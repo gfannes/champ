@@ -1,0 +1,9 @@
+cook.book("champetter", fun(book){
+	book.recipe("cli", TargetType.Executable, fun[book](rcp){
+		rcp.add("src/cli", "app/**.[hc]pp")
+	})
+	
+	book.recipe("ut", TargetType.Executable, fun[book](rcp){
+		rcp.add("src/ut", "**.[hc]pp")
+	})
+})
