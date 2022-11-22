@@ -10,12 +10,20 @@ task :prepare do
 
     require_relative('gubg/gubg.build/load.rb')
     require('gubg/build/Cooker')
+    require('fileutils')
 end
 
 desc 'Build the targets'
 task :build => :prepare do
     cooker = Gubg::Build::Cooker.new()
     cooker.generate(:ninja, 'champetter/cli').ninja()
+end
+
+desc 'Clean the build'
+task :clean => :prepare do
+    FileUtils.rm_rf('.cook')
+    FileUtils.rm_f(%w[build.ninja champetter.cli champetter.ut .ninja_log])
+    FileUtils.rm(FileList.new("*.resp"))
 end
 
 desc 'Install the CLI application'
@@ -32,4 +40,13 @@ end
 
 desc 'Run the e2e tests'
 task :e2e => :build do
+end
+
+desc 'Generate clangd file'
+task :clangd do
+    include_paths = %w[common model view presenter cli ut].map{|name|File.absolute_path("#{name}/src")}
+    File.open('.clangd', 'w') do |fo|
+        fo.puts('CompileFlags:')
+        fo.puts("    Add: [-std=c++17, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
+    end
 end

@@ -2,6 +2,8 @@ gubg
 champetter.cli
 champetter.ut
 .cook/
+.clangd
 .ninja_log
 build.ninja
 *.resp
+*.a
