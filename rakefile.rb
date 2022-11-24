@@ -44,7 +44,9 @@ end
 
 desc 'Generate clangd file'
 task :clangd do
-    include_paths = %w[common model view presenter cli ut].map{|name|File.absolute_path("#{name}/src")}
+    include_paths = []
+    include_paths += %w[common model view presenter cli ut].map{|name|File.absolute_path("#{name}/src")}
+    include_paths += %w[std io].map{|name|File.absolute_path("gubg/gubg.#{name}/src")}
     File.open('.clangd', 'w') do |fo|
         fo.puts('CompileFlags:')
         fo.puts("    Add: [-std=c++17, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
