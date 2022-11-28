@@ -14,6 +14,8 @@ int main(int argc, const char **argv)
     
     cli::App app{options};
     std::cout << "Everything went OK" << std::endl;
+    
+    MSS(app.run());
 
     MSS_END();
 }

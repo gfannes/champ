@@ -2,7 +2,10 @@ include("gubg")
 
 cook.book("champetter", fun(book){
 	book.recipe("cli", TargetType.Executable, fun[book](rcp){
-		rcp.add("cli/src", "**.[hc]pp")
+		rcp.add("src", "cli/**.[hc]pp")
+		rcp.add("src", "data/**.[hc]pp")
+		rcp.add("src", "iact/**.[hc]pp")
+		rcp.add("src", "show/**.[hc]pp")
 		rcp.depends_on("gubg/func")
 	})
 	
