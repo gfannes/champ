@@ -43,7 +43,7 @@ task :e2e => :build do
 end
 
 desc 'Generate clangd file'
-task :clangd do
+task :clangd => :prepare do
     include_paths = []
     include_paths += %w[src]
     include_paths += %w[std io].map{|name|"gubg/gubg.#{name}/src"}
@@ -52,4 +52,6 @@ task :clangd do
         fo.puts('CompileFlags:')
         fo.puts("    Add: [-std=c++17, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
     end
+    cooker = Gubg::Build::Cooker.new()
+    cooker.generate(:ninja).ninja_compdb()
 end

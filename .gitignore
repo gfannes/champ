@@ -2,7 +2,9 @@ gubg
 champetter.cli
 champetter.ut
 .cook/
+.clang-format
 .clangd
+compile_commands.json
 .ninja_log
 build.ninja
 *.resp
