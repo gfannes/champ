@@ -4,23 +4,26 @@
 #include <cli/Options.hpp>
 #include <iact/Boss.hpp>
 
-namespace cli { 
-    class App 
+namespace cli {
+
+    class App
     {
     public:
-        App(const Options &options): options_(options) {}
-    
+        App(const Options &options)
+            : options_(options) {}
+
         bool run();
 
     private:
+        bool setup_();
         bool mainloop_();
 
         const Options &options_;
-    
+
         show::Boss show_;
         iact::Boss iact_{show_};
     };
-} 
+
+} // namespace cli
 
 #endif
-

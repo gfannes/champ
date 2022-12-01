@@ -1,4 +1,3 @@
-#include <cli/Options.hpp>
 #include <cli/App.hpp>
 
 #include <gubg/mss.hpp>
@@ -11,10 +10,15 @@ int main(int argc, const char **argv)
 
     cli::Options options;
     MSS(options.parse(argc, argv));
-    
+
+    if (options.print_help)
+    {
+        std::cout << options.help();
+        MSS_RETURN_OK();
+    }
+
     cli::App app{options};
-    std::cout << "Everything went OK" << std::endl;
-    
+
     MSS(app.run());
 
     MSS_END();

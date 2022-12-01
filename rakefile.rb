@@ -47,7 +47,7 @@ task :clangd => :prepare do
     include_paths = []
     include_paths += %w[src]
     include_paths += %w[std io].map{|name|"gubg/gubg.#{name}/src"}
-    include_paths.map!{|ip|File.absolute_path(ip)}
+    include_paths.map!{|ip|File.realdirpath(ip)}
     File.open('.clangd', 'w') do |fo|
         fo.puts('CompileFlags:')
         fo.puts("    Add: [-std=c++17, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")

@@ -3,17 +3,28 @@
 
 #include <show/Boss.hpp>
 
-namespace iact { 
-    class Boss 
+#include <gubg/Signal.hpp>
+
+namespace iact {
+
+    class Boss
     {
     public:
-    Boss(show::Boss &show): show_(show) {}
+        Boss(show::Boss &show)
+            : show_(show) {}
+
+        struct Signals
+        {
+            gubg::Signal<> quit;
+        };
+        Signals signals;
+
+        bool process(char ch);
 
     private:
-    show::Boss &show_;
-
+        show::Boss &show_;
     };
-} 
+
+} // namespace iact
 
 #endif
-

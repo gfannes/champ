@@ -4,18 +4,20 @@
 #include <string>
 
 namespace cli {
-    class Options 
+    class Options
     {
     public:
-    bool parse(int argc, const char **argv);
-    
-    std::string exe_name;
-    
-    bool print_help = false;
+        bool parse(int argc, const char **argv);
+
+        std::string exe_name;
+
+        bool print_help = false;
+        int verbose_level = 0;
+
+        std::string help() const;
 
     private:
     };
-} 
+} // namespace cli
 
 #endif
-
