@@ -16,6 +16,7 @@ end
 desc 'Build the targets'
 task :build => :prepare do
     cooker = Gubg::Build::Cooker.new()
+    cooker.option("c++.std", 20)
     cooker.generate(:ninja, 'champetter/cli').ninja()
 end
 
@@ -50,8 +51,9 @@ task :clangd => :prepare do
     include_paths.map!{|ip|File.realdirpath(ip)}
     File.open('.clangd', 'w') do |fo|
         fo.puts('CompileFlags:')
-        fo.puts("    Add: [-std=c++17, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
+        fo.puts("    Add: [-std=c++20, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
     end
     cooker = Gubg::Build::Cooker.new()
+    cooker.option("c++.std", 20)
     cooker.generate(:ninja).ninja_compdb()
 end

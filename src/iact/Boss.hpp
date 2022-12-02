@@ -1,6 +1,7 @@
 #ifndef HEADER_iact_Boss_hpp_ALREAD_INCLUDED
 #define HEADER_iact_Boss_hpp_ALREAD_INCLUDED
 
+#include <data/Boss.hpp>
 #include <show/Boss.hpp>
 
 #include <gubg/Signal.hpp>
@@ -10,8 +11,7 @@ namespace iact {
     class Boss
     {
     public:
-        Boss(show::Boss &show)
-            : show_(show) {}
+        Boss(data::Boss &, show::Boss &show);
 
         struct Signals
         {
@@ -19,9 +19,10 @@ namespace iact {
         };
         Signals signals;
 
-        bool process(char ch);
+        bool process(std::optional<char> ch);
 
     private:
+        data::Boss &data_;
         show::Boss &show_;
     };
 

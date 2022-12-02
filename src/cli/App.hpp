@@ -4,6 +4,8 @@
 #include <cli/Options.hpp>
 #include <iact/Boss.hpp>
 
+#include <optional>
+
 namespace cli {
 
     class App
@@ -20,8 +22,11 @@ namespace cli {
 
         const Options &options_;
 
-        show::Boss show_;
-        iact::Boss iact_{show_};
+        bool quit_ = false;
+
+        std::optional<data::Boss> data_;
+        std::optional<show::Boss> show_;
+        std::optional<iact::Boss> iact_;
     };
 
 } // namespace cli

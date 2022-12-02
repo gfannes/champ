@@ -1,7 +1,6 @@
 #include <cli/App.hpp>
 
 #include <gubg/mss.hpp>
-#include <gubg/tui.hpp>
 
 namespace cli {
 
@@ -9,12 +8,9 @@ namespace cli {
     {
         MSS_BEGIN(bool);
 
-        bool quit = false;
-        iact_.signals.quit.connect([&]() { quit = true; });
-
         MSS(setup_());
 
-        while (!quit)
+        while (!quit_)
         {
             MSS(mainloop_());
         }
@@ -27,7 +23,11 @@ namespace cli {
     {
         MSS_BEGIN(bool);
 
-        show_.setup();
+        data_.emplace();
+        show_.emplace();
+        iact_.emplace(*data_, *show_);
+
+        iact_->signals.quit.connect([&]() { quit_ = true; });
 
         MSS_END();
     }
@@ -36,11 +36,18 @@ namespace cli {
     {
         MSS_BEGIN(bool);
 
-        MSS(show_.draw());
+        MSS(!!show_);
+        auto &show = *show_;
 
-        char ch;
-        MSS(gubg::tui::get_char(ch));
-        MSS(iact_.process(ch));
+        MSS(!!iact_);
+        auto &iact = *iact_;
+
+        MSS(show.draw());
+
+        std::optional<char> ch;
+        MSS(show.read_char(ch));
+
+        MSS(iact.process(ch));
 
         MSS_END();
     }
