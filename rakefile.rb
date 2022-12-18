@@ -18,6 +18,9 @@ task :build => :prepare do
     cooker = Gubg::Build::Cooker.new()
     cooker.option("c++.std", 20)
     cooker.generate(:ninja, 'champetter/cli').ninja()
+
+    options = %w[--pkg-begin gubg/tui gubg/gubg.io/src/gubg/tui.zig --pkg-end -lc]
+    sh "zig build-exe #{options*' '} src/cli/main.zig"
 end
 
 desc 'Clean the build'
@@ -41,6 +44,11 @@ end
 
 desc 'Run the e2e tests'
 task :e2e => :build do
+end
+
+desc 'Run the app'
+task :run => :build do
+    sh "./main"
 end
 
 desc 'Generate clangd file'
