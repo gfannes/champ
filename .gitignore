@@ -12,3 +12,7 @@ build.ninja
 *.o
 .cache/
 main
+
+# Added by cargo
+
+/target
