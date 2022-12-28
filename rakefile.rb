@@ -15,6 +15,8 @@ end
 
 desc 'Build the targets'
 task :build => :prepare do
+    sh "cargo build"
+
     cooker = Gubg::Build::Cooker.new()
     cooker.option("c++.std", 20)
     cooker.generate(:ninja, 'champetter/cli').ninja()
