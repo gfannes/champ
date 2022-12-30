@@ -50,7 +50,7 @@ end
 
 desc 'Run the app'
 task :run => :build do
-    sh "./main"
+    sh "./target/debug/champ"
 end
 
 desc 'Generate clangd file'
