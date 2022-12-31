@@ -30,6 +30,7 @@ task :clean => :prepare do
     FileUtils.rm_rf('.cook')
     FileUtils.rm_f(%w[build.ninja champetter.cli champetter.ut .ninja_log])
     FileUtils.rm(FileList.new("*.resp"))
+    FileUtils.rm_rf('target')
 end
 
 desc 'Install the CLI application'

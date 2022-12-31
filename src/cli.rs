@@ -1,4 +1,4 @@
-use champetter::error::Result;
+use crate::error::Result;
 
 pub struct Options {
     pub help: bool,
