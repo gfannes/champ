@@ -1,8 +1,6 @@
 use crate::data::node;
 use crate::data::path::Path;
-use crate::error::{Error, Result};
-
-use std::path::PathBuf;
+use crate::my;
 
 pub struct Tree {
     root: node::Node,
@@ -62,7 +60,7 @@ impl Tree {
         //     Ok(roots)
     }
 
-    pub fn nodes(&self, path: &Path) -> Result<Vec<String>> {
+    pub fn nodes(&self, path: &Path) -> my::Result<Vec<String>> {
         let pb = std::path::PathBuf::from(path);
         println!("pb: {}", pb.display());
 

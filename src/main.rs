@@ -1,13 +1,12 @@
 mod cli;
 mod data;
-mod error;
+#[macro_use]
+mod my;
 
-use crate::error::Result;
-
-fn main() -> Result<()> {
+fn main() -> my::Result<()> {
     let tree = data::Tree::new();
 
-    let mut path = data::Path::from(std::env::current_dir()?);
+    let path = data::Path::from(std::env::current_dir()?);
 
     println!("{}", &path);
     for node in tree.nodes(&path)? {

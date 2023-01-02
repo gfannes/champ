@@ -1,5 +1,3 @@
-use crate::error;
-
 #[derive(Default, Clone)]
 pub struct Path {
     pub parts: Vec<String>,
@@ -10,8 +8,8 @@ impl Path {
         Default::default()
     }
 
-    pub fn add(&mut self, part: &str) -> &mut Self {
-        self.parts.push(part.to_string());
+    pub fn add(&mut self, part: impl Into<String>) -> &mut Self {
+        self.parts.push(part.into());
         self
     }
 }
@@ -22,7 +20,7 @@ impl std::convert::From<std::path::PathBuf> for Path {
         for part in other.components() {
             match part {
                 std::path::Component::Normal(str) => {
-                    path.parts.push(str.to_string_lossy().to_string())
+                    path.add(str.to_string_lossy());
                 }
                 _ => {}
             }
@@ -64,4 +62,14 @@ impl std::fmt::Display for Path {
         }
         Ok(())
     }
+}
+
+#[test]
+fn test_new_add() {
+    let mut p = Path::new();
+    assert_eq!(format!("{}", p), "/");
+    p.add("abc");
+    assert_eq!(format!("{}", p), "/abc");
+    p.add("def".to_string());
+    assert_eq!(format!("{}", p), "/abc/def");
 }

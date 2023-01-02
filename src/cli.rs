@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::my;
 
 pub struct Options {
     pub help: bool,
@@ -15,7 +15,7 @@ impl Options {
         return options;
     }
 
-    pub fn parse() -> Result<Options> {
+    pub fn parse() -> my::Result<Options> {
         let options = Options::new();
         return Ok(options);
     }
