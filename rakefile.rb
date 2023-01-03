@@ -40,9 +40,11 @@ end
 
 desc 'Run the unit tests'
 task :ut => :prepare do
-    cooker = Gubg::Build::Cooker.new()
-    cooker.generate(:ninja, 'champetter/ut').ninja()
-    sh './champetter.ut'
+    sh 'cargo test'
+    
+    # cooker = Gubg::Build::Cooker.new()
+    # cooker.generate(:ninja, 'champetter/ut').ninja()
+    # sh './champetter.ut'
 end
 
 desc 'Run the e2e tests'

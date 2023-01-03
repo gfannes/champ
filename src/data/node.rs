@@ -1,15 +1,17 @@
 pub type Nodes = Vec<Box<Node>>;
 
+use crate::data::name::{Build, Name};
+
 #[derive(Default)]
 pub struct Node {
-    name: String,
+    name: Name,
     childs: Nodes,
 }
 
 impl Node {
-    pub fn new(str: String) -> Node {
+    pub fn new(name: impl Into<String>) -> Node {
         Node {
-            name: str,
+            name: Name::root(name),
             ..Default::default()
         }
     }
