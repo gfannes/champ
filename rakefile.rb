@@ -1,72 +1,121 @@
+require('fileutils')
+
 task :default do
     sh 'rake -T'
 end
 
-task :prepare do
-    gubg = ENV['gubg']
-    raise("Env var 'gubg' not set") unless gubg
+DEFAULT_LANGUAGE = :rust
+language = ->(task_args){task_args[:language] || DEFAULT_LANGUAGE}
 
-    sh "ln -s #{gubg} gubg" unless File.exist?('gubg')
+exe_name = nil
 
-    require_relative('gubg/gubg.build/load.rb')
-    require('gubg/build/Cooker')
-    require('fileutils')
-end
-
-desc 'Build the targets'
-task :build => :prepare do
-    sh "cargo build"
-
-    cooker = Gubg::Build::Cooker.new()
-    cooker.option("c++.std", 20)
-    cooker.generate(:ninja, 'champetter/cli').ninja()
-
-    options = %w[--pkg-begin gubg/tui gubg/gubg.io/src/gubg/tui.zig --pkg-end -lc]
-    sh "zig build-exe #{options*' '} src/cli/main.zig"
-end
-
-desc 'Clean the build'
-task :clean => :prepare do
-    FileUtils.rm_rf('.cook')
-    FileUtils.rm_f(%w[build.ninja champetter.cli champetter.ut .ninja_log])
-    FileUtils.rm(FileList.new("*.resp"))
-    FileUtils.rm_rf('target')
-end
-
-desc 'Install the CLI application'
-task :install => :build do
-    sh 'sudo cp champetter.cli /usr/local/bin/champ'
-end
-
-desc 'Run the unit tests'
-task :ut => :prepare do
-    sh 'cargo test'
-    
-    # cooker = Gubg::Build::Cooker.new()
-    # cooker.generate(:ninja, 'champetter/ut').ninja()
-    # sh './champetter.ut'
-end
-
-desc 'Run the e2e tests'
-task :e2e => :build do
-end
-
-desc 'Run the app'
-task :run => :build do
-    sh "./target/debug/champ"
-end
-
-desc 'Generate clangd file'
-task :clangd => :prepare do
-    include_paths = []
-    include_paths += %w[src]
-    include_paths += %w[std io].map{|name|"gubg/gubg.#{name}/src"}
-    include_paths.map!{|ip|File.realdirpath(ip)}
-    File.open('.clangd', 'w') do |fo|
-        fo.puts('CompileFlags:')
-        fo.puts("    Add: [-std=c++20, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
+{
+    prepare: {desc: 'Prepare for building', default: ->(_){}},
+    build: {desc: 'Build the CLI application'},
+    run: {desc: 'Run the CLI application',
+        default: ->(task_args) do
+            task_name = "#{language.(task_args)}:build"
+            Rake::Task[task_name].invoke()
+            sh "./#{exe_name}"
+        end
+    },
+    install: {desc: 'Install the CLI application',
+        default: ->(task_args) do
+            task_name = "#{language.(task_args)}:build"
+            Rake::Task[task_name].invoke()
+            sh "sudo cp #{exe_name} /usr/local/bin/champ"
+        end
+    },
+    clean: {desc: 'Clean the build'},
+    test: {desc: 'Run the tests'},
+}.each do |name, info|
+    desc(info[:desc])
+    task(name, :language) do |t, args|
+        task_name = "#{language.(args)}:#{name}"
+        if Rake::Task.task_defined?(task_name)
+            Rake::Task[task_name].invoke()
+        elsif info[:default]
+            info[:default].(args)
+        else raise("No task found for #{task_name}")
+        end
     end
-    cooker = Gubg::Build::Cooker.new()
-    cooker.option("c++.std", 20)
-    cooker.generate(:ninja).ninja_compdb()
+end
+
+namespace :rust do
+    task :build => :prepare do
+        sh 'cargo build'
+        exe_name = 'target/debug/champ'
+    end
+
+    task :install do
+        sh 'cargo install --path .'
+    end
+
+    task :clean => :prepare do
+        FileUtils.rm_rf('target')
+    end
+
+    task :test=> :prepare do
+        sh 'cargo test'
+    end
+end
+
+namespace :cpp do
+    task :prepare do
+        gubg = ENV['gubg']
+        raise("Env var 'gubg' not set") unless gubg
+
+        sh "ln -s #{gubg} gubg" unless File.exist?('gubg')
+
+        require_relative('gubg/gubg.build/load.rb')
+        require('gubg/build/Cooker')
+    end
+
+    task :build => :prepare do
+        cooker = Gubg::Build::Cooker.new()
+        cooker.option("c++.std", 20)
+        cooker.generate(:ninja, 'champetter/cli').ninja()
+        exe_name = 'champetter.cli'
+    end
+
+    task :clean => :prepare do
+        FileUtils.rm_rf('.cook')
+        FileUtils.rm_f(%w[build.ninja champetter.cli champetter.ut .ninja_log])
+        FileUtils.rm(FileList.new("*.resp"))
+    end
+
+    task :ut => :prepare do
+        cooker = Gubg::Build::Cooker.new()
+        cooker.generate(:ninja, 'champetter/ut').ninja()
+        sh './champetter.ut'
+    end
+
+    desc 'Generate clangd file'
+    task :clangd => :prepare do
+        include_paths = []
+        include_paths += %w[src]
+        include_paths += %w[std io].map{|name|"gubg/gubg.#{name}/src"}
+        include_paths.map!{|ip|File.realdirpath(ip)}
+        File.open('.clangd', 'w') do |fo|
+            fo.puts('CompileFlags:')
+            fo.puts("    Add: [-std=c++20, #{include_paths.map{|ip|"-I#{ip}"}*', '}]")
+        end
+        cooker = Gubg::Build::Cooker.new()
+        cooker.option("c++.std", 20)
+        cooker.generate(:ninja).ninja_compdb()
+    end
+end
+
+namespace :zig do
+    task :build => :prepare do
+        options = %w[--pkg-begin gubg/tui gubg/gubg.io/src/gubg/tui.zig --pkg-end -lc]
+        sh "zig build-exe #{options*' '} src/cli/main.zig"
+        exe_name = 'main'
+    end
+
+    task :clean => :prepare do
+    end
+
+    task :ut => :prepare do
+    end
 end
