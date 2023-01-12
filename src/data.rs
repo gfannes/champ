@@ -7,3 +7,8 @@ mod name;
 mod node;
 mod path;
 mod tree;
+
+pub struct List {
+    pub items: Vec<String>,
+    focus: Option<usize>,
+}

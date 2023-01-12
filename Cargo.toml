@@ -10,3 +10,4 @@ name = "champ"
 path = "src/main.rs"
 
 [dependencies]
+crossterm = "0.25.0"
