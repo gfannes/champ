@@ -1,5 +1,6 @@
 pub use crate::my::Result;
 
+pub use crossterm::event::Event;
 use crossterm::{
     cursor, event,
     style::{self, Color, Stylize},
@@ -29,11 +30,14 @@ impl Tui {
         stdout.execute(event::EnableFocusChange)?;
         Ok(Tui { stdout })
     }
+
+    pub fn event(&mut self) -> Option<Event> {
+        None
+    }
 }
 
 impl Drop for Tui {
     fn drop(&mut self) {
-        println!("\nDropping Tui");
         self.stdout.execute(cursor::Show {}).unwrap();
         self.stdout.execute(event::DisableMouseCapture).unwrap();
         self.stdout.execute(event::DisableBracketedPaste).unwrap();

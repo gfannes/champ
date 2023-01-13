@@ -1,4 +1,4 @@
-mod cli;
+mod config;
 mod data;
 #[macro_use]
 mod my;
@@ -6,20 +6,23 @@ mod show;
 mod tui;
 
 fn main() -> my::Result<()> {
-    tui::test()?;
+    let cli_options = config::cli::Options::parse()?;
 
-    return Ok(());
+    let settings = config::Settings::load(&cli_options)?;
+
+    let mut tui = tui::Tui::new()?;
 
     let tree = data::Tree::new();
 
     let path = data::Path::from(std::env::current_dir()?);
 
-    println!("{}", &path);
-    for node in tree.nodes(&path)? {
-        println!("{}", node);
+    loop {
+        match tui.event() {
+            _ => {
+                break;
+            }
+        }
     }
-
-    let list = show::widget::List::new();
 
     Ok(())
 }
