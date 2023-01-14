@@ -8,13 +8,6 @@ use crossterm::{
 };
 use std::io::Write;
 
-pub struct Region {
-    row: usize,
-    col: usize,
-    width: usize,
-    height: usize,
-}
-
 pub struct Tui {
     stdout: std::io::Stdout,
 }
@@ -40,19 +33,35 @@ impl Tui {
         }
     }
 
+    pub fn clear(&mut self) -> Result<()> {
+        self.stdout
+            .queue(terminal::Clear(terminal::ClearType::All))?;
+        Ok(())
+    }
+
     pub fn move_to(&mut self, x: u16, y: u16) -> Result<()> {
         self.stdout.queue(cursor::MoveTo(x, y))?;
         Ok(())
     }
 
-    pub fn print(&mut self, msg: &str) -> Result<()> {
-        self.stdout.queue(style::Print(msg))?;
+    pub fn print(&mut self, msg: impl Into<String>) -> Result<()> {
+        self.stdout.queue(style::Print(msg.into()))?;
         Ok(())
     }
 
     pub fn flush(&mut self) -> Result<()> {
         self.stdout.flush()?;
         Ok(())
+    }
+
+    pub fn region(&self) -> Result<Region> {
+        let (width, height) = crossterm::terminal::size()?;
+        Ok(Region {
+            row: 0,
+            col: 0,
+            width: width as usize,
+            height: height as usize,
+        })
     }
 }
 
@@ -77,6 +86,18 @@ impl std::ops::DerefMut for Tui {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.stdout
     }
+}
+
+pub struct List {
+    region: Region,
+}
+
+#[derive(Debug)]
+pub struct Region {
+    row: usize,
+    col: usize,
+    width: usize,
+    height: usize,
 }
 
 pub fn test() -> Result<()> {

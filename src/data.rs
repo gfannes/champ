@@ -8,7 +8,14 @@ mod node;
 mod path;
 mod tree;
 
+#[derive(Default)]
 pub struct List {
     pub items: Vec<String>,
-    focus: Option<usize>,
+    pub focus: Option<usize>,
+}
+
+impl List {
+    pub fn new() -> List {
+        Default::default()
+    }
 }

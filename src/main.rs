@@ -31,8 +31,10 @@ fn main() -> my::Result<()> {
             }
         }
 
+        tui.clear();
+
         tui.move_to(0, 0)?;
-        tui.print("ola")?;
+        let region = tui.region()?;
 
         tui.flush()?;
     }
