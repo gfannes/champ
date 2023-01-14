@@ -1,6 +1,6 @@
 pub use crate::my::Result;
 
-pub use crossterm::event::Event;
+pub use crossterm::event::{Event, KeyCode};
 use crossterm::{
     cursor, event,
     style::{self, Color, Stylize},
@@ -31,8 +31,13 @@ impl Tui {
         Ok(Tui { stdout })
     }
 
-    pub fn event(&mut self) -> Option<Event> {
-        None
+    pub fn event(&mut self) -> Result<Option<Event>> {
+        if event::poll(std::time::Duration::from_millis(10))? {
+            let event = event::read()?;
+            Ok(Some(event))
+        } else {
+            Ok(None)
+        }
     }
 }
 

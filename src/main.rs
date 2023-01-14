@@ -1,4 +1,5 @@
 mod config;
+mod ctrl;
 mod data;
 #[macro_use]
 mod my;
@@ -16,10 +17,17 @@ fn main() -> my::Result<()> {
 
     let path = data::Path::from(std::env::current_dir()?);
 
-    loop {
-        match tui.event() {
-            _ => {
-                break;
+    let mut commander = ctrl::Commander::new();
+
+    'mainloop: loop {
+        while let Some(event) = tui.event()? {
+            commander.process(event)?;
+        }
+
+        for command in commander.commands() {
+            match command {
+                ctrl::Command::Quit => break 'mainloop,
+                _ => {}
             }
         }
     }
