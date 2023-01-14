@@ -39,6 +39,21 @@ impl Tui {
             Ok(None)
         }
     }
+
+    pub fn move_to(&mut self, x: u16, y: u16) -> Result<()> {
+        self.stdout.queue(cursor::MoveTo(x, y))?;
+        Ok(())
+    }
+
+    pub fn print(&mut self, msg: &str) -> Result<()> {
+        self.stdout.queue(style::Print(msg))?;
+        Ok(())
+    }
+
+    pub fn flush(&mut self) -> Result<()> {
+        self.stdout.flush()?;
+        Ok(())
+    }
 }
 
 impl Drop for Tui {
@@ -50,12 +65,14 @@ impl Drop for Tui {
         terminal::disable_raw_mode().unwrap();
     }
 }
+
 impl std::ops::Deref for Tui {
     type Target = std::io::Stdout;
     fn deref(&self) -> &Self::Target {
         &self.stdout
     }
 }
+
 impl std::ops::DerefMut for Tui {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.stdout

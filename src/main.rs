@@ -30,6 +30,11 @@ fn main() -> my::Result<()> {
                 _ => {}
             }
         }
+
+        tui.move_to(0, 0)?;
+        tui.print("ola")?;
+
+        tui.flush()?;
     }
 
     Ok(())
