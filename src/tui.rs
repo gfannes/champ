@@ -101,21 +101,66 @@ pub struct Region {
     pub height: usize,
 }
 
-pub struct Path {
+impl Region {
+    pub fn pop_line(&mut self, side: Side) -> Option<Region> {
+        let mut res = None;
+
+        match side {
+            Side::Top => {
+                if self.height > 0 {
+                    res = Some(Region {
+                        row: self.row,
+                        col: self.col,
+                        width: self.width,
+                        height: 1,
+                    });
+
+                    self.row += 1;
+                    self.height -= 1;
+                }
+            }
+            Side::Bottom => {
+                if self.height > 0 {
+                    self.height -= 1;
+
+                    res = Some(Region {
+                        row: self.row + self.height,
+                        col: self.col,
+                        width: self.width,
+                        height: 1,
+                    });
+                }
+            }
+            _ => {}
+        }
+
+        res
+    }
+}
+
+pub enum Side {
+    Top,
+    Left,
+    Right,
+    Bottom,
+}
+
+pub struct Text {
     region: Region,
 }
 
-impl Path {
-    pub fn new(region: Region) -> Path {
-        Path { region }
+impl Text {
+    pub fn new(region: Region) -> Text {
+        Text { region }
     }
-    pub fn draw(&mut self, tui: &mut Tui, path: &data::Path) -> Result<()> {
+    pub fn draw(&mut self, tui: &mut Tui, str: impl Into<String>) -> Result<()> {
         tui.queue(cursor::MoveTo(
-            self.region.row as u16,
             self.region.col as u16,
+            self.region.row as u16,
         ))?;
 
-        let mut str = format!("{}", path);
+        let mut str = str.into();
+
         let mut size = None;
         for (count, (ix, _)) in str.char_indices().enumerate() {
             if count == self.region.width {

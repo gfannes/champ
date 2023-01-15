@@ -15,7 +15,9 @@ fn main() -> my::Result<()> {
 
     let tree = data::Tree::new();
 
-    let mut path_data = data::Path::from(std::env::current_dir()?);
+    let mut path = data::Path::from(std::env::current_dir()?);
+
+    let mut status_line = "Status line".to_string();
 
     let mut commander = ctrl::Commander::new();
 
@@ -28,7 +30,7 @@ fn main() -> my::Result<()> {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
                 ctrl::Command::In => {
-                    path_data.parts.pop();
+                    path.parts.pop();
                 }
                 _ => {}
             }
@@ -36,10 +38,24 @@ fn main() -> my::Result<()> {
 
         tui.clear();
 
-        tui.move_to(0, 0)?;
         let mut region = tui.region()?;
-        let mut path_tui = tui::Path::new(region);
-        path_tui.draw(&mut tui, &path_data)?;
+
+        {
+            let mut text = tui::Text::new(
+                region
+                    .pop_line(tui::Side::Top)
+                    .ok_or(my::Error::create("Cannot pop line for Path"))?,
+            );
+            text.draw(&mut tui, format!("{}", &path))?;
+        }
+        {
+            let mut text = tui::Text::new(
+                region
+                    .pop_line(tui::Side::Bottom)
+                    .ok_or(my::Error::create("Cannot pop line for Status"))?,
+            );
+            text.draw(&mut tui, &status_line)?;
+        }
 
         tui.flush()?;
     }
