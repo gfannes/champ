@@ -1,3 +1,4 @@
+use crate::data;
 pub use crate::my::Result;
 
 pub use crossterm::event::{Event, KeyCode};
@@ -92,60 +93,42 @@ pub struct List {
     region: Region,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Region {
-    row: usize,
-    col: usize,
-    width: usize,
-    height: usize,
+    pub row: usize,
+    pub col: usize,
+    pub width: usize,
+    pub height: usize,
 }
 
-pub fn test() -> Result<()> {
-    let mut a = Tui::new()?;
+pub struct Path {
+    region: Region,
+}
 
-    for i in 0..1000 {
-        if event::poll(std::time::Duration::from_millis(10))? {
-            let event = event::read()?;
-            write!(a.stdout, "event: {:?}\r\n", event)?;
-            match event {
-                event::Event::FocusGained => {}
-                event::Event::FocusLost => {}
-                event::Event::Key(event) => {
-                    if event.code == event::KeyCode::Char('q') {
-                        return Ok(());
-                    }
-                }
-                event::Event::Mouse(event) => {}
-                event::Event::Paste(str) => {}
-                event::Event::Resize(cols, roms) => {}
-            }
-        }
-        if true {
-            for y in 0..40 {
-                for x in 0..150 {
-                    if (y == 0 || y == 40 - 1) || (x == 0 || x == 150 - 1) {
-                        // in this loop we are more efficient by not flushing the buffer.
-                        a.queue(cursor::MoveTo(x, y))?
-                            .queue(style::PrintStyledContent(
-                                "#".with(Color::Rgb {
-                                    r: (x + i) as u8,
-                                    g: y as u8,
-                                    b: 120,
-                                })
-                                .on(Color::Rgb {
-                                    r: 120,
-                                    g: x as u8,
-                                    b: (y + i) as u8,
-                                }),
-                            ))?;
-                    }
-                }
-            }
-            a.flush()?;
-        }
+impl Path {
+    pub fn new(region: Region) -> Path {
+        Path { region }
     }
+    pub fn draw(&mut self, tui: &mut Tui, path: &data::Path) -> Result<()> {
+        tui.queue(cursor::MoveTo(
+            self.region.row as u16,
+            self.region.col as u16,
+        ))?;
 
-    // a.a.queue(cursor::Show {})?;
+        let mut str = format!("{}", path);
+        let mut size = None;
+        for (count, (ix, _)) in str.char_indices().enumerate() {
+            if count == self.region.width {
+                size = Some(ix);
+                break;
+            }
+        }
+        if let Some(size) = size {
+            str.truncate(size);
+        }
 
-    Ok(())
+        tui.queue(style::Print(str))?;
+
+        Ok(())
+    }
 }

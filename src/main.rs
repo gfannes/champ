@@ -15,7 +15,7 @@ fn main() -> my::Result<()> {
 
     let tree = data::Tree::new();
 
-    let path = data::Path::from(std::env::current_dir()?);
+    let mut path_data = data::Path::from(std::env::current_dir()?);
 
     let mut commander = ctrl::Commander::new();
 
@@ -27,6 +27,9 @@ fn main() -> my::Result<()> {
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
+                ctrl::Command::In => {
+                    path_data.parts.pop();
+                }
                 _ => {}
             }
         }
@@ -34,7 +37,9 @@ fn main() -> my::Result<()> {
         tui.clear();
 
         tui.move_to(0, 0)?;
-        let region = tui.region()?;
+        let mut region = tui.region()?;
+        let mut path_tui = tui::Path::new(region);
+        path_tui.draw(&mut tui, &path_data)?;
 
         tui.flush()?;
     }
