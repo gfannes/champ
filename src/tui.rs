@@ -1,4 +1,5 @@
 use crate::data;
+use crate::my;
 pub use crate::my::Result;
 
 pub use crossterm::event::{Event, KeyCode};
@@ -93,7 +94,7 @@ pub struct List {
     region: Region,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Region {
     pub row: usize,
     pub col: usize,
@@ -102,36 +103,60 @@ pub struct Region {
 }
 
 impl Region {
-    pub fn pop_line(&mut self, side: Side) -> Option<Region> {
+    pub fn pop(&mut self, count: usize, side: Side) -> Option<Region> {
         let mut res = None;
 
         match side {
             Side::Top => {
-                if self.height > 0 {
+                if self.height >= count {
                     res = Some(Region {
                         row: self.row,
                         col: self.col,
                         width: self.width,
-                        height: 1,
+                        height: count,
                     });
 
-                    self.row += 1;
-                    self.height -= 1;
+                    self.row += count;
+                    self.height -= count;
                 }
             }
             Side::Bottom => {
-                if self.height > 0 {
-                    self.height -= 1;
+                if self.height >= count {
+                    self.height -= count;
 
                     res = Some(Region {
                         row: self.row + self.height,
                         col: self.col,
                         width: self.width,
-                        height: 1,
+                        height: count,
                     });
                 }
             }
-            _ => {}
+            Side::Left => {
+                if self.width >= count {
+                    res = Some(Region {
+                        row: self.row,
+                        col: self.col,
+                        width: count,
+                        height: self.height,
+                    });
+
+                    self.col += count;
+                    self.width -= count;
+                }
+            }
+            Side::Right => {
+                if self.width >= count {
+                    self.width -= count;
+
+                    res = Some(Region {
+                        row: self.row,
+                        col: self.col + self.width,
+                        width: count,
+                        height: self.height,
+                    });
+                }
+            }
         }
 
         res
@@ -176,4 +201,41 @@ impl Text {
 
         Ok(())
     }
+}
+
+#[derive(Default)]
+pub struct Layout {
+    pub path: Region,
+    pub parent: Region,
+    pub location: Region,
+    pub preview: Region,
+    pub status: Region,
+}
+
+impl Layout {
+    pub fn new() -> Layout {
+        Default::default()
+    }
+}
+
+pub fn layout(tui: &Tui) -> Result<Layout> {
+    let mut region = tui.region()?;
+    let mut res = Layout::new();
+    res.path = region
+        .pop(1, Side::Top)
+        .ok_or(my::Error::create("Could not pop region for path"))?;
+    res.status = region
+        .pop(1, Side::Bottom)
+        .ok_or(my::Error::create("Could not pop region for status"))?;
+
+    let w = region.width / 3;
+    res.parent = region
+        .pop(w, Side::Left)
+        .ok_or(my::Error::create("Could not pop region for parent"))?;
+    res.location = region
+        .pop(w, Side::Left)
+        .ok_or(my::Error::create("Could not pop region for location"))?;
+    res.preview = region;
+
+    Ok(res)
 }

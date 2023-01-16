@@ -21,6 +21,7 @@ fn main() -> my::Result<()> {
 
     let mut commander = ctrl::Commander::new();
 
+    let mut count: usize = 0;
     'mainloop: loop {
         while let Some(event) = tui.event()? {
             commander.process(event)?;
@@ -36,28 +37,17 @@ fn main() -> my::Result<()> {
             }
         }
 
-        tui.clear();
+        tui.clear()?;
 
-        let mut region = tui.region()?;
+        let layout = tui::layout(&tui)?;
 
-        {
-            let mut text = tui::Text::new(
-                region
-                    .pop_line(tui::Side::Top)
-                    .ok_or(my::Error::create("Cannot pop line for Path"))?,
-            );
-            text.draw(&mut tui, format!("{}", &path))?;
-        }
-        {
-            let mut text = tui::Text::new(
-                region
-                    .pop_line(tui::Side::Bottom)
-                    .ok_or(my::Error::create("Cannot pop line for Status"))?,
-            );
-            text.draw(&mut tui, &status_line)?;
-        }
+        tui::Text::new(layout.path).draw(&mut tui, format!("{}", &path))?;
+        status_line = format!("Loop {}", count);
+        tui::Text::new(layout.status).draw(&mut tui, &status_line)?;
 
         tui.flush()?;
+
+        count += 1;
     }
 
     Ok(())
