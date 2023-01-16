@@ -21,6 +21,10 @@ fn main() -> my::Result<()> {
 
     let mut commander = ctrl::Commander::new();
 
+    let mut list = data::List::new();
+
+    let mut filter = data::Filter::new();
+
     let mut count: usize = 0;
     'mainloop: loop {
         while let Some(event) = tui.event()? {
@@ -36,6 +40,10 @@ fn main() -> my::Result<()> {
                 _ => {}
             }
         }
+
+        let nodes = tree.nodes(&path)?;
+
+        list.set_items(&nodes, &filter);
 
         tui.clear()?;
 
