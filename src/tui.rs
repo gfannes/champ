@@ -94,6 +94,12 @@ pub struct List {
     region: Region,
 }
 
+impl List {
+    pub fn new(region: Region) -> List {
+        List { region }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Region {
     pub row: usize,
