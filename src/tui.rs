@@ -98,6 +98,15 @@ impl List {
     pub fn new(region: Region) -> List {
         List { region }
     }
+    pub fn draw(&mut self, tui: &mut Tui, list: &data::List) -> Result<()> {
+        let mut region = self.region;
+        for item in &list.items {
+            if let Some(line) = region.pop(1, Side::Top) {
+                Text::new(line).draw(tui, item);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Copy, Clone, Default)]

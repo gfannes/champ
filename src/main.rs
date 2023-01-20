@@ -53,7 +53,7 @@ fn main() -> my::Result<()> {
         status_line = format!("Loop {}", count);
         tui::Text::new(layout.status).draw(&mut tui, &status_line)?;
 
-        tui::List::new(layout.location);
+        tui::List::new(layout.location).draw(&mut tui, &list);
 
         tui.flush()?;
 
