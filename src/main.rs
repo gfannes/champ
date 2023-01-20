@@ -27,10 +27,6 @@ fn main() -> my::Result<()> {
 
     let mut count: usize = 0;
     'mainloop: loop {
-        while let Some(event) = tui.event()? {
-            commander.process(event)?;
-        }
-
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
@@ -44,6 +40,11 @@ fn main() -> my::Result<()> {
         let nodes = tree.nodes(&path)?;
 
         list.set_items(&nodes, &filter);
+        if nodes.is_empty() {
+            list.focus = None;
+        } else {
+            list.focus = Some(0);
+        }
 
         tui.clear()?;
 
@@ -56,6 +57,10 @@ fn main() -> my::Result<()> {
         tui::List::new(layout.location).draw(&mut tui, &list);
 
         tui.flush()?;
+
+        if let Some(event) = tui.event()? {
+            commander.process(event)?;
+        }
 
         count += 1;
     }

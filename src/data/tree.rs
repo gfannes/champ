@@ -62,7 +62,6 @@ impl Tree {
 
     pub fn nodes(&self, path: &Path) -> my::Result<Vec<String>> {
         let pb = std::path::PathBuf::from(path);
-        println!("pb: {}", pb.display());
 
         let mut v = Vec::new();
 

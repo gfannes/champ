@@ -27,7 +27,7 @@ impl Tui {
     }
 
     pub fn event(&mut self) -> Result<Option<Event>> {
-        if event::poll(std::time::Duration::from_millis(10))? {
+        if event::poll(std::time::Duration::from_millis(1000))? {
             let event = event::read()?;
             Ok(Some(event))
         } else {
@@ -100,9 +100,15 @@ impl List {
     }
     pub fn draw(&mut self, tui: &mut Tui, list: &data::List) -> Result<()> {
         let mut region = self.region;
-        for item in &list.items {
+        for (ix0, item) in list.items.iter().enumerate() {
             if let Some(line) = region.pop(1, Side::Top) {
-                Text::new(line).draw(tui, item);
+                let mut text = Text::new(line);
+                if let Some(focus_ix) = list.focus {
+                    if focus_ix == ix0 {
+                        text.mark();
+                    }
+                }
+                text.draw(tui, item);
             }
         }
         Ok(())
@@ -187,11 +193,18 @@ pub enum Side {
 
 pub struct Text {
     region: Region,
+    marked: bool,
 }
 
 impl Text {
     pub fn new(region: Region) -> Text {
-        Text { region }
+        Text {
+            region,
+            marked: false,
+        }
+    }
+    pub fn mark(&mut self) {
+        self.marked = true;
     }
     pub fn draw(&mut self, tui: &mut Tui, str: impl Into<String>) -> Result<()> {
         tui.queue(cursor::MoveTo(
@@ -212,7 +225,11 @@ impl Text {
             str.truncate(size);
         }
 
-        tui.queue(style::Print(str))?;
+        if self.marked {
+            tui.queue(style::PrintStyledContent(str.with(Color::Yellow)))?;
+        } else {
+            tui.queue(style::Print(str))?;
+        }
 
         Ok(())
     }
