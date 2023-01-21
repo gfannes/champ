@@ -11,7 +11,7 @@ fn main() -> my::Result<()> {
 
     let settings = config::Settings::load(&cli_options)?;
 
-    let mut tui = tui::Tui::new()?;
+    let mut term = tui::Term::new()?;
 
     let tree = data::Tree::new();
 
@@ -46,19 +46,19 @@ fn main() -> my::Result<()> {
             list.focus = Some(0);
         }
 
-        tui.clear()?;
+        term.clear()?;
 
-        let layout = tui::layout(&tui)?;
+        let layout = tui::Layout::create(&term)?;
 
-        tui::Text::new(layout.path).draw(&mut tui, format!("{}", &path))?;
+        tui::Text::new(layout.path).draw(&mut term, format!("{}", &path))?;
         status_line = format!("Loop {}", count);
-        tui::Text::new(layout.status).draw(&mut tui, &status_line)?;
+        tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 
-        tui::List::new(layout.location).draw(&mut tui, &list);
+        tui::List::new(layout.location).draw(&mut term, &list);
 
-        tui.flush()?;
+        term.flush()?;
 
-        if let Some(event) = tui.event()? {
+        if let Some(event) = term.event()? {
             commander.process(event)?;
         }
 
