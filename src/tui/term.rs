@@ -19,13 +19,26 @@ impl Term {
         Ok(Term { stdout })
     }
 
-    pub fn event(&mut self) -> my::Result<Option<tui::Event>> {
-        if event::poll(std::time::Duration::from_millis(1000))? {
+    pub fn event(&mut self, timeout_ms: u64) -> my::Result<Option<tui::Event>> {
+        if event::poll(std::time::Duration::from_millis(timeout_ms))? {
             let event = event::read()?;
             Ok(Some(event))
         } else {
             Ok(None)
         }
+    }
+    pub fn process_events(
+        &mut self,
+        timeout_ms: u64,
+        mut ftor: impl FnMut(tui::Event) -> my::Result<()>,
+    ) -> my::Result<()> {
+        let mut timeout_ms = timeout_ms;
+        while let Some(event) = self.event(timeout_ms)? {
+            ftor(event)?;
+            timeout_ms = 0;
+        }
+
+        Ok(())
     }
 
     pub fn clear(&mut self) -> my::Result<()> {

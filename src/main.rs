@@ -16,6 +16,7 @@ fn main() -> my::Result<()> {
     let tree = data::Tree::new();
 
     let mut path = data::Path::from(std::env::current_dir()?);
+    let mut index = data::Index::new();
 
     let mut status_line = "Status line".to_string();
 
@@ -27,40 +28,45 @@ fn main() -> my::Result<()> {
 
     let mut count: usize = 0;
     'mainloop: loop {
+        let nodes = tree.nodes(&path)?;
+
+        list.set_items(&nodes, &filter);
+        list.update_focus(&mut index);
+
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
                 ctrl::Command::In => {
                     path.parts.pop();
                 }
+                ctrl::Command::Up => {
+                    index.ix -= 1;
+                    index.name = None;
+                }
+                ctrl::Command::Down => {
+                    index.ix += 1;
+                    index.name = None;
+                }
                 _ => {}
             }
         }
-
-        let nodes = tree.nodes(&path)?;
-
-        list.set_items(&nodes, &filter);
-        if nodes.is_empty() {
-            list.focus = None;
-        } else {
-            list.focus = Some(0);
-        }
+        status_line = format!("index: {:?}", index);
 
         term.clear()?;
 
         let layout = tui::Layout::create(&term)?;
 
         tui::Text::new(layout.path).draw(&mut term, format!("{}", &path))?;
-        status_line = format!("Loop {}", count);
-        tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 
-        tui::List::new(layout.location).draw(&mut term, &list);
+        tui::List::new(layout.location).draw(&mut term, &list)?;
+
+        tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 
         term.flush()?;
 
-        if let Some(event) = term.event()? {
-            commander.process(event)?;
-        }
+        term.process_events(settings.mainloop_timeout_ms, |event| {
+            commander.process(event)
+        })?;
 
         count += 1;
     }

@@ -1,51 +1,48 @@
+pub use crate::data::list::List;
 pub use crate::data::name::Data;
 pub use crate::data::node::{Node, Nodes};
 pub use crate::data::path::Path;
 pub use crate::data::tree::Tree;
-use crate::my;
+use std::cmp;
 
+mod list;
 mod name;
 mod node;
 mod path;
 mod tree;
 
-#[derive(Default)]
-pub struct List {
-    pub items: Vec<String>,
-    pub focus: Option<usize>,
+#[derive(Debug)]
+pub struct Index {
+    pub ix: i64,
+    pub name: Option<String>,
 }
 
-impl List {
-    pub fn new() -> List {
-        Default::default()
+impl Index {
+    pub fn new() -> Index {
+        Index { ix: -1, name: None }
     }
 
-    pub fn set_items(&mut self, nodes: &Vec<String>, filter: &Filter) -> my::Result<()> {
-        let focus_str = self.focus.map(|ix| self.items[ix].clone());
-        self.focus = None;
-
-        self.items.clear();
-        for (ix, s) in nodes.iter().enumerate() {
-            let mut include = true;
-
-            let is_hidden = s.starts_with(".");
-            if is_hidden && !filter.hidden {
-                include = false;
-            }
-
-            if include {
-                let s = s.to_string();
-                if let Some(focus_str) = &focus_str {
-                    if self.focus.is_none() && s == *focus_str {
-                        self.focus = Some(ix);
-                    }
+    pub fn update(&mut self, items: &Vec<String>) {
+        if let Some(wanted_name) = &self.name {
+            for (ix, item) in items.iter().enumerate() {
+                if item == wanted_name {
+                    self.ix = ix as i64;
+                    // We found the name and updated the ix
+                    return;
                 }
-
-                self.items.push(s);
             }
         }
 
-        Ok(())
+        self.ix = cmp::max(self.ix, 0);
+
+        let max_ix = (items.len() as i64) - 1;
+        self.ix = cmp::min(self.ix, max_ix);
+
+        if self.ix < 0 {
+            self.name = None;
+        } else {
+            self.name = Some(items[self.ix as usize].clone());
+        }
     }
 }
 

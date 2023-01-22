@@ -25,11 +25,15 @@ pub mod cli {
     }
 }
 
-pub struct Settings {}
+pub struct Settings {
+    pub mainloop_timeout_ms: u64,
+}
 
 impl Settings {
     pub fn load(cli_options: &cli::Options) -> Result<Settings> {
-        let settings = Settings {};
+        let settings = Settings {
+            mainloop_timeout_ms: 100,
+        };
         Ok(settings)
     }
 }
