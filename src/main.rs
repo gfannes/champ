@@ -16,7 +16,7 @@ fn main() -> my::Result<()> {
     let tree = data::Tree::new();
 
     let mut path = data::Path::from(std::env::current_dir()?);
-    let mut index = data::Index::new();
+    let mut indices = data::Indices::new();
 
     let mut status_line = "Status line".to_string();
 
@@ -28,29 +28,46 @@ fn main() -> my::Result<()> {
 
     let mut count: usize = 0;
     'mainloop: loop {
+        term.process_events(settings.mainloop_timeout_ms, |event| {
+            commander.process(event)
+        })?;
+
         let nodes = tree.nodes(&path)?;
 
         list.set_items(&nodes, &filter);
-        list.update_focus(&mut index);
+
+        list.update_focus(indices.goc(&path));
 
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
+
                 ctrl::Command::In => {
-                    path.parts.pop();
+                    if let Some(name) = path.pop() {
+                        status_line = format!("name: {:?}", name);
+                        let index = indices.goc(&path);
+                        index.name = Some(name);
+                    }
                 }
                 ctrl::Command::Up => {
+                    let index = indices.goc(&path);
                     index.ix -= 1;
                     index.name = None;
                 }
                 ctrl::Command::Down => {
+                    let index = indices.goc(&path);
                     index.ix += 1;
                     index.name = None;
+                }
+                ctrl::Command::Out => {
+                    let index = indices.goc(&path);
+                    if let Some(name) = &index.name {
+                        path.push(name);
+                    }
                 }
                 _ => {}
             }
         }
-        status_line = format!("index: {:?}", index);
 
         term.clear()?;
 
@@ -63,10 +80,6 @@ fn main() -> my::Result<()> {
         tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 
         term.flush()?;
-
-        term.process_events(settings.mainloop_timeout_ms, |event| {
-            commander.process(event)
-        })?;
 
         count += 1;
     }

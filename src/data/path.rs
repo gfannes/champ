@@ -1,6 +1,6 @@
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
-    pub parts: Vec<String>,
+    parts: Vec<String>,
 }
 
 impl Path {
@@ -8,9 +8,12 @@ impl Path {
         Default::default()
     }
 
-    pub fn add(&mut self, part: impl Into<String>) -> &mut Self {
+    pub fn push(&mut self, part: impl Into<String>) -> &mut Self {
         self.parts.push(part.into());
         self
+    }
+    pub fn pop(&mut self) -> Option<String> {
+        self.parts.pop()
     }
 }
 
@@ -20,7 +23,7 @@ impl std::convert::From<std::path::PathBuf> for Path {
         for part in other.components() {
             match part {
                 std::path::Component::Normal(str) => {
-                    path.add(str.to_string_lossy());
+                    path.push(str.to_string_lossy());
                 }
                 _ => {}
             }
@@ -65,11 +68,11 @@ impl std::fmt::Display for Path {
 }
 
 #[test]
-fn test_new_add() {
+fn test_new_push() {
     let mut p = Path::new();
     assert_eq!(format!("{}", p), "/");
-    p.add("abc");
+    p.push("abc");
     assert_eq!(format!("{}", p), "/abc");
-    p.add("def".to_string());
+    p.push("def".to_string());
     assert_eq!(format!("{}", p), "/abc/def");
 }
