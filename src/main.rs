@@ -6,6 +6,8 @@ mod my;
 mod show;
 mod tui;
 
+use std::process;
+
 fn main() -> my::Result<()> {
     let cli_options = config::cli::Options::parse()?;
 
@@ -64,13 +66,19 @@ fn main() -> my::Result<()> {
             }
         }
 
-        match tree.nodes(&new_path) {
-            Ok(nodes) => {
-                list.set_items(&nodes, &filter);
-                path = new_path;
-            }
-            Err(error) => {
-                status_line = format!("Error: {}", error);
+        if tree.is_file(&new_path) {
+            process::Command::new("hx")
+                .arg(std::path::PathBuf::from(&new_path))
+                .status()?;
+        } else {
+            match tree.nodes(&new_path) {
+                Ok(nodes) => {
+                    list.set_items(&nodes, &filter);
+                    path = new_path;
+                }
+                Err(error) => {
+                    status_line = format!("Error: {}", error);
+                }
             }
         }
 

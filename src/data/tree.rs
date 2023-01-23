@@ -13,6 +13,16 @@ impl Tree {
         }
     }
 
+    pub fn is_file(&self, path: &Path) -> bool {
+        let pb = std::path::PathBuf::from(path);
+        if let Ok(metadata) = std::fs::metadata(&pb) {
+            if metadata.is_file() {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn nodes(&self, path: &Path) -> my::Result<Vec<String>> {
         let pb = std::path::PathBuf::from(path);
 

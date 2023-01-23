@@ -14,10 +14,14 @@ mod tree;
 
 pub struct Filter {
     hidden: bool,
+    sort: bool,
 }
 
 impl Filter {
     pub fn new() -> Filter {
-        Filter { hidden: false }
+        Filter {
+            hidden: false,
+            sort: true,
+        }
     }
 }

@@ -35,6 +35,10 @@ impl List {
                 self.items.push(s);
             }
         }
+
+        if filter.sort {
+            self.items.sort();
+        }
     }
 
     pub fn update_focus(&mut self, index: &mut data::Index) {
