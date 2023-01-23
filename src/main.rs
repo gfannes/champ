@@ -32,42 +32,49 @@ fn main() -> my::Result<()> {
             commander.process(event)
         })?;
 
-        let nodes = tree.nodes(&path)?;
-
-        list.set_items(&nodes, &filter);
-
-        list.update_focus(indices.goc(&path));
-
+        let mut new_path = path.clone();
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
 
                 ctrl::Command::In => {
-                    if let Some(name) = path.pop() {
+                    if let Some(name) = new_path.pop() {
                         status_line = format!("name: {:?}", name);
-                        let index = indices.goc(&path);
+                        let index = indices.goc(&new_path);
                         index.name = Some(name);
                     }
                 }
                 ctrl::Command::Up => {
-                    let index = indices.goc(&path);
+                    let index = indices.goc(&new_path);
                     index.ix -= 1;
                     index.name = None;
                 }
                 ctrl::Command::Down => {
-                    let index = indices.goc(&path);
+                    let index = indices.goc(&new_path);
                     index.ix += 1;
                     index.name = None;
                 }
                 ctrl::Command::Out => {
-                    let index = indices.goc(&path);
+                    let index = indices.goc(&new_path);
                     if let Some(name) = &index.name {
-                        path.push(name);
+                        new_path.push(name);
                     }
                 }
                 _ => {}
             }
         }
+
+        match tree.nodes(&new_path) {
+            Ok(nodes) => {
+                list.set_items(&nodes, &filter);
+                path = new_path;
+            }
+            Err(error) => {
+                status_line = format!("Error: {}", error);
+            }
+        }
+
+        list.update_focus(indices.goc(&path));
 
         term.clear()?;
 
