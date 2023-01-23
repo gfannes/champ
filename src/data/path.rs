@@ -1,3 +1,39 @@
+use crate::my;
+
+pub struct Mgr {
+    pub current_ix: usize,
+    paths: Vec<Path>,
+}
+
+impl Mgr {
+    pub fn new() -> my::Result<Mgr> {
+        let mut res = Mgr {
+            paths: Vec::new(),
+            current_ix: 0,
+        };
+
+        res.switch_tab(0)?;
+
+        Ok(res)
+    }
+
+    pub fn current(&self) -> &Path {
+        &self.paths[self.current_ix]
+    }
+
+    pub fn set_current(&mut self, path: Path) {
+        self.paths[self.current_ix] = path;
+    }
+
+    pub fn switch_tab(&mut self, tab: usize) -> my::Result<()> {
+        while self.paths.len() <= tab {
+            self.paths.push(Path::from(std::env::current_dir()?));
+        }
+        self.current_ix = tab;
+        Ok(())
+    }
+}
+
 #[derive(Default, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     parts: Vec<String>,

@@ -17,8 +17,9 @@ fn main() -> my::Result<()> {
 
     let tree = data::Tree::new();
 
-    let mut path = data::Path::from(std::env::current_dir()?);
     let mut indices = data::Indices::new();
+
+    let mut path_mgr = data::path::Mgr::new()?;
 
     let mut status_line = "Status line".to_string();
 
@@ -34,7 +35,7 @@ fn main() -> my::Result<()> {
             commander.process(event)
         })?;
 
-        let mut new_path = path.clone();
+        let mut new_path = path_mgr.current().clone();
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
@@ -62,6 +63,10 @@ fn main() -> my::Result<()> {
                         new_path.push(name);
                     }
                 }
+                ctrl::Command::SwitchTab(tab) => {
+                    path_mgr.switch_tab(tab)?;
+                    new_path = path_mgr.current().clone();
+                }
                 _ => {}
             }
         }
@@ -74,7 +79,7 @@ fn main() -> my::Result<()> {
             match tree.nodes(&new_path) {
                 Ok(nodes) => {
                     list.set_items(&nodes, &filter);
-                    path = new_path;
+                    path_mgr.set_current(new_path);
                 }
                 Err(error) => {
                     status_line = format!("Error: {}", error);
@@ -82,13 +87,16 @@ fn main() -> my::Result<()> {
             }
         }
 
-        list.update_focus(indices.goc(&path));
+        list.update_focus(indices.goc(path_mgr.current()));
 
         term.clear()?;
 
         let layout = tui::Layout::create(&term)?;
 
-        tui::Text::new(layout.path).draw(&mut term, format!("{}", &path))?;
+        tui::Text::new(layout.path).draw(
+            &mut term,
+            format!("[{}]: {}", path_mgr.current_ix, path_mgr.current()),
+        )?;
 
         tui::List::new(layout.location).draw(&mut term, &list)?;
 

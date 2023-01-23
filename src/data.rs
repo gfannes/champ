@@ -9,7 +9,7 @@ mod index;
 mod list;
 mod name;
 mod node;
-mod path;
+pub mod path;
 mod tree;
 
 pub struct Filter {
