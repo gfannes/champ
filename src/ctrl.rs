@@ -34,6 +34,11 @@ impl Commander {
                         'l' => self.commands.push(Command::Out),
                         _ => {}
                     },
+                    KeyCode::Down => self.commands.push(Command::Down),
+                    KeyCode::Up => self.commands.push(Command::Up),
+                    KeyCode::Left => self.commands.push(Command::In),
+                    KeyCode::Right => self.commands.push(Command::Out),
+                    KeyCode::Enter => self.commands.push(Command::Out),
                     _ => {}
                 },
                 _ => {}
