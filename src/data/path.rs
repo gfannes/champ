@@ -12,7 +12,7 @@ impl Mgr {
             current_ix: 0,
         };
 
-        res.switch_tab(0)?;
+        res.switch_tab(1)?;
 
         Ok(res)
     }
