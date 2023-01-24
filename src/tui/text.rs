@@ -41,7 +41,9 @@ impl Text {
         }
 
         if self.marked {
-            term.queue(style::PrintStyledContent(str.with(style::Color::Blue)))?;
+            term.queue(style::PrintStyledContent(
+                str.with(style::Color::Green).on(style::Color::DarkGrey),
+            ))?;
         } else {
             term.queue(style::Print(str))?;
         }

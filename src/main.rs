@@ -25,7 +25,8 @@ fn main() -> my::Result<()> {
 
     let mut commander = ctrl::Commander::new();
 
-    let mut list = data::List::new();
+    let mut location_list = data::List::new();
+    let mut parent_list = data::List::new();
 
     let mut filter = data::Filter::new();
 
@@ -35,51 +36,51 @@ fn main() -> my::Result<()> {
             commander.process(event)
         })?;
 
-        let mut new_path = path_mgr.current().clone();
+        let mut new_location_path = path_mgr.location().clone();
         for command in commander.commands() {
             match command {
                 ctrl::Command::Quit => break 'mainloop,
 
                 ctrl::Command::In => {
-                    if let Some(name) = new_path.pop() {
+                    if let Some(name) = new_location_path.pop() {
                         status_line = format!("name: {:?}", name);
-                        let index = indices.goc(&new_path);
+                        let index = indices.goc(&new_location_path);
                         index.name = Some(name);
                     }
                 }
                 ctrl::Command::Up => {
-                    let index = indices.goc(&new_path);
+                    let index = indices.goc(&new_location_path);
                     index.ix -= 1;
                     index.name = None;
                 }
                 ctrl::Command::Down => {
-                    let index = indices.goc(&new_path);
+                    let index = indices.goc(&new_location_path);
                     index.ix += 1;
                     index.name = None;
                 }
                 ctrl::Command::Out => {
-                    let index = indices.goc(&new_path);
+                    let index = indices.goc(&new_location_path);
                     if let Some(name) = &index.name {
-                        new_path.push(name);
+                        new_location_path.push(name);
                     }
                 }
                 ctrl::Command::SwitchTab(tab) => {
                     path_mgr.switch_tab(tab)?;
-                    new_path = path_mgr.current().clone();
+                    new_location_path = path_mgr.location().clone();
                 }
                 _ => {}
             }
         }
 
-        if tree.is_file(&new_path) {
+        if tree.is_file(&new_location_path) {
             process::Command::new("hx")
-                .arg(std::path::PathBuf::from(&new_path))
+                .arg(std::path::PathBuf::from(&new_location_path))
                 .status()?;
         } else {
-            match tree.nodes(&new_path) {
+            match tree.nodes(&new_location_path) {
                 Ok(nodes) => {
-                    list.set_items(&nodes, &filter);
-                    path_mgr.set_current(new_path);
+                    location_list.set_items(&nodes, &filter);
+                    path_mgr.set_location(new_location_path);
                 }
                 Err(error) => {
                     status_line = format!("Error: {}", error);
@@ -87,7 +88,19 @@ fn main() -> my::Result<()> {
             }
         }
 
-        list.update_focus(indices.goc(path_mgr.current()));
+        location_list.update_focus(indices.goc(path_mgr.location()));
+        {
+            let parent_path = path_mgr.parent();
+            match tree.nodes(&parent_path) {
+                Ok(nodes) => {
+                    parent_list.set_items(&nodes, &filter);
+                }
+                Err(error) => {
+                    status_line = format!("Error: {}", error);
+                }
+            }
+            parent_list.update_focus(indices.goc(&parent_path));
+        }
 
         term.clear()?;
 
@@ -95,10 +108,11 @@ fn main() -> my::Result<()> {
 
         tui::Text::new(layout.path).draw(
             &mut term,
-            format!("[{}]: {}", path_mgr.current_ix, path_mgr.current()),
+            format!("[{}]: {}", path_mgr.tab, path_mgr.location()),
         )?;
 
-        tui::List::new(layout.location).draw(&mut term, &list)?;
+        tui::List::new(layout.location).draw(&mut term, &location_list)?;
+        tui::List::new(layout.parent).draw(&mut term, &parent_list)?;
 
         tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 

@@ -1,7 +1,7 @@
 use crate::my;
 
 pub struct Mgr {
-    pub current_ix: usize,
+    pub tab: usize,
     paths: Vec<Path>,
 }
 
@@ -9,7 +9,7 @@ impl Mgr {
     pub fn new() -> my::Result<Mgr> {
         let mut res = Mgr {
             paths: Vec::new(),
-            current_ix: 0,
+            tab: 0,
         };
 
         res.switch_tab(1)?;
@@ -17,19 +17,25 @@ impl Mgr {
         Ok(res)
     }
 
-    pub fn current(&self) -> &Path {
-        &self.paths[self.current_ix]
+    pub fn location(&self) -> &Path {
+        &self.paths[self.tab]
     }
 
-    pub fn set_current(&mut self, path: Path) {
-        self.paths[self.current_ix] = path;
+    pub fn set_location(&mut self, path: Path) {
+        self.paths[self.tab] = path;
+    }
+
+    pub fn parent(&self) -> Path {
+        let mut res = self.location().clone();
+        res.pop();
+        res
     }
 
     pub fn switch_tab(&mut self, tab: usize) -> my::Result<()> {
         while self.paths.len() <= tab {
             self.paths.push(Path::from(std::env::current_dir()?));
         }
-        self.current_ix = tab;
+        self.tab = tab;
         Ok(())
     }
 }
