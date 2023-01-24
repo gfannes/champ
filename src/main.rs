@@ -27,6 +27,7 @@ fn main() -> my::Result<()> {
 
     let mut location_list = data::List::new();
     let mut parent_list = data::List::new();
+    let mut preview_list = data::List::new();
 
     let mut filter = data::Filter::new();
 
@@ -77,7 +78,7 @@ fn main() -> my::Result<()> {
                 .arg(std::path::PathBuf::from(&new_location_path))
                 .status()?;
         } else {
-            match tree.nodes(&new_location_path) {
+            match tree.read_folder(&new_location_path) {
                 Ok(nodes) => {
                     location_list.set_items(&nodes, &filter);
                     path_mgr.set_location(new_location_path);
@@ -89,9 +90,10 @@ fn main() -> my::Result<()> {
         }
 
         location_list.update_focus(indices.goc(path_mgr.location()));
+
         {
             let parent_path = path_mgr.parent();
-            match tree.nodes(&parent_path) {
+            match tree.read_folder(&parent_path) {
                 Ok(nodes) => {
                     parent_list.set_items(&nodes, &filter);
                 }
@@ -100,6 +102,34 @@ fn main() -> my::Result<()> {
                 }
             }
             parent_list.update_focus(indices.goc(&parent_path));
+        }
+
+        {
+            let mut preview_path = path_mgr.location().clone();
+            if let Some(name) = &indices.goc(&preview_path).name {
+                preview_path.push(name);
+
+                if tree.is_file(&preview_path) {
+                    match tree.read_file(&preview_path) {
+                        Ok(nodes) => {
+                            preview_list.set_items(&nodes, &filter);
+                        }
+                        Err(error) => {
+                            status_line = format!("Error: {}", error);
+                        }
+                    }
+                } else {
+                    match tree.read_folder(&preview_path) {
+                        Ok(nodes) => {
+                            preview_list.set_items(&nodes, &filter);
+                        }
+                        Err(error) => {
+                            status_line = format!("Error: {}", error);
+                        }
+                    }
+                }
+                preview_list.update_focus(indices.goc(&preview_path));
+            }
         }
 
         term.clear()?;
@@ -113,6 +143,7 @@ fn main() -> my::Result<()> {
 
         tui::List::new(layout.location).draw(&mut term, &location_list)?;
         tui::List::new(layout.parent).draw(&mut term, &parent_list)?;
+        tui::List::new(layout.preview).draw(&mut term, &preview_list)?;
 
         tui::Text::new(layout.status).draw(&mut term, &status_line)?;
 

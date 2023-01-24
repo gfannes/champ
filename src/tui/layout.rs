@@ -101,12 +101,12 @@ impl Layout {
             .pop(1, Side::Bottom)
             .ok_or(my::Error::create("Could not pop region for status"))?;
 
-        let w = region.width / 4;
+        let w = region.width;
         res.parent = region
-            .pop(w, Side::Left)
+            .pop(w * 1 / 6, Side::Left)
             .ok_or(my::Error::create("Could not pop region for parent"))?;
         res.location = region
-            .pop(w, Side::Left)
+            .pop(w * 2 / 6, Side::Left)
             .ok_or(my::Error::create("Could not pop region for location"))?;
         res.preview = region;
 
