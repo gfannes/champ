@@ -1,6 +1,7 @@
 use crate::data::node;
 use crate::data::path::Path;
 use crate::my;
+use std::io::prelude::*;
 use std::io::BufRead;
 
 pub struct Tree {
@@ -31,9 +32,9 @@ impl Tree {
 
         let file = std::fs::File::open(pb)?;
 
-        let mut buf_reader = std::io::BufReader::new(file);
+        let mut buf_reader = std::io::BufReader::new(file.take(4096));
 
-        if true {
+        if false {
             for entry in buf_reader.lines() {
                 v.push(entry?);
             }
