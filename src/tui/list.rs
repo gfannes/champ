@@ -13,17 +13,31 @@ impl List {
     }
     pub fn draw(&mut self, term: &mut term::Term, list: &data::List) -> my::Result<()> {
         let mut region = self.region;
-        for (ix0, item) in list.items.iter().enumerate() {
-            if let Some(line) = region.pop(1, tui::Side::Top) {
-                let mut text = tui::Text::new(line);
-                if let Some(focus_ix) = list.focus {
-                    if focus_ix == ix0 {
-                        text.mark();
-                    }
-                }
-                text.draw(term, item);
+
+        let mut ix = 0;
+        if let Some(focus_ix) = list.focus {
+            if focus_ix >= self.region.height {
+                ix = focus_ix - self.region.height + 1;
             }
         }
+
+        while let Some(line) = region.pop(1, tui::Side::Top) {
+            let mut text = tui::Text::new(line);
+            if let Some(focus_ix) = list.focus {
+                if focus_ix == ix {
+                    text.mark();
+                }
+            }
+
+            if let Some(item) = list.items.get(ix) {
+                text.draw(term, item)?;
+            } else {
+                text.clear(term)?;
+            }
+
+            ix += 1;
+        }
+
         Ok(())
     }
 }

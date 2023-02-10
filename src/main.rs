@@ -29,7 +29,14 @@ fn main() -> my::Result<()> {
     let mut parent_list = data::List::new();
     let mut preview_list = data::List::new();
 
-    let mut filter = data::Filter::new();
+    let mut folder_filter = data::Filter {
+        hidden: false,
+        sort: true,
+    };
+    let file_filter = data::Filter {
+        hidden: true,
+        sort: false,
+    };
 
     let mut count: usize = 0;
     'mainloop: loop {
@@ -80,7 +87,7 @@ fn main() -> my::Result<()> {
         } else {
             match tree.read_folder(&new_location_path) {
                 Ok(nodes) => {
-                    location_list.set_items(&nodes, &filter);
+                    location_list.set_items(&nodes, &folder_filter);
                     path_mgr.set_location(new_location_path);
                 }
                 Err(error) => {
@@ -95,7 +102,7 @@ fn main() -> my::Result<()> {
             let parent_path = path_mgr.parent();
             match tree.read_folder(&parent_path) {
                 Ok(nodes) => {
-                    parent_list.set_items(&nodes, &filter);
+                    parent_list.set_items(&nodes, &folder_filter);
                 }
                 Err(error) => {
                     status_line = format!("Error: {}", error);
@@ -112,7 +119,7 @@ fn main() -> my::Result<()> {
                 if tree.is_file(&preview_path) {
                     match tree.read_file(&preview_path) {
                         Ok(nodes) => {
-                            preview_list.set_items(&nodes, &filter);
+                            preview_list.set_items(&nodes, &file_filter);
                         }
                         Err(error) => {
                             status_line = format!("Error: {}", error);
@@ -121,7 +128,7 @@ fn main() -> my::Result<()> {
                 } else {
                     match tree.read_folder(&preview_path) {
                         Ok(nodes) => {
-                            preview_list.set_items(&nodes, &filter);
+                            preview_list.set_items(&nodes, &folder_filter);
                         }
                         Err(error) => {
                             status_line = format!("Error: {}", error);
@@ -132,7 +139,7 @@ fn main() -> my::Result<()> {
             }
         }
 
-        term.clear()?;
+        // Make sure that the complete layout is redrawn. Performing a term.clear()? results in flicker
 
         let layout = tui::Layout::create(&term)?;
 

@@ -40,11 +40,19 @@ impl Tree {
             }
         } else {
             let mut buf = Vec::new();
-            while let Ok(size) = buf_reader.read_until(0x0a_u8, &mut buf) {
+            let delim = 0x0a_u8;
+            while let Ok(size) = buf_reader.read_until(delim, &mut buf) {
                 if size == 0 {
                     break;
                 }
-                v.push(String::from_utf8_lossy(&buf).into_owned());
+                let mut str = String::from_utf8_lossy(&buf).into_owned();
+                if let Some(ch) = str.pop() {
+                    if ch != delim as char {
+                        str.push(ch);
+                    }
+                }
+                v.push(str);
+                buf.clear();
             }
         }
 

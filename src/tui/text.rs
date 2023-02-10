@@ -21,6 +21,16 @@ impl Text {
     pub fn mark(&mut self) {
         self.marked = true;
     }
+    pub fn clear(&mut self, term: &mut term::Term) -> my::Result<()> {
+        term.queue(cursor::MoveTo(
+            self.region.col as u16,
+            self.region.row as u16,
+        ))?;
+
+        term.queue(style::Print(" ".repeat(self.region.width)))?;
+
+        Ok(())
+    }
     pub fn draw(&mut self, term: &mut term::Term, str: impl Into<String>) -> my::Result<()> {
         term.queue(cursor::MoveTo(
             self.region.col as u16,
@@ -29,16 +39,15 @@ impl Text {
 
         let mut str = str.into();
 
-        let mut size = None;
+        let mut sz = 0;
         for (count, (ix, _)) in str.char_indices().enumerate() {
             if count == self.region.width {
-                size = Some(ix);
+                str.truncate(ix);
                 break;
             }
+            sz = count + 1;
         }
-        if let Some(size) = size {
-            str.truncate(size);
-        }
+        str += &" ".repeat(self.region.width - sz);
 
         if self.marked {
             term.queue(style::PrintStyledContent(
