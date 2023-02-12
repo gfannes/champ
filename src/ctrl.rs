@@ -29,10 +29,14 @@ impl Commander {
                 Event::Key(key) => match key.code {
                     KeyCode::Char(ch) => match ch {
                         'q' => self.commands.push(Command::Quit),
+
+                        'f' => self.mode = Mode::Filter,
+
                         'j' => self.commands.push(Command::Down),
                         'k' => self.commands.push(Command::Up),
                         'h' => self.commands.push(Command::In),
                         'l' => self.commands.push(Command::Out),
+
                         '0' => self.commands.push(Command::SwitchTab(0)),
                         '1' => self.commands.push(Command::SwitchTab(1)),
                         '2' => self.commands.push(Command::SwitchTab(2)),
@@ -43,6 +47,7 @@ impl Commander {
                         '7' => self.commands.push(Command::SwitchTab(7)),
                         '8' => self.commands.push(Command::SwitchTab(8)),
                         '9' => self.commands.push(Command::SwitchTab(9)),
+
                         _ => {}
                     },
                     KeyCode::Down => self.commands.push(Command::Down),
@@ -50,6 +55,15 @@ impl Commander {
                     KeyCode::Left => self.commands.push(Command::In),
                     KeyCode::Right => self.commands.push(Command::Out),
                     KeyCode::Enter => self.commands.push(Command::Out),
+
+                    KeyCode::Esc => {}
+                    _ => {}
+                },
+                _ => {}
+            },
+            Mode::Filter => match event {
+                Event::Key(key) => match key.code {
+                    KeyCode::Esc => self.mode = Mode::Normal,
                     _ => {}
                 },
                 _ => {}
@@ -66,4 +80,5 @@ impl Commander {
 
 enum Mode {
     Normal,
+    Filter,
 }

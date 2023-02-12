@@ -10,6 +10,7 @@ mod list;
 mod name;
 mod node;
 pub mod path;
+pub mod status;
 mod tree;
 
 pub struct Filter {

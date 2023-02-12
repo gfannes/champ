@@ -22,6 +22,7 @@ fn main() -> my::Result<()> {
     let mut path_mgr = data::path::Mgr::new()?;
 
     let mut status_line = "Status line".to_string();
+    let mut status = data::status::Line::new();
 
     let mut commander = ctrl::Commander::new();
 
