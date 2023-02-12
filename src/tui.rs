@@ -7,5 +7,6 @@ pub use crossterm::event::{Event, KeyCode};
 
 mod layout;
 mod list;
+pub mod status;
 mod term;
 mod text;
