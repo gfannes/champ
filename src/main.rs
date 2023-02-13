@@ -53,7 +53,7 @@ fn main() -> my::Result<()> {
                 ctrl::Command::In => {
                     if let Some(name) = new_location_path.pop() {
                         status_line = format!("name: {:?}", name);
-                        status.add_timed_message(format!("name: {:?}", name), 500);
+                        status.set_timed_message(format!("name: {:?}", name), 500);
                         let index = indices.goc(&new_location_path);
                         index.name = Some(name);
                     }
@@ -94,7 +94,7 @@ fn main() -> my::Result<()> {
                 }
                 Err(error) => {
                     status_line = format!("Error: {}", error);
-                    status.add_timed_message(format!("Error: {}", error), 500);
+                    status.set_timed_message(format!("Error: {}", error), 500);
                 }
             }
         }
@@ -109,7 +109,7 @@ fn main() -> my::Result<()> {
                 }
                 Err(error) => {
                     status_line = format!("Error: {}", error);
-                    status.add_timed_message(format!("Error: {}", error), 500);
+                    status.set_timed_message(format!("Error: {}", error), 500);
                 }
             }
             parent_list.update_focus(indices.goc(&parent_path));
@@ -127,7 +127,7 @@ fn main() -> my::Result<()> {
                         }
                         Err(error) => {
                             status_line = format!("Error: {}", error);
-                            status.add_timed_message(format!("Error: {}", error), 500);
+                            status.set_timed_message(format!("Error: {}", error), 500);
                         }
                     }
                 } else {
@@ -137,7 +137,7 @@ fn main() -> my::Result<()> {
                         }
                         Err(error) => {
                             status_line = format!("Error: {}", error);
-                            status.add_timed_message(format!("Error: {}", error), 500);
+                            status.set_timed_message(format!("Error: {}", error), 500);
                         }
                     }
                 }
