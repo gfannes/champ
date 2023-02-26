@@ -23,6 +23,7 @@ fn main() -> my::Result<()> {
 
     let mut status_line = "Status line".to_string();
     let mut status = data::status::Line::new();
+    status.message = "Main".to_string();
 
     let mut commander = ctrl::Commander::new();
 
@@ -77,6 +78,9 @@ fn main() -> my::Result<()> {
                 ctrl::Command::SwitchTab(tab) => {
                     path_mgr.switch_tab(tab)?;
                     new_location_path = path_mgr.location().clone();
+                }
+                ctrl::Command::SwitchMode(mode) => {
+                    status.set_timed_message(format!("Mode: {:?}", mode), 500);
                 }
                 _ => {}
             }
@@ -158,7 +162,7 @@ fn main() -> my::Result<()> {
         tui::List::new(layout.parent).draw(&mut term, &parent_list)?;
         tui::List::new(layout.preview).draw(&mut term, &preview_list)?;
 
-        tui::Text::new(layout.status).draw(&mut term, &status_line)?;
+        tui::Text::new(layout.status).draw(&mut term, status.message())?;
         tui::status::Line::new(layout.status).draw(&mut term, &status)?;
 
         term.flush()?;

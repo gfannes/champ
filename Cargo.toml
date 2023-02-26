@@ -11,3 +11,4 @@ path = "src/main.rs"
 
 [dependencies]
 crossterm = "0.25.0"
+unicode-width = "0.1.10"

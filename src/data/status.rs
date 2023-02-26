@@ -18,6 +18,16 @@ impl Line {
         }
     }
 
+    pub fn message(&self) -> &str {
+        if let Some(timed_message) = &self.timed_message {
+            let now = std::time::Instant::now();
+            if now < timed_message.timeout {
+                return &timed_message.message;
+            }
+        }
+        return &self.message;
+    }
+
     pub fn set_timed_message(&mut self, message: impl Into<String>, duration_ms: u64) {
         let timed_message = TimedMessage {
             timeout: std::time::Instant::now() + std::time::Duration::from_millis(duration_ms),

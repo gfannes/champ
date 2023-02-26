@@ -1,6 +1,12 @@
 use crate::my::Result;
 use crate::tui::*;
 
+#[derive(Copy, Clone, Debug)]
+pub enum Mode {
+    Normal,
+    Filter,
+}
+
 pub enum Command {
     Quit,
     Down,
@@ -8,6 +14,7 @@ pub enum Command {
     In,
     Out,
     SwitchTab(usize),
+    SwitchMode(Mode),
 }
 
 pub struct Commander {
@@ -30,7 +37,10 @@ impl Commander {
                     KeyCode::Char(ch) => match ch {
                         'q' => self.commands.push(Command::Quit),
 
-                        'f' => self.mode = Mode::Filter,
+                        'f' => {
+                            self.mode = Mode::Filter;
+                            self.commands.push(Command::SwitchMode(self.mode));
+                        }
 
                         'j' => self.commands.push(Command::Down),
                         'k' => self.commands.push(Command::Up),
@@ -63,7 +73,10 @@ impl Commander {
             },
             Mode::Filter => match event {
                 Event::Key(key) => match key.code {
-                    KeyCode::Esc => self.mode = Mode::Normal,
+                    KeyCode::Esc => {
+                        self.mode = Mode::Normal;
+                        self.commands.push(Command::SwitchMode(self.mode));
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -76,9 +89,4 @@ impl Commander {
     pub fn commands(&mut self) -> Vec<Command> {
         std::mem::take(&mut self.commands)
     }
-}
-
-enum Mode {
-    Normal,
-    Filter,
 }

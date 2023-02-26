@@ -5,6 +5,7 @@ use crossterm::{
     style::{self, Stylize},
     QueueableCommand,
 };
+use unicode_width::UnicodeWidthChar;
 
 pub struct Text {
     region: tui::Region,
@@ -37,24 +38,33 @@ impl Text {
             self.region.row as u16,
         ))?;
 
-        let mut str = str.into();
+        // Collect the non-control characters of `str` into `display_str` upto a maximal terminal display width of `self.region.width`
+        let mut display_str = String::new();
+        {
+            let mut display_width = 0;
+            for (ix, ch) in str.into().char_indices() {
+                if let Some(w) = ch.width() {
+                    if display_width + w > self.region.width {
+                        break;
+                    }
 
-        let mut sz = 0;
-        for (count, (ix, _)) in str.char_indices().enumerate() {
-            if count == self.region.width {
-                str.truncate(ix);
-                break;
+                    if w > 0 {
+                        display_str.push(ch);
+                        display_width += w;
+                    }
+                }
             }
-            sz = count + 1;
+            display_str += &" ".repeat(self.region.width - display_width);
         }
-        str += &" ".repeat(self.region.width - sz);
 
         if self.marked {
             term.queue(style::PrintStyledContent(
-                str.with(style::Color::Green).on(style::Color::DarkGrey),
+                display_str
+                    .with(style::Color::Green)
+                    .on(style::Color::DarkGrey),
             ))?;
         } else {
-            term.queue(style::Print(str))?;
+            term.queue(style::Print(display_str))?;
         }
 
         Ok(())
