@@ -91,7 +91,6 @@ fn main() -> my::Result<()> {
 
         status_line.message = commander.str.clone();
         folder_filter.filter = commander.str.clone();
-        file_filter.filter = commander.str.clone();
 
         if tree.is_file(&new_location_path) {
             process::Command::new("hx")

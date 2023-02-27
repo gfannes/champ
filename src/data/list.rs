@@ -29,7 +29,7 @@ impl List {
                 for exp_ch in filter.filter.chars() {
                     let mut found = false;
                     while let Some(act_ch) = it.next() {
-                        if act_ch == exp_ch {
+                        if act_ch.to_lowercase().eq(exp_ch.to_lowercase()) {
                             found = true;
                             break;
                         }
