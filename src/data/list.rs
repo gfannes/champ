@@ -25,6 +25,23 @@ impl List {
             }
 
             if include {
+                let mut it = s.chars();
+                for exp_ch in filter.filter.chars() {
+                    let mut found = false;
+                    while let Some(act_ch) = it.next() {
+                        if act_ch == exp_ch {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        include = false;
+                        break;
+                    }
+                }
+            }
+
+            if include {
                 let s = s.to_string();
                 if let Some(focus_str) = &focus_str {
                     if self.focus.is_none() && s == *focus_str {

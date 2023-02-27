@@ -16,4 +16,5 @@ mod tree;
 pub struct Filter {
     pub hidden: bool,
     pub sort: bool,
+    pub filter: String,
 }

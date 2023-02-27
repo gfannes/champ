@@ -21,9 +21,7 @@ fn main() -> my::Result<()> {
 
     let mut path_mgr = data::path::Mgr::new()?;
 
-    let mut status_line = "Status line".to_string();
-    let mut status = data::status::Line::new();
-    status.message = "Main".to_string();
+    let mut status_line = data::status::Line::new();
 
     let mut commander = ctrl::Commander::new();
 
@@ -34,10 +32,12 @@ fn main() -> my::Result<()> {
     let mut folder_filter = data::Filter {
         hidden: false,
         sort: true,
+        filter: String::new(),
     };
-    let file_filter = data::Filter {
+    let mut file_filter = data::Filter {
         hidden: true,
         sort: false,
+        filter: String::new(),
     };
 
     let mut count: usize = 0;
@@ -53,10 +53,10 @@ fn main() -> my::Result<()> {
 
                 ctrl::Command::In => {
                     if let Some(name) = new_location_path.pop() {
-                        status_line = format!("name: {:?}", name);
-                        status.set_timed_message(format!("name: {:?}", name), 500);
+                        status_line.set_timed_message(format!("name: {:?}", name), 500);
                         let index = indices.goc(&new_location_path);
                         index.name = Some(name);
+                        commander.str.clear();
                     }
                 }
                 ctrl::Command::Up => {
@@ -73,18 +73,25 @@ fn main() -> my::Result<()> {
                     let index = indices.goc(&new_location_path);
                     if let Some(name) = &index.name {
                         new_location_path.push(name);
+                        commander.str.clear();
                     }
                 }
                 ctrl::Command::SwitchTab(tab) => {
                     path_mgr.switch_tab(tab)?;
                     new_location_path = path_mgr.location().clone();
+                    commander.str.clear();
                 }
                 ctrl::Command::SwitchMode(mode) => {
-                    status.set_timed_message(format!("Mode: {:?}", mode), 500);
+                    status_line.mode = mode;
+                    commander.str.clear();
                 }
                 _ => {}
             }
         }
+
+        status_line.message = commander.str.clone();
+        folder_filter.filter = commander.str.clone();
+        file_filter.filter = commander.str.clone();
 
         if tree.is_file(&new_location_path) {
             process::Command::new("hx")
@@ -97,8 +104,7 @@ fn main() -> my::Result<()> {
                     path_mgr.set_location(new_location_path);
                 }
                 Err(error) => {
-                    status_line = format!("Error: {}", error);
-                    status.set_timed_message(format!("Error: {}", error), 500);
+                    status_line.set_timed_message(format!("Error: {}", error), 500);
                 }
             }
         }
@@ -112,8 +118,7 @@ fn main() -> my::Result<()> {
                     parent_list.set_items(&nodes, &folder_filter);
                 }
                 Err(error) => {
-                    status_line = format!("Error: {}", error);
-                    status.set_timed_message(format!("Error: {}", error), 500);
+                    status_line.set_timed_message(format!("Error: {}", error), 500);
                 }
             }
             parent_list.update_focus(indices.goc(&parent_path));
@@ -130,8 +135,7 @@ fn main() -> my::Result<()> {
                             preview_list.set_items(&nodes, &file_filter);
                         }
                         Err(error) => {
-                            status_line = format!("Error: {}", error);
-                            status.set_timed_message(format!("Error: {}", error), 500);
+                            status_line.set_timed_message(format!("Error: {}", error), 500);
                         }
                     }
                 } else {
@@ -140,8 +144,7 @@ fn main() -> my::Result<()> {
                             preview_list.set_items(&nodes, &folder_filter);
                         }
                         Err(error) => {
-                            status_line = format!("Error: {}", error);
-                            status.set_timed_message(format!("Error: {}", error), 500);
+                            status_line.set_timed_message(format!("Error: {}", error), 500);
                         }
                     }
                 }
@@ -162,8 +165,8 @@ fn main() -> my::Result<()> {
         tui::List::new(layout.parent).draw(&mut term, &parent_list)?;
         tui::List::new(layout.preview).draw(&mut term, &preview_list)?;
 
-        tui::Text::new(layout.status).draw(&mut term, status.message())?;
-        tui::status::Line::new(layout.status).draw(&mut term, &status)?;
+        tui::Text::new(layout.status).draw(&mut term, status_line.message())?;
+        tui::status::Line::new(layout.status).draw(&mut term, &status_line)?;
 
         term.flush()?;
 

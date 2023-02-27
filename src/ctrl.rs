@@ -19,15 +19,19 @@ pub enum Command {
 
 pub struct Commander {
     mode: Mode,
+    pub str: String,
     commands: Vec<Command>,
 }
 
 impl Commander {
     pub fn new() -> Commander {
-        Commander {
+        let mut res = Commander {
             mode: Mode::Normal,
+            str: String::new(),
             commands: Vec::new(),
-        }
+        };
+        res.commands.push(Command::SwitchMode(res.mode));
+        res
     }
 
     pub fn process(&mut self, event: Event) -> Result<()> {
@@ -73,9 +77,24 @@ impl Commander {
             },
             Mode::Filter => match event {
                 Event::Key(key) => match key.code {
+                    KeyCode::Char(ch) => self.str.push(ch),
+                    KeyCode::Down => self.commands.push(Command::Down),
+                    KeyCode::Up => self.commands.push(Command::Up),
+                    KeyCode::Left => self.commands.push(Command::In),
+                    KeyCode::Right => self.commands.push(Command::Out),
+                    KeyCode::Enter => self.commands.push(Command::Out),
+                    KeyCode::Backspace => {
+                        if !self.str.is_empty() {
+                            self.str.pop();
+                        }
+                    }
                     KeyCode::Esc => {
-                        self.mode = Mode::Normal;
-                        self.commands.push(Command::SwitchMode(self.mode));
+                        if self.str.is_empty() {
+                            self.mode = Mode::Normal;
+                            self.commands.push(Command::SwitchMode(self.mode));
+                        } else {
+                            self.str.clear();
+                        }
                     }
                     _ => {}
                 },
