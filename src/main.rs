@@ -91,6 +91,10 @@ fn main() -> my::Result<()> {
                     env::set_current_dir(cwd)?;
                     term.enable()?;
                 }
+                ctrl::Command::Delete => {
+                    let path = std::path::PathBuf::from(&new_location_path);
+                    status_line.set_timed_message(format!("Deleting {:?}", &path), 500);
+                }
                 ctrl::Command::SwitchTab(tab) => {
                     path_mgr.switch_tab(tab)?;
                     new_location_path = path_mgr.location().clone();
