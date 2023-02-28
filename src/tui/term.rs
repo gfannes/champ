@@ -5,18 +5,45 @@ use std::io::Write;
 
 pub struct Term {
     stdout: std::io::Stdout,
+    enabled: bool,
 }
 
 impl Term {
     pub fn new() -> my::Result<Term> {
-        let mut stdout = std::io::stdout();
-        terminal::enable_raw_mode()?;
-        stdout.queue(cursor::Hide {})?;
-        stdout.execute(terminal::Clear(terminal::ClearType::All))?;
-        stdout.execute(event::EnableMouseCapture)?;
-        stdout.execute(event::EnableBracketedPaste)?;
-        stdout.execute(event::EnableFocusChange)?;
-        Ok(Term { stdout })
+        let mut term = Term {
+            stdout: std::io::stdout(),
+            enabled: false,
+        };
+        term.enable()?;
+        Ok(term)
+    }
+
+    pub fn enable(&mut self) -> my::Result<()> {
+        if !self.enabled {
+            terminal::enable_raw_mode()?;
+            self.stdout.queue(cursor::Hide {})?;
+            self.stdout
+                .execute(terminal::Clear(terminal::ClearType::All))?;
+            self.stdout.execute(event::EnableMouseCapture)?;
+            self.stdout.execute(event::EnableBracketedPaste)?;
+            self.stdout.execute(event::EnableFocusChange)?;
+
+            self.enabled = true;
+        }
+        Ok(())
+    }
+
+    pub fn disable(&mut self) -> my::Result<()> {
+        if self.enabled {
+            self.stdout.execute(cursor::Show {})?;
+            self.stdout.execute(event::DisableMouseCapture)?;
+            self.stdout.execute(event::DisableBracketedPaste)?;
+            self.stdout.execute(event::DisableFocusChange)?;
+            terminal::disable_raw_mode()?;
+
+            self.enabled = false;
+        }
+        Ok(())
     }
 
     pub fn event(&mut self, timeout_ms: u64) -> my::Result<Option<tui::Event>> {
@@ -75,11 +102,7 @@ impl Term {
 
 impl Drop for Term {
     fn drop(&mut self) {
-        self.stdout.execute(cursor::Show {}).unwrap();
-        self.stdout.execute(event::DisableMouseCapture).unwrap();
-        self.stdout.execute(event::DisableBracketedPaste).unwrap();
-        self.stdout.execute(event::DisableFocusChange).unwrap();
-        terminal::disable_raw_mode().unwrap();
+        self.disable().unwrap()
     }
 }
 

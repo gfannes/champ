@@ -13,6 +13,7 @@ pub enum Command {
     Up,
     In,
     Out,
+    Shell,
     SwitchTab(usize),
     SwitchMode(Mode),
 }
@@ -41,7 +42,7 @@ impl Commander {
                     KeyCode::Char(ch) => match ch {
                         'q' => self.commands.push(Command::Quit),
 
-                        'f' => {
+                        '/' => {
                             self.mode = Mode::Filter;
                             self.commands.push(Command::SwitchMode(self.mode));
                         }
@@ -50,6 +51,8 @@ impl Commander {
                         'k' => self.commands.push(Command::Up),
                         'h' => self.commands.push(Command::In),
                         'l' => self.commands.push(Command::Out),
+
+                        ';' => self.commands.push(Command::Shell),
 
                         '0' => self.commands.push(Command::SwitchTab(0)),
                         '1' => self.commands.push(Command::SwitchTab(1)),
@@ -77,7 +80,10 @@ impl Commander {
             },
             Mode::Filter => match event {
                 Event::Key(key) => match key.code {
-                    KeyCode::Char(ch) => self.str.push(ch),
+                    KeyCode::Char(ch) => match ch {
+                        ';' => self.commands.push(Command::Shell),
+                        _ => self.str.push(ch),
+                    },
                     KeyCode::Down => self.commands.push(Command::Down),
                     KeyCode::Up => self.commands.push(Command::Up),
                     KeyCode::Left => self.commands.push(Command::In),

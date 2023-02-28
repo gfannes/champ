@@ -6,6 +6,8 @@ mod my;
 mod show;
 mod tui;
 
+use std::env;
+use std::ffi;
 use std::process;
 
 fn main() -> my::Result<()> {
@@ -76,6 +78,19 @@ fn main() -> my::Result<()> {
                         commander.str.clear();
                     }
                 }
+                ctrl::Command::Shell => {
+                    term.disable()?;
+                    let cwd = env::current_dir()?;
+                    let my_path: std::path::PathBuf = path_mgr.location().into();
+                    env::set_current_dir(my_path)?;
+                    process::Command::new(
+                        std::env::var_os("SHELL")
+                            .unwrap_or(ffi::OsStr::new("/bin/zsh").to_os_string()),
+                    )
+                    .status()?;
+                    env::set_current_dir(cwd)?;
+                    term.enable()?;
+                }
                 ctrl::Command::SwitchTab(tab) => {
                     path_mgr.switch_tab(tab)?;
                     new_location_path = path_mgr.location().clone();
@@ -93,9 +108,28 @@ fn main() -> my::Result<()> {
         folder_filter.filter = commander.str.clone();
 
         if tree.is_file(&new_location_path) {
-            process::Command::new("hx")
-                .arg(std::path::PathBuf::from(&new_location_path))
-                .status()?;
+            let path = std::path::PathBuf::from(&new_location_path);
+            let app = match path.extension() {
+                Some(ext) => {
+                    if ext == ffi::OsStr::new("pdf") {
+                        "evince"
+                    } else if ext == ffi::OsStr::new("zip") {
+                        "unzip"
+                    } else if ext == ffi::OsStr::new("graphml") {
+                        "yed"
+                    } else {
+                        "hx"
+                    }
+                }
+                None => "hx",
+            };
+            term.disable()?;
+            let cwd = env::current_dir()?;
+            let my_path: std::path::PathBuf = path_mgr.location().into();
+            env::set_current_dir(my_path)?;
+            process::Command::new(app).arg(path).status()?;
+            env::set_current_dir(cwd)?;
+            term.enable()?;
         } else {
             match tree.read_folder(&new_location_path) {
                 Ok(nodes) => {
