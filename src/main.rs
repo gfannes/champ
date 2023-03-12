@@ -4,6 +4,7 @@ mod data;
 #[macro_use]
 mod my;
 mod show;
+mod tree;
 mod tui;
 
 use std::env;
