@@ -1,9 +1,20 @@
+mod fs;
+
 use std::ffi;
 
 // A filesystem tree
-struct Root {
+pub struct Root {
     folders: Vec<Folder>,
     files: Vec<File>,
+}
+
+impl Root {
+    pub fn new() -> Root {
+        Root {
+            folders: Vec::new(),
+            files: Vec::new(),
+        }
+    }
 }
 
 struct Folder {
