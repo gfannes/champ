@@ -19,8 +19,13 @@ impl Text {
             marked: false,
         }
     }
-    pub fn mark(&mut self) {
+    pub fn mark(&mut self) -> &mut Self {
         self.marked = true;
+        self
+    }
+    pub fn set_mark(&mut self, b: bool) -> &mut Self {
+        self.marked = b;
+        self
     }
     pub fn clear(&mut self, term: &mut tui::term::Term) -> util::Result<()> {
         term.queue(cursor::MoveTo(

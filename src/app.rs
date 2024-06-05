@@ -1,49 +1,68 @@
 use crate::{cli, config, ctrl, data, tui, util};
 
+use dirs;
+use flexi_logger;
+use log;
 use std::{env, ffi, process};
 
 pub struct App {
     settings: config::Settings,
+    logger_handle: flexi_logger::LoggerHandle,
+
     term: tui::Term,
+    commander: ctrl::Commander,
+
     tree: data::Tree,
     indices: data::Indices,
     path_mgr: data::path::Mgr,
     status_line: data::status::Line,
-    commander: ctrl::Commander,
     location_list: data::List,
     parent_list: data::List,
     preview_list: data::List,
+    folder_filter: data::Filter,
+    file_filter: data::Filter,
 }
 
 impl App {
     pub fn create(cli_options: &cli::Options) -> util::Result<App> {
+        let settings = config::Settings::load(&cli_options)?;
+
+        let logger_handle = flexi_logger::Logger::try_with_str(&settings.log_level)?
+            .log_to_file(
+                flexi_logger::FileSpec::default()
+                    .o_directory(dirs::cache_dir().map(|d| d.join("champ"))),
+            )
+            .start()?;
+        log::info!("Starting champ");
+
         let app = App {
-            settings: config::Settings::load(&cli_options)?,
+            settings,
+            logger_handle,
             term: tui::Term::new()?,
+            commander: ctrl::Commander::new(),
             tree: data::Tree::new(),
             indices: data::Indices::new(),
             path_mgr: data::path::Mgr::new()?,
             status_line: data::status::Line::new(),
-            commander: ctrl::Commander::new(),
             location_list: data::List::new(),
             parent_list: data::List::new(),
             preview_list: data::List::new(),
+            folder_filter: data::Filter {
+                hidden: false,
+                sort: true,
+                filter: String::new(),
+            },
+            file_filter: data::Filter {
+                hidden: true,
+                sort: false,
+                filter: String::new(),
+            },
         };
+
         Ok(app)
     }
 
     pub fn run(&mut self) -> util::Result<()> {
-        let mut folder_filter = data::Filter {
-            hidden: false,
-            sort: true,
-            filter: String::new(),
-        };
-        let file_filter = data::Filter {
-            hidden: true,
-            sort: false,
-            filter: String::new(),
-        };
-
         'mainloop: loop {
             self.term
                 .process_events(self.settings.mainloop_timeout_ms, |event| {
@@ -64,6 +83,13 @@ impl App {
                             self.commander.str.clear();
                         }
                     }
+                    ctrl::Command::Out => {
+                        let index = self.indices.goc(&new_location_path);
+                        if let Some(name) = &index.name {
+                            new_location_path.push(name);
+                            self.commander.str.clear();
+                        }
+                    }
                     ctrl::Command::Up => {
                         let index = self.indices.goc(&new_location_path);
                         index.ix -= 1;
@@ -74,13 +100,27 @@ impl App {
                         index.ix += 1;
                         index.name = None;
                     }
-                    ctrl::Command::Out => {
+                    ctrl::Command::UpUp => {
                         let index = self.indices.goc(&new_location_path);
-                        if let Some(name) = &index.name {
-                            new_location_path.push(name);
-                            self.commander.str.clear();
-                        }
+                        index.ix -= 10;
+                        index.name = None;
                     }
+                    ctrl::Command::DownDown => {
+                        let index = self.indices.goc(&new_location_path);
+                        index.ix += 10;
+                        index.name = None;
+                    }
+                    ctrl::Command::Top => {
+                        let index = self.indices.goc(&new_location_path);
+                        index.ix = 0;
+                        index.name = None;
+                    }
+                    ctrl::Command::Bottom => {
+                        let index = self.indices.goc(&new_location_path);
+                        index.ix = i64::MAX;
+                        index.name = None;
+                    }
+
                     ctrl::Command::Shell => {
                         self.term.disable()?;
                         let cwd = env::current_dir()?;
@@ -94,11 +134,13 @@ impl App {
                         env::set_current_dir(cwd)?;
                         self.term.enable()?;
                     }
+
                     ctrl::Command::Delete => {
                         let path = std::path::PathBuf::from(&new_location_path);
                         self.status_line
                             .set_timed_message(format!("Deleting {:?}", &path), 500);
                     }
+
                     ctrl::Command::SwitchTab(tab) => {
                         self.path_mgr.switch_tab(tab)?;
                         new_location_path = self.path_mgr.location().clone();
@@ -112,7 +154,7 @@ impl App {
             }
 
             self.status_line.message = self.commander.str.clone();
-            folder_filter.filter = self.commander.str.clone();
+            self.folder_filter.filter = self.commander.str.clone();
 
             if self.tree.is_file(&new_location_path) {
                 let path = std::path::PathBuf::from(&new_location_path);
@@ -134,13 +176,18 @@ impl App {
                 let cwd = env::current_dir()?;
                 let my_path: std::path::PathBuf = self.path_mgr.location().into();
                 env::set_current_dir(my_path)?;
-                process::Command::new(app).arg(path).status()?;
+                if let Err(err) = process::Command::new(app).arg(path).status() {
+                    self.status_line.set_timed_message(
+                        format!("Error: Could not run '{}': {}", app, err),
+                        2000,
+                    );
+                }
                 env::set_current_dir(cwd)?;
                 self.term.enable()?;
             } else {
                 match self.tree.read_folder(&new_location_path) {
                     Ok(nodes) => {
-                        self.location_list.set_items(&nodes, &folder_filter);
+                        self.location_list.set_items(&nodes, &self.folder_filter);
                         self.path_mgr.set_location(new_location_path);
                     }
                     Err(error) => {
@@ -157,7 +204,7 @@ impl App {
                 let parent_path = self.path_mgr.parent();
                 match self.tree.read_folder(&parent_path) {
                     Ok(nodes) => {
-                        self.parent_list.set_items(&nodes, &folder_filter);
+                        self.parent_list.set_items(&nodes, &self.folder_filter);
                     }
                     Err(error) => {
                         self.status_line
@@ -176,7 +223,7 @@ impl App {
                     if self.tree.is_file(&preview_path) {
                         match self.tree.read_file(&preview_path) {
                             Ok(nodes) => {
-                                self.preview_list.set_items(&nodes, &file_filter);
+                                self.preview_list.set_items(&nodes, &self.file_filter);
                             }
                             Err(error) => {
                                 self.status_line
@@ -186,7 +233,7 @@ impl App {
                     } else {
                         match self.tree.read_folder(&preview_path) {
                             Ok(nodes) => {
-                                self.preview_list.set_items(&nodes, &folder_filter);
+                                self.preview_list.set_items(&nodes, &self.folder_filter);
                             }
                             Err(error) => {
                                 self.status_line
@@ -201,9 +248,11 @@ impl App {
 
             // Make sure that the complete layout is redrawn. Performing a term.clear()? results in flicker
 
+            let is_filter_mode = matches!(self.status_line.mode, ctrl::Mode::Filter);
+
             let layout = tui::Layout::create(&self.term)?;
 
-            tui::Text::new(layout.path).draw(
+            tui::Text::new(layout.path).set_mark(is_filter_mode).draw(
                 &mut self.term,
                 format!("[{}]: {}", self.path_mgr.tab, self.path_mgr.location()),
             )?;
@@ -212,11 +261,16 @@ impl App {
             tui::List::new(layout.parent).draw(&mut self.term, &self.parent_list)?;
             tui::List::new(layout.preview).draw(&mut self.term, &self.preview_list)?;
 
-            tui::Text::new(layout.status).draw(&mut self.term, self.status_line.message())?;
+            tui::Text::new(layout.status)
+                .set_mark(is_filter_mode)
+                .draw(&mut self.term, self.status_line.message())?;
+
             tui::status::Line::new(layout.status).draw(&mut self.term, &self.status_line)?;
 
             self.term.flush()?;
         }
+
+        log::info!("Stopping App.run()");
 
         Ok(())
     }

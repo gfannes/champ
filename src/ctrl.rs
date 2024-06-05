@@ -1,5 +1,4 @@
-use crate::tui::*;
-use crate::util::Result;
+use crate::{tui, util};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Mode {
@@ -9,10 +8,14 @@ pub enum Mode {
 
 pub enum Command {
     Quit,
-    Down,
-    Up,
     In,
     Out,
+    Down,
+    Up,
+    DownDown,
+    UpUp,
+    Top,
+    Bottom,
     Shell,
     Delete,
     SwitchTab(usize),
@@ -36,11 +39,11 @@ impl Commander {
         res
     }
 
-    pub fn process(&mut self, event: Event) -> Result<()> {
+    pub fn process(&mut self, event: tui::Event) -> util::Result<()> {
         match self.mode {
             Mode::Normal => match event {
-                Event::Key(key) => match key.code {
-                    KeyCode::Char(ch) => match ch {
+                tui::Event::Key(key) => match key.code {
+                    tui::KeyCode::Char(ch) => match ch {
                         'q' => self.commands.push(Command::Quit),
 
                         '/' => {
@@ -52,6 +55,8 @@ impl Commander {
                         'k' => self.commands.push(Command::Up),
                         'h' => self.commands.push(Command::In),
                         'l' => self.commands.push(Command::Out),
+                        'g' => self.commands.push(Command::Top),
+                        'G' => self.commands.push(Command::Bottom),
 
                         ';' => self.commands.push(Command::Shell),
 
@@ -70,20 +75,22 @@ impl Commander {
 
                         _ => {}
                     },
-                    KeyCode::Down => self.commands.push(Command::Down),
-                    KeyCode::Up => self.commands.push(Command::Up),
-                    KeyCode::Left => self.commands.push(Command::In),
-                    KeyCode::Right => self.commands.push(Command::Out),
-                    KeyCode::Enter => self.commands.push(Command::Out),
+                    tui::KeyCode::Down => self.commands.push(Command::Down),
+                    tui::KeyCode::Up => self.commands.push(Command::Up),
+                    tui::KeyCode::PageDown => self.commands.push(Command::DownDown),
+                    tui::KeyCode::PageUp => self.commands.push(Command::UpUp),
+                    tui::KeyCode::Left => self.commands.push(Command::In),
+                    tui::KeyCode::Right => self.commands.push(Command::Out),
+                    tui::KeyCode::Enter => self.commands.push(Command::Out),
 
-                    KeyCode::Esc => {}
+                    tui::KeyCode::Esc => {}
                     _ => {}
                 },
                 _ => {}
             },
             Mode::Filter => match event {
-                Event::Key(key) => match key.code {
-                    KeyCode::Char(ch) => match ch {
+                tui::Event::Key(key) => match key.code {
+                    tui::KeyCode::Char(ch) => match ch {
                         ';' => {
                             self.mode = Mode::Normal;
                             self.commands.push(Command::SwitchMode(self.mode));
@@ -91,17 +98,17 @@ impl Commander {
                         }
                         _ => self.str.push(ch),
                     },
-                    KeyCode::Down => self.commands.push(Command::Down),
-                    KeyCode::Up => self.commands.push(Command::Up),
-                    KeyCode::Left => self.commands.push(Command::In),
-                    KeyCode::Right => self.commands.push(Command::Out),
-                    KeyCode::Enter => self.commands.push(Command::Out),
-                    KeyCode::Backspace => {
+                    tui::KeyCode::Down => self.commands.push(Command::Down),
+                    tui::KeyCode::Up => self.commands.push(Command::Up),
+                    tui::KeyCode::Left => self.commands.push(Command::In),
+                    tui::KeyCode::Right => self.commands.push(Command::Out),
+                    tui::KeyCode::Enter => self.commands.push(Command::Out),
+                    tui::KeyCode::Backspace => {
                         if !self.str.is_empty() {
                             self.str.pop();
                         }
                     }
-                    KeyCode::Esc => {
+                    tui::KeyCode::Esc => {
                         if self.str.is_empty() {
                             self.mode = Mode::Normal;
                             self.commands.push(Command::SwitchMode(self.mode));
