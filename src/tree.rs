@@ -1,5 +1,3 @@
-mod fs;
-
 use std::ffi;
 
 // A filesystem tree
