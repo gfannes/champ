@@ -1,5 +1,5 @@
-use crate::my;
-use crate::tui::{self, term};
+use crate::{tui, util};
+
 use crossterm::{
     cursor,
     style::{self, Stylize},
@@ -22,7 +22,7 @@ impl Text {
     pub fn mark(&mut self) {
         self.marked = true;
     }
-    pub fn clear(&mut self, term: &mut term::Term) -> my::Result<()> {
+    pub fn clear(&mut self, term: &mut tui::term::Term) -> util::Result<()> {
         term.queue(cursor::MoveTo(
             self.region.col as u16,
             self.region.row as u16,
@@ -32,7 +32,7 @@ impl Text {
 
         Ok(())
     }
-    pub fn draw(&mut self, term: &mut term::Term, str: impl Into<String>) -> my::Result<()> {
+    pub fn draw(&mut self, term: &mut tui::term::Term, str: impl Into<String>) -> util::Result<()> {
         term.queue(cursor::MoveTo(
             self.region.col as u16,
             self.region.row as u16,

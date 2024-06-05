@@ -1,4 +1,4 @@
-use crate::my;
+use crate::util;
 
 pub struct Mgr {
     pub tab: usize,
@@ -6,7 +6,7 @@ pub struct Mgr {
 }
 
 impl Mgr {
-    pub fn new() -> my::Result<Mgr> {
+    pub fn new() -> util::Result<Mgr> {
         let mut res = Mgr {
             paths: Vec::new(),
             tab: 0,
@@ -31,7 +31,7 @@ impl Mgr {
         res
     }
 
-    pub fn switch_tab(&mut self, tab: usize) -> my::Result<()> {
+    pub fn switch_tab(&mut self, tab: usize) -> util::Result<()> {
         while self.paths.len() <= tab {
             self.paths.push(Path::from(std::env::current_dir()?));
         }

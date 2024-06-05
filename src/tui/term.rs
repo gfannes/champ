@@ -1,5 +1,5 @@
-use crate::my;
-use crate::tui;
+use crate::{tui, util};
+
 use crossterm::{cursor, event, style, terminal, ExecutableCommand, QueueableCommand};
 use std::io::Write;
 
@@ -9,7 +9,7 @@ pub struct Term {
 }
 
 impl Term {
-    pub fn new() -> my::Result<Term> {
+    pub fn new() -> util::Result<Term> {
         let mut term = Term {
             stdout: std::io::stdout(),
             enabled: false,
@@ -18,7 +18,7 @@ impl Term {
         Ok(term)
     }
 
-    pub fn enable(&mut self) -> my::Result<()> {
+    pub fn enable(&mut self) -> util::Result<()> {
         if !self.enabled {
             terminal::enable_raw_mode()?;
             self.stdout.queue(cursor::Hide {})?;
@@ -33,7 +33,7 @@ impl Term {
         Ok(())
     }
 
-    pub fn disable(&mut self) -> my::Result<()> {
+    pub fn disable(&mut self) -> util::Result<()> {
         if self.enabled {
             self.stdout.execute(cursor::Show {})?;
             self.stdout.execute(event::DisableMouseCapture)?;
@@ -46,7 +46,7 @@ impl Term {
         Ok(())
     }
 
-    pub fn event(&mut self, timeout_ms: u64) -> my::Result<Option<tui::Event>> {
+    pub fn event(&mut self, timeout_ms: u64) -> util::Result<Option<tui::Event>> {
         if event::poll(std::time::Duration::from_millis(timeout_ms))? {
             let event = event::read()?;
             Ok(Some(event))
@@ -57,8 +57,8 @@ impl Term {
     pub fn process_events(
         &mut self,
         timeout_ms: u64,
-        mut ftor: impl FnMut(tui::Event) -> my::Result<()>,
-    ) -> my::Result<()> {
+        mut ftor: impl FnMut(tui::Event) -> util::Result<()>,
+    ) -> util::Result<()> {
         let mut timeout_ms = timeout_ms;
         while let Some(event) = self.event(timeout_ms)? {
             ftor(event)?;
@@ -68,28 +68,28 @@ impl Term {
         Ok(())
     }
 
-    pub fn clear(&mut self) -> my::Result<()> {
+    pub fn clear(&mut self) -> util::Result<()> {
         self.stdout
             .queue(terminal::Clear(terminal::ClearType::All))?;
         Ok(())
     }
 
-    pub fn move_to(&mut self, x: u16, y: u16) -> my::Result<()> {
+    pub fn move_to(&mut self, x: u16, y: u16) -> util::Result<()> {
         self.stdout.queue(cursor::MoveTo(x, y))?;
         Ok(())
     }
 
-    pub fn print(&mut self, msg: impl Into<String>) -> my::Result<()> {
+    pub fn print(&mut self, msg: impl Into<String>) -> util::Result<()> {
         self.stdout.queue(style::Print(msg.into()))?;
         Ok(())
     }
 
-    pub fn flush(&mut self) -> my::Result<()> {
+    pub fn flush(&mut self) -> util::Result<()> {
         self.stdout.flush()?;
         Ok(())
     }
 
-    pub fn region(&self) -> my::Result<tui::Region> {
+    pub fn region(&self) -> util::Result<tui::Region> {
         let (width, height) = crossterm::terminal::size()?;
         Ok(tui::Region {
             row: 0,

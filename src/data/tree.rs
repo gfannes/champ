@@ -1,6 +1,6 @@
 use crate::data::node;
 use crate::data::path::Path;
-use crate::my;
+use crate::util;
 use std::io::prelude::*;
 use std::io::BufRead;
 
@@ -25,7 +25,7 @@ impl Tree {
         false
     }
 
-    pub fn read_file(&self, path: &Path) -> my::Result<Vec<String>> {
+    pub fn read_file(&self, path: &Path) -> util::Result<Vec<String>> {
         let pb = std::path::PathBuf::from(path);
 
         let mut v = Vec::new();
@@ -59,7 +59,7 @@ impl Tree {
         Ok(v)
     }
 
-    pub fn read_folder(&self, path: &Path) -> my::Result<Vec<String>> {
+    pub fn read_folder(&self, path: &Path) -> util::Result<Vec<String>> {
         let pb = std::path::PathBuf::from(path);
 
         let mut v = Vec::new();

@@ -1,7 +1,4 @@
-use crate::data;
-use crate::my;
-use crate::tui;
-use crate::tui::term;
+use crate::{data, tui, util};
 
 pub struct Line {
     region: tui::Region,
@@ -12,7 +9,11 @@ impl Line {
         Line { region }
     }
 
-    pub fn draw(&mut self, term: &mut term::Term, line: &data::status::Line) -> my::Result<()> {
+    pub fn draw(
+        &mut self,
+        term: &mut tui::term::Term,
+        line: &data::status::Line,
+    ) -> util::Result<()> {
         let mut region = self.region;
         Ok(())
     }

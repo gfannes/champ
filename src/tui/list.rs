@@ -1,7 +1,4 @@
-use crate::data;
-use crate::my;
-use crate::tui;
-use crate::tui::term;
+use crate::{data, tui, util};
 
 pub struct List {
     region: tui::Region,
@@ -11,7 +8,7 @@ impl List {
     pub fn new(region: tui::Region) -> List {
         List { region }
     }
-    pub fn draw(&mut self, term: &mut term::Term, list: &data::List) -> my::Result<()> {
+    pub fn draw(&mut self, term: &mut tui::term::Term, list: &data::List) -> util::Result<()> {
         let mut region = self.region;
 
         let mut ix = 0;

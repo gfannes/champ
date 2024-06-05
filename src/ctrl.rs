@@ -1,5 +1,5 @@
-use crate::my::Result;
 use crate::tui::*;
+use crate::util::Result;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Mode {

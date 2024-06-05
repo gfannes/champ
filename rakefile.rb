@@ -43,8 +43,10 @@ end
 
 namespace :rust do
     task :build => :prepare do
-        sh 'cargo build'
-        exe_name = 'target/debug/champ'
+        mode = :release
+        # mode = :debug
+        sh "cargo build --#{mode}"
+        exe_name = "target/#{mode}/champ"
     end
 
     task :install do

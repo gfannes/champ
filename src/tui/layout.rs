@@ -1,5 +1,4 @@
-use crate::my;
-use crate::tui::term;
+use crate::{tui, util};
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Region {
@@ -91,23 +90,23 @@ impl Layout {
         Default::default()
     }
 
-    pub fn create(term: &term::Term) -> my::Result<Layout> {
+    pub fn create(term: &tui::term::Term) -> util::Result<Layout> {
         let mut region = term.region()?;
         let mut res = Layout::new();
         res.path = region
             .pop(1, Side::Top)
-            .ok_or(my::Error::create("Could not pop region for path"))?;
+            .ok_or(util::Error::create("Could not pop region for path"))?;
         res.status = region
             .pop(1, Side::Bottom)
-            .ok_or(my::Error::create("Could not pop region for status"))?;
+            .ok_or(util::Error::create("Could not pop region for status"))?;
 
         let w = region.width;
         res.parent = region
             .pop(w * 1 / 6, Side::Left)
-            .ok_or(my::Error::create("Could not pop region for parent"))?;
+            .ok_or(util::Error::create("Could not pop region for parent"))?;
         res.location = region
             .pop(w * 2 / 6, Side::Left)
-            .ok_or(my::Error::create("Could not pop region for location"))?;
+            .ok_or(util::Error::create("Could not pop region for location"))?;
         res.preview = region;
 
         Ok(res)

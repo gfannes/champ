@@ -2,6 +2,7 @@
 name = "champetter"
 version = "0.1.0"
 edition = "2021"
+authors = ["Geert Fannes <geert.fannes@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,5 +11,6 @@ name = "champ"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
 crossterm = "0.25.0"
 unicode-width = "0.1.10"

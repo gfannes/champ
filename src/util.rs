@@ -24,7 +24,7 @@ impl Error {
 
 macro_rules! fail {
     ($fmt:expr) => {
-        return Err(my::Error::create(&format!($fmt)))
+        return Err(util::Error::create(&format!($fmt)))
     };
     ($fmt:expr, $($arg:expr),*) => {
         return Err(my::Error::create(&format!($fmt, $($arg),*)))

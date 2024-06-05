@@ -1,4 +1,4 @@
-pub use crate::my::Result;
+pub use crate::util::Result;
 pub use crate::tui::layout::{Layout, Region, Side};
 pub use crate::tui::list::List;
 pub use crate::tui::term::Term;
