@@ -33,7 +33,11 @@ impl App {
                     .o_directory(dirs::cache_dir().map(|d| d.join("champ"))),
             )
             .start()?;
-        log::info!("Starting champ");
+        log::info!(
+            "Starting champ with config file '{}':\n{:?}",
+            settings.config_fp.display(),
+            settings.config
+        );
 
         let app = App {
             settings,

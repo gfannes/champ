@@ -22,12 +22,13 @@ impl Error {
     }
 }
 
+#[macro_export]
 macro_rules! fail {
     ($fmt:expr) => {
         return Err(util::Error::create(&format!($fmt)))
     };
     ($fmt:expr, $($arg:expr),*) => {
-        return Err(my::Error::create(&format!($fmt, $($arg),*)))
+        return Err(util::Error::create(&format!($fmt, $($arg),*)))
     };
     ($fmt:expr, $($arg:expr),+ ,) => {
         fail!($fmt, $($arg),*)
