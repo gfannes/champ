@@ -7,7 +7,7 @@ use std::{env, ffi, process};
 
 pub struct App {
     settings: config::Settings,
-    logger_handle: flexi_logger::LoggerHandle,
+    _logger_handle: flexi_logger::LoggerHandle,
 
     term: tui::Term,
     commander: ctrl::Commander,
@@ -37,7 +37,7 @@ impl App {
 
         let app = App {
             settings,
-            logger_handle,
+            _logger_handle: logger_handle,
             term: tui::Term::new()?,
             commander: ctrl::Commander::new(),
             tree: data::Tree::new(),
