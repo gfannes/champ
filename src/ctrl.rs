@@ -55,10 +55,12 @@ impl Commander {
                         'k' => self.commands.push(Command::Up),
                         'h' => self.commands.push(Command::In),
                         'l' => self.commands.push(Command::Out),
+                        'e' => self.commands.push(Command::Out),
                         'g' => self.commands.push(Command::Top),
                         'G' => self.commands.push(Command::Bottom),
 
                         ';' => self.commands.push(Command::Shell),
+                        'w' => self.commands.push(Command::Shell),
 
                         'd' => self.commands.push(Command::Delete),
 
