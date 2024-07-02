@@ -89,9 +89,9 @@ impl Term {
         Ok(())
     }
 
-    pub fn region(&self) -> util::Result<tui::Region> {
+    pub fn region(&self) -> util::Result<tui::layout::Region> {
         let (width, height) = crossterm::terminal::size()?;
-        Ok(tui::Region {
+        Ok(tui::layout::Region {
             row: 0,
             col: 0,
             width: width as usize,

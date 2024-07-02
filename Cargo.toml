@@ -10,6 +10,10 @@ authors = ["Geert Fannes <geert.fannes@gmail.com>"]
 name = "champ"
 path = "src/main.rs"
 
+[[bin]]
+name = "ch"
+path = "src/bin/ch.rs"
+
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
 crossterm = "0.25.0"

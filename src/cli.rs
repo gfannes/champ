@@ -1,18 +1,15 @@
-use clap::Parser;
-use std::path;
+use crate::{config, util};
 
-#[derive(Parser, Debug)]
-pub struct Options {
-    pub help: bool,
-    #[arg(short, long, default_value_t = 0)]
-    pub verbose: i32,
+pub struct App {}
 
-    #[arg(short, long)]
-    pub config: Option<path::PathBuf>,
-}
+impl App {
+    pub fn try_new(cli_args: &config::CliArgs) -> util::Result<App> {
+        let app = App {};
+        Ok(app)
+    }
 
-impl Options {
-    pub fn parse_from_cli() -> Self {
-        clap::Parser::parse()
+    pub fn run(&self) -> util::Result<()> {
+        println!("cli.App.run()");
+        Ok(())
     }
 }

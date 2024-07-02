@@ -1,11 +1,11 @@
 use crate::{data, tui, util};
 
 pub struct List {
-    region: tui::Region,
+    region: tui::layout::Region,
 }
 
 impl List {
-    pub fn new(region: tui::Region) -> List {
+    pub fn new(region: tui::layout::Region) -> List {
         List { region }
     }
     pub fn draw(&mut self, term: &mut tui::term::Term, list: &data::List) -> util::Result<()> {
@@ -18,8 +18,8 @@ impl List {
             }
         }
 
-        while let Some(line) = region.pop(1, tui::Side::Top) {
-            let mut text = tui::Text::new(line);
+        while let Some(line) = region.pop(1, tui::layout::Side::Top) {
+            let mut text = tui::text::Text::new(line);
             if let Some(focus_ix) = list.focus {
                 if focus_ix == ix {
                     text.mark();

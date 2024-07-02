@@ -1,11 +1,11 @@
 use crate::{data, tui, util};
 
 pub struct Line {
-    region: tui::Region,
+    region: tui::layout::Region,
 }
 
 impl Line {
-    pub fn new(region: tui::Region) -> Line {
+    pub fn new(region: tui::layout::Region) -> Line {
         Line { region }
     }
 

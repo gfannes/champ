@@ -1,9 +1,10 @@
-pub mod app;
+// pub mod app;
 pub mod cli;
-mod config;
+pub mod config;
 mod ctrl;
 mod data;
+pub mod mero;
 mod show;
 mod tree;
-mod tui;
+pub mod tui;
 pub mod util;

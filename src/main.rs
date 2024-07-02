@@ -1,7 +1,7 @@
-use champetter::{app, cli, util};
+use champetter::{config, tui, util};
 
 fn main() -> util::Result<()> {
-    let mut app = app::App::create(&cli::Options::parse_from_cli())?;
+    let mut app = tui::App::try_new(&config::CliArgs::parse())?;
 
     app.run()?;
 

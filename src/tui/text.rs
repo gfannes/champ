@@ -8,12 +8,12 @@ use crossterm::{
 use unicode_width::UnicodeWidthChar;
 
 pub struct Text {
-    region: tui::Region,
+    region: tui::layout::Region,
     marked: bool,
 }
 
 impl Text {
-    pub fn new(region: tui::Region) -> Text {
+    pub fn new(region: tui::layout::Region) -> Text {
         Text {
             region,
             marked: false,
