@@ -57,8 +57,11 @@ namespace :rust do
         FileUtils.rm_rf('target')
     end
 
-    task :test=> :prepare do
+    task :test => %i[prepare install] do
         sh 'cargo test'
+        sh 'ch -h'
+        sh 'ch list -h'
+        sh 'ch list'
     end
 end
 
