@@ -16,7 +16,7 @@ impl App {
         if let Some(command) = self.config.command.as_ref() {
             match command {
                 config::Command::List { verbose } => {
-                    for root in &self.config.global.root {
+                    for root in &self.config.global.filter {
                         println!("{:?}", root);
                     }
                 }

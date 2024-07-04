@@ -38,10 +38,10 @@ impl CliArgs {
 #[derive(serde::Deserialize, Debug)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
-    pub root: Vec<Root>,
+    pub filter: Vec<Filter>,
 }
 #[derive(serde::Deserialize, Debug)]
-pub struct Root {
+pub struct Filter {
     pub name: String,
     pub path: path::PathBuf,
 }
