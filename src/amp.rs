@@ -3,7 +3,7 @@
 use crate::{fail, util};
 use std::{ffi, fmt, fs, path};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Part {
     Folder { name: ffi::OsString },
     File { name: ffi::OsString },
@@ -17,6 +17,30 @@ pub struct Path {
 impl Path {
     pub fn root() -> Path {
         Path { parts: Vec::new() }
+    }
+    pub fn folder(path: impl AsRef<path::Path>) -> Path {
+        let mut p = Path::root();
+        for component in path.as_ref().components() {
+            let component = component.as_os_str();
+            if component != "/" {
+                p = p.push(Part::Folder {
+                    name: component.into(),
+                });
+            }
+        }
+        p
+    }
+    fn include(&self, rhs: &Path) -> bool {
+        let parts_to_check = rhs.parts.len();
+        if self.parts.len() < parts_to_check {
+            return false;
+        }
+        for ix in 0..parts_to_check {
+            if rhs.parts[ix] != self.parts[ix] {
+                return false;
+            }
+        }
+        true
     }
     fn push(&self, part: Part) -> Path {
         let mut path = self.clone();
@@ -82,9 +106,17 @@ impl Node {
     }
 }
 
-type Nodes = Vec<Node>;
-
-pub struct Filter {}
+pub struct Filter {
+    base: Path,
+}
+impl Filter {
+    fn new(base: Path) -> Filter {
+        Filter { base }
+    }
+    fn call(&self, path: &Path) -> bool {
+        self.base.include(path) || path.include(&self.base)
+    }
+}
 
 pub struct Tree {
     filter: Filter,
@@ -92,18 +124,24 @@ pub struct Tree {
 
 impl Tree {
     pub fn new() -> Tree {
-        Tree { filter: Filter {} }
+        Tree {
+            filter: Filter::new(Path::root()),
+        }
     }
-    pub fn list(&mut self, path: &Path) -> util::Result<Nodes> {
-        let mut nodes = Vec::new();
+    pub fn set_filter(&mut self, filter: Filter) {
+        self.filter = filter;
+    }
+    pub fn list(&mut self, path: &Path) -> util::Result<Vec<Path>> {
+        let mut paths = Vec::new();
+
         match path.fs_path()? {
             FsPath::Folder(folder) => {
-                println!("Reading {:?}", &folder);
                 for entry in fs::read_dir(&folder)? {
                     let entry = entry?;
-                    println!("{:?}", entry.file_name());
-                    let ft = entry.file_type()?;
+
                     let mut new_path = None;
+
+                    let ft = entry.file_type()?;
                     if ft.is_dir() {
                         new_path = Some(path.push(Part::Folder {
                             name: entry.file_name(),
@@ -113,15 +151,18 @@ impl Tree {
                             name: entry.file_name(),
                         }));
                     }
+
                     if let Some(new_path) = new_path {
-                        nodes.push(Node::new(new_path));
+                        if self.filter.call(&new_path) {
+                            paths.push(new_path);
+                        }
                     }
                 }
             }
-            FsPath::File(file) => {}
+            FsPath::File(_file) => {}
         }
 
-        Ok(nodes)
+        Ok(paths)
     }
 }
 
@@ -132,11 +173,11 @@ mod tests {
     #[test]
     fn test_list() -> util::Result<()> {
         let mut tree = Tree::new();
-        let path = Path::root();
-        println!("{}", path);
-        let nodes = tree.list(&path)?;
-        for node in &nodes {
-            println!("{}", node.path);
+        tree.set_filter(Filter::new(Path::folder("/home/geertf")));
+        let path = Path::folder("/home/geertf");
+        let paths = tree.list(&path)?;
+        for p in &paths {
+            println!("{}", p);
         }
         Ok(())
     }
