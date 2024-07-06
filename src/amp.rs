@@ -1,6 +1,6 @@
 // Annotation Metadata Protocol
 
-use crate::{fail, util};
+use crate::{config, fail, util};
 use std::{ffi, fmt, fs, path};
 
 #[derive(Clone, PartialEq)]
@@ -115,6 +115,13 @@ impl Filter {
     }
     fn call(&self, path: &Path) -> bool {
         self.base.include(path) || path.include(&self.base)
+    }
+}
+impl From<&config::Filter> for Filter {
+    fn from(filter: &config::Filter) -> Filter {
+        Filter {
+            base: Path::folder(&filter.path),
+        }
     }
 }
 
