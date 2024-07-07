@@ -24,7 +24,12 @@ pub struct CliArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// List all files in all roots
+    /// Print global config
+    Config {
+        /// Verbosity level
+        verbose: Option<i32>,
+    },
+    /// List all files for a given filter
     List {
         /// Verbosity level
         verbose: Option<i32>,
@@ -43,16 +48,16 @@ pub struct Global {
     pub path: Option<path::PathBuf>,
     pub filter: Vec<Filter>,
 }
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct Filter {
     pub name: String,
     pub path: path::PathBuf,
 }
 
 impl Global {
-    pub fn load(cli_options: &CliArgs) -> util::Result<Global> {
+    pub fn load(cli_args: &CliArgs) -> util::Result<Global> {
         let global_fp;
-        if let Some(fp) = &cli_options.config {
+        if let Some(fp) = &cli_args.config {
             global_fp = Some(fp.to_owned());
         } else {
             global_fp = dirs::config_dir().map(|d| d.join("champ/config.toml"));
@@ -80,9 +85,18 @@ impl Global {
 
         let content = std::fs::read(&global_fp)?;
         let content = std::str::from_utf8(&content)?;
-        let mut global: Global = toml::from_str(content)?;
-        global.path = Some(global_fp);
-
-        Ok(global)
+        match toml::from_str::<Global>(content) {
+            Ok(mut global) => {
+                global.path = Some(global_fp);
+                Ok(global)
+            }
+            Err(err) => {
+                fail!(
+                    "Could not parse config from '{}': {}",
+                    global_fp.display(),
+                    err
+                );
+            }
+        }
     }
 }

@@ -42,12 +42,38 @@ impl Path {
         }
         true
     }
+    fn is_hidden(&self) -> bool {
+        let is_hidden = |name: &ffi::OsString| {
+            if let Some(ch) = name.to_string_lossy().chars().next() {
+                if ch == '.' {
+                    return true;
+                }
+            }
+            false
+        };
+        for part in &self.parts {
+            match part {
+                Part::Folder { name } => {
+                    if is_hidden(name) {
+                        return true;
+                    }
+                }
+                Part::File { name } => {
+                    if is_hidden(name) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
     fn push(&self, part: Part) -> Path {
         let mut path = self.clone();
         path.parts.push(part);
         path
     }
-    fn fs_path(&self) -> util::Result<FsPath> {
+    pub fn fs_path(&self) -> util::Result<FsPath> {
         let mut ret = FsPath::Folder(path::PathBuf::from("/"));
         for part in &self.parts {
             match part {
@@ -88,7 +114,8 @@ impl fmt::Display for Path {
     }
 }
 
-enum FsPath {
+#[derive(Debug)]
+pub enum FsPath {
     Folder(path::PathBuf),
     File(path::PathBuf),
 }
@@ -108,20 +135,26 @@ impl Node {
 
 pub struct Filter {
     base: Path,
+    include_hidden: bool,
 }
 impl Filter {
     fn new(base: Path) -> Filter {
-        Filter { base }
+        Filter {
+            base,
+            include_hidden: false,
+        }
     }
     fn call(&self, path: &Path) -> bool {
-        self.base.include(path) || path.include(&self.base)
+        if path.is_hidden() && !self.include_hidden {
+            false
+        } else {
+            self.base.include(path) || path.include(&self.base)
+        }
     }
 }
 impl From<&config::Filter> for Filter {
     fn from(filter: &config::Filter) -> Filter {
-        Filter {
-            base: Path::folder(&filter.path),
-        }
+        Filter::new(Path::folder(&filter.path))
     }
 }
 
@@ -146,17 +179,22 @@ impl Tree {
                 for entry in fs::read_dir(&folder)? {
                     let entry = entry?;
 
-                    let mut new_path = None;
+                    let mut metadata = fs::metadata(entry.path())?;
+                    if metadata.is_symlink() {
+                        metadata = fs::symlink_metadata(entry.path())?;
+                    }
 
-                    let ft = entry.file_type()?;
-                    if ft.is_dir() {
+                    let new_path;
+                    if metadata.is_dir() {
                         new_path = Some(path.push(Part::Folder {
                             name: entry.file_name(),
                         }));
-                    } else if ft.is_file() {
+                    } else if metadata.is_file() {
                         new_path = Some(path.push(Part::File {
                             name: entry.file_name(),
                         }));
+                    } else {
+                        new_path = None;
                     }
 
                     if let Some(new_path) = new_path {
