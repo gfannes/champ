@@ -15,6 +15,9 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub config: Option<path::PathBuf>,
 
+    #[arg(short, long)]
+    pub filter: Option<String>,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
