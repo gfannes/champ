@@ -19,7 +19,12 @@ clap = { version = "4.5.4", features = ["derive"] }
 crossterm = "0.25.0"
 dirs = "5.0.1"
 flexi_logger = "0.28.1"
+ignore = "0.4.22"
 log = "0.4.21"
 serde = { version = "1.0.203", features = ["derive"] }
 toml = "0.8.14"
 unicode-width = "0.1.10"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true

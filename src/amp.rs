@@ -135,26 +135,21 @@ impl Node {
 
 pub struct Filter {
     base: Path,
-    include_hidden: bool,
+    pub hidden: bool,
+    pub ignore: bool,
 }
 impl Filter {
-    fn new(base: Path) -> Filter {
-        Filter {
-            base,
-            include_hidden: false,
-        }
-    }
     fn call(&self, path: &Path) -> bool {
-        if path.is_hidden() && !self.include_hidden {
-            false
-        } else {
-            self.base.include(path) || path.include(&self.base)
-        }
+        self.base.include(path) || path.include(&self.base)
     }
 }
 impl From<&config::Filter> for Filter {
     fn from(filter: &config::Filter) -> Filter {
-        Filter::new(Path::folder(&filter.path))
+        Filter {
+            base: Path::folder(&filter.path),
+            hidden: filter.hidden,
+            ignore: filter.ignore,
+        }
     }
 }
 
@@ -165,7 +160,11 @@ pub struct Tree {
 impl Tree {
     pub fn new() -> Tree {
         Tree {
-            filter: Filter::new(Path::root()),
+            filter: Filter {
+                base: Path::root(),
+                hidden: false,
+                ignore: false,
+            },
         }
     }
     pub fn set_filter(&mut self, filter: Filter) {
@@ -176,30 +175,47 @@ impl Tree {
 
         match path.fs_path()? {
             FsPath::Folder(folder) => {
-                for entry in fs::read_dir(&folder)? {
+                for entry in ignore::WalkBuilder::new(&folder)
+                    .hidden(self.filter.hidden)
+                    .ignore(self.filter.ignore)
+                    .git_ignore(self.filter.ignore)
+                    .max_depth(Some(1))
+                    .build()
+                    .skip(1)
+                {
                     let entry = entry?;
 
-                    let mut metadata = fs::metadata(entry.path())?;
-                    if metadata.is_symlink() {
-                        metadata = fs::symlink_metadata(entry.path())?;
-                    }
+                    match fs::metadata(entry.path()) {
+                        Err(err) => {
+                            println!(
+                                "Error: could not read metadata for {}: {}",
+                                entry.path().display(),
+                                &err
+                            );
+                        }
+                        Ok(mut metadata) => {
+                            if metadata.is_symlink() {
+                                metadata = fs::symlink_metadata(entry.path())?;
+                            }
 
-                    let new_path;
-                    if metadata.is_dir() {
-                        new_path = Some(path.push(Part::Folder {
-                            name: entry.file_name(),
-                        }));
-                    } else if metadata.is_file() {
-                        new_path = Some(path.push(Part::File {
-                            name: entry.file_name(),
-                        }));
-                    } else {
-                        new_path = None;
-                    }
+                            let new_path;
+                            if metadata.is_dir() {
+                                new_path = Some(path.push(Part::Folder {
+                                    name: entry.file_name().into(),
+                                }));
+                            } else if metadata.is_file() {
+                                new_path = Some(path.push(Part::File {
+                                    name: entry.file_name().into(),
+                                }));
+                            } else {
+                                new_path = None;
+                            }
 
-                    if let Some(new_path) = new_path {
-                        if self.filter.call(&new_path) {
-                            paths.push(new_path);
+                            if let Some(new_path) = new_path {
+                                if self.filter.call(&new_path) {
+                                    paths.push(new_path);
+                                }
+                            }
                         }
                     }
                 }
@@ -218,7 +234,11 @@ mod tests {
     #[test]
     fn test_list() -> util::Result<()> {
         let mut tree = Tree::new();
-        tree.set_filter(Filter::new(Path::folder("/home/geertf")));
+        tree.set_filter(Filter {
+            base: Path::folder("/home/geertf"),
+            hidden: true,
+            ignore: true,
+        });
         let path = Path::folder("/home/geertf");
         let paths = tree.list(&path)?;
         for p in &paths {

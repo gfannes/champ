@@ -43,7 +43,7 @@ impl App {
                 }
             }
             amp::FsPath::File(file) => {
-                println!("{}", file.display());
+                // println!("{}", file.display());
             }
         }
         Ok(())

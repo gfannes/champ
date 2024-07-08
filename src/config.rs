@@ -52,6 +52,13 @@ pub struct Global {
 pub struct Filter {
     pub name: String,
     pub path: path::PathBuf,
+    #[serde(default = "default_true")]
+    pub hidden: bool,
+    #[serde(default = "default_true")]
+    pub ignore: bool,
+}
+fn default_true() -> bool {
+    true
 }
 
 impl Global {
