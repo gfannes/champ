@@ -143,42 +143,42 @@ impl Node {
     }
 }
 
-pub struct Filter {
+pub struct TreeSpec {
     base: Path,
     pub hidden: bool,
     pub ignore: bool,
 }
-impl Filter {
+impl TreeSpec {
     fn call(&self, path: &Path) -> bool {
         self.base.include(path) || path.include(&self.base)
     }
 }
-impl From<&config::Filter> for Filter {
-    fn from(filter: &config::Filter) -> Filter {
-        Filter {
-            base: Path::folder(&filter.path),
-            hidden: filter.hidden,
-            ignore: filter.ignore,
+impl From<&config::Tree> for TreeSpec {
+    fn from(config_tree: &config::Tree) -> TreeSpec {
+        TreeSpec {
+            base: Path::folder(&config_tree.path),
+            hidden: config_tree.hidden,
+            ignore: config_tree.ignore,
         }
     }
 }
 
 pub struct Tree {
-    filter: Filter,
+    spec: TreeSpec,
 }
 
 impl Tree {
     pub fn new() -> Tree {
         Tree {
-            filter: Filter {
+            spec: TreeSpec {
                 base: Path::root(),
                 hidden: false,
                 ignore: false,
             },
         }
     }
-    pub fn set_filter(&mut self, filter: Filter) {
-        self.filter = filter;
+    pub fn set_tree(&mut self, tree_spec: TreeSpec) {
+        self.spec = tree_spec;
     }
     pub fn list(&mut self, path: &Path) -> util::Result<Vec<Path>> {
         let mut paths = Vec::new();
@@ -188,9 +188,9 @@ impl Tree {
                 // @perf: Creating a new Walk for every folder is a performance killer.
                 // Better is to store the ignore::gitignore::Gitignore for folders that have a .gitignore, and reuse them.
                 for entry in ignore::WalkBuilder::new(&folder)
-                    .hidden(self.filter.hidden)
-                    .ignore(self.filter.ignore)
-                    .git_ignore(self.filter.ignore)
+                    .hidden(self.spec.hidden)
+                    .ignore(self.spec.ignore)
+                    .git_ignore(self.spec.ignore)
                     .max_depth(Some(1))
                     .build()
                     .skip(1)
@@ -229,7 +229,7 @@ impl Tree {
                         }
 
                         if let Some(new_path) = new_path {
-                            if self.filter.call(&new_path) {
+                            if self.spec.call(&new_path) {
                                 paths.push(new_path);
                             }
                         }
@@ -262,7 +262,7 @@ impl Tree {
                     //         }
 
                     //         if let Some(new_path) = new_path {
-                    //             if self.filter.call(&new_path) {
+                    //             if self.tree.call(&new_path) {
                     //                 paths.push(new_path);
                     //             }
                     //         }
@@ -313,7 +313,7 @@ mod tests {
     #[test]
     fn test_list() -> util::Result<()> {
         let mut tree = Tree::new();
-        tree.set_filter(Filter {
+        tree.set_tree(TreeSpec {
             base: Path::folder("/home/geertf"),
             hidden: true,
             ignore: true,

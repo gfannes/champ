@@ -12,6 +12,7 @@ build.ninja
 *.o
 .cache/
 main
+test/
 
 # Added by cargo
 

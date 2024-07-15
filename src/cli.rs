@@ -17,8 +17,8 @@ impl App {
     }
 
     pub fn run(&mut self) -> util::Result<()> {
-        if let Some(filter) = &self.config.filter {
-            self.tree.set_filter(filter.into());
+        if let Some(tree) = &self.config.tree {
+            self.tree.set_tree(tree.into());
         }
 
         if let Some(command) = self.config.command.as_ref() {
@@ -54,34 +54,41 @@ impl App {
 struct Config {
     global: config::Global,
     command: Option<config::Command>,
-    filter: Option<config::Filter>,
+    tree: Option<config::Tree>,
 }
 
 impl Config {
     fn load(cli_args: config::CliArgs) -> util::Result<Config> {
         let global = config::Global::load(&cli_args)?;
 
-        let mut filter_opt = None;
-        if let Some(filter_str) = &cli_args.filter {
-            for filter in &global.filter {
-                if &filter.name == filter_str {
-                    filter_opt = Some(filter.clone());
+        let mut tree_opt = None;
+        if let Some(tree_str) = &cli_args.tree {
+            for tree in &global.tree {
+                if &tree.name == tree_str {
+                    tree_opt = Some(tree.clone());
                 }
             }
-            match &filter_opt {
-                Some(filter) => {
-                    println!("Using filter {:?}", filter);
+            match &tree_opt {
+                Some(tree) => {
+                    println!("Using tree {:?}", tree);
                 }
                 None => {
-                    fail!("Unknown filter '{}'", filter_str);
+                    fail!("Unknown tree '{}'", tree_str);
                 }
             }
+        } else if let Some(root_pb) = &cli_args.root {
+            tree_opt = Some(config::Tree {
+                name: "<root>".into(),
+                path: root_pb.clone(),
+                hidden: true,
+                ignore: true,
+            });
         }
 
-        let mut config = Config {
+        let config = Config {
             global,
             command: cli_args.command,
-            filter: filter_opt,
+            tree: tree_opt,
         };
 
         Ok(config)

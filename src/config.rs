@@ -15,8 +15,12 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub config: Option<path::PathBuf>,
 
+    /// Named tree, defined in the config file
     #[arg(short, long)]
-    pub filter: Option<String>,
+    pub tree: Option<String>,
+
+    #[arg(short = 'C', long)]
+    pub root: Option<path::PathBuf>,
 
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -29,7 +33,7 @@ pub enum Command {
         /// Verbosity level
         verbose: Option<i32>,
     },
-    /// List all files for a given filter
+    /// List all files for a given tree
     List {
         /// Verbosity level
         verbose: Option<i32>,
@@ -37,8 +41,12 @@ pub enum Command {
 }
 
 impl CliArgs {
-    pub fn parse() -> Self {
-        clap::Parser::parse()
+    pub fn try_parse() -> util::Result<Self> {
+        let res: CliArgs = clap::Parser::parse();
+        if res.tree.is_some() && res.root.is_some() {
+            fail!("You cannot specify both a 'tree' and a 'root'");
+        }
+        Ok(res)
     }
 }
 
@@ -46,10 +54,10 @@ impl CliArgs {
 #[derive(serde::Deserialize, Debug)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
-    pub filter: Vec<Filter>,
+    pub tree: Vec<Tree>,
 }
 #[derive(serde::Deserialize, Debug, Clone)]
-pub struct Filter {
+pub struct Tree {
     pub name: String,
     pub path: path::PathBuf,
     #[serde(default = "default_true")]

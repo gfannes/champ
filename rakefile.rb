@@ -1,4 +1,29 @@
 require('fileutils')
+require('pathname')
+
+
+my = Class.new() do
+    attr :test_dir
+    def initialize()
+        @test_dir = Pathname.new(__FILE__).parent()/'test'
+        @test_dir.mkpath()
+    end
+
+    def product(*terms)
+        if terms.size() == 1
+            terms[0].map{|e|[e]}
+        else
+            p = product(*terms[0..terms.size-2])
+            pp = []
+            terms[terms.size-1].each do |e|
+                p.each do |ary|
+                    pp << ary+[e]
+                end
+            end
+            pp
+        end
+    end
+end.new()
 
 task :default do
     sh 'rake -T'
@@ -122,5 +147,33 @@ namespace :zig do
     end
 
     task :ut => :prepare do
+    end
+end
+
+namespace :test do
+    desc "Create test tree in '#{my.test_dir}'"
+    task :create_tree do
+        paths = []
+        levels = %w[a b c d e]
+        # levels = %w[a b]
+        levels.size().times do |ix0|
+            terms = []
+            (ix0+1).times do |i|
+                terms << (0...8).map{|j|"#{levels[i]}#{j}"}
+            end
+            paths += my.product(*terms)
+        end
+        paths.map! do |path|
+            path = path*'/'
+            path = my.test_dir/path
+            path.sub_ext('.ext')
+            # Pathname.new(path*'/').sub_ext('.ext')
+        end
+        paths.each do |path|
+            path.parent().mkpath()
+            path.open('w') do |fo|
+                fo.puts("#{path}")
+            end
+        end
     end
 end
