@@ -1,4 +1,5 @@
 use crate::{amp, config, fail, util};
+use std::path;
 
 pub struct App {
     config: Config,
@@ -35,7 +36,6 @@ impl App {
     }
 
     fn list_files_recursive_(&mut self, parent: &amp::Path) -> util::Result<()> {
-        let fs_path = parent.fs_path()?;
         match parent.fs_path()? {
             amp::FsPath::Folder(folder) => {
                 for child in self.tree.list(parent)? {
@@ -77,9 +77,34 @@ impl Config {
                 }
             }
         } else if let Some(root_pb) = &cli_args.root {
+            let mut root_expanded = path::PathBuf::new();
+            let mut first = true;
+            for component in root_pb.components() {
+                match component {
+                    path::Component::Prefix(prefix) => {
+                        root_expanded.push(prefix.as_os_str());
+                        first = false;
+                    }
+                    path::Component::RootDir => {
+                        root_expanded.push("/");
+                        first = false;
+                    }
+                    path::Component::CurDir => {}
+                    path::Component::Normal(normal) => {
+                        if first {
+                            root_expanded.push(std::env::current_dir()?);
+                            first = false;
+                        }
+                        root_expanded.push(normal);
+                    }
+                    path::Component::ParentDir => {
+                        fail!("No support for '..' in root dir yet");
+                    }
+                }
+            }
             tree_opt = Some(config::Tree {
                 name: "<root>".into(),
-                path: root_pb.clone(),
+                path: root_expanded,
                 hidden: !cli_args.hidden,
                 ignore: !cli_args.ignored,
             });
