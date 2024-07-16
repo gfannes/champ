@@ -22,6 +22,12 @@ pub struct CliArgs {
     #[arg(short = 'C', long)]
     pub root: Option<path::PathBuf>,
 
+    #[arg(short = 'u', long, default_value_t = false)]
+    pub hidden: bool,
+
+    #[arg(short = 'U', long, default_value_t = false)]
+    pub ignored: bool,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }

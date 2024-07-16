@@ -43,7 +43,7 @@ impl App {
                 }
             }
             amp::FsPath::File(file) => {
-                // println!("{}", file.display());
+                println!("{}", file.display());
             }
         }
         Ok(())
@@ -80,8 +80,8 @@ impl Config {
             tree_opt = Some(config::Tree {
                 name: "<root>".into(),
                 path: root_pb.clone(),
-                hidden: true,
-                ignore: true,
+                hidden: !cli_args.hidden,
+                ignore: !cli_args.ignored,
             });
         }
 

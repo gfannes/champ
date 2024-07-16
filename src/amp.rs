@@ -209,20 +209,31 @@ impl Tree {
                                 name: entry.file_name().into(),
                             }));
                         } else if file_type.is_symlink() {
-                            let mut metadata = fs::metadata(entry.path())?;
-                            if metadata.is_symlink() {
-                                metadata = fs::symlink_metadata(entry.path())?;
-                            }
-                            if metadata.is_dir() {
-                                new_path = Some(path.push(Part::Folder {
-                                    name: entry.file_name().into(),
-                                }));
-                            } else if metadata.is_file() {
-                                new_path = Some(path.push(Part::File {
-                                    name: entry.file_name().into(),
-                                }));
-                            } else {
-                                new_path = None;
+                            match fs::metadata(entry.path()) {
+                                Err(err) => {
+                                    println!(
+                                        "Warning: Skipping {}, could not read metadata: {}",
+                                        entry.path().display(),
+                                        &err
+                                    );
+                                    new_path = None;
+                                }
+                                Ok(mut metadata) => {
+                                    if metadata.is_symlink() {
+                                        metadata = fs::symlink_metadata(entry.path())?;
+                                    }
+                                    if metadata.is_dir() {
+                                        new_path = Some(path.push(Part::Folder {
+                                            name: entry.file_name().into(),
+                                        }));
+                                    } else if metadata.is_file() {
+                                        new_path = Some(path.push(Part::File {
+                                            name: entry.file_name().into(),
+                                        }));
+                                    } else {
+                                        new_path = None;
+                                    }
+                                }
                             }
                         } else {
                             new_path = None;
@@ -234,40 +245,6 @@ impl Tree {
                             }
                         }
                     }
-
-                    // match fs::metadata(entry.path()) {
-                    //     Err(err) => {
-                    //         println!(
-                    //             "Error: could not read metadata for {}: {}",
-                    //             entry.path().display(),
-                    //             &err
-                    //         );
-                    //     }
-                    //     Ok(mut metadata) => {
-                    //         if metadata.is_symlink() {
-                    //             metadata = fs::symlink_metadata(entry.path())?;
-                    //         }
-
-                    //         let new_path;
-                    //         if metadata.is_dir() {
-                    //             new_path = Some(path.push(Part::Folder {
-                    //                 name: entry.file_name().into(),
-                    //             }));
-                    //         } else if metadata.is_file() {
-                    //             new_path = Some(path.push(Part::File {
-                    //                 name: entry.file_name().into(),
-                    //             }));
-                    //         } else {
-                    //             new_path = None;
-                    //         }
-
-                    //         if let Some(new_path) = new_path {
-                    //             if self.tree.call(&new_path) {
-                    //                 paths.push(new_path);
-                    //             }
-                    //         }
-                    //     }
-                    // }
                 }
             }
             FsPath::File(_file) => {}

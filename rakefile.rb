@@ -153,26 +153,30 @@ end
 namespace :test do
     desc "Create test tree in '#{my.test_dir}'"
     task :create_tree do
-        paths = []
-        levels = %w[a b c d e]
-        # levels = %w[a b]
-        levels.size().times do |ix0|
-            terms = []
-            (ix0+1).times do |i|
-                terms << (0...8).map{|j|"#{levels[i]}#{j}"}
+        if :create_paths_as_array_of_arrays
+            paths = []
+            level_count = 8
+            level_count.times do |depth0|
+                terms = []
+                (depth0+1).times do |level|
+                    terms << %w[a b c d].map{|name|"#{name}#{level}"}
+                end
+                paths += my.product(*terms)
             end
-            paths += my.product(*terms)
         end
-        paths.map! do |path|
-            path = path*'/'
-            path = my.test_dir/path
-            path.sub_ext('.ext')
-            # Pathname.new(path*'/').sub_ext('.ext')
+        if :rework_paths_into_filenames
+            paths.map! do |path|
+                path = path*'/'
+                path = my.test_dir/path
+                path.sub_ext('.ext')
+            end
         end
-        paths.each do |path|
-            path.parent().mkpath()
-            path.open('w') do |fo|
-                fo.puts("#{path}")
+        if :create_files_and_folders
+            paths.each do |path|
+                path.parent().mkpath()
+                path.open('w') do |fo|
+                    fo.puts("#{path}")
+                end
             end
         end
     end
