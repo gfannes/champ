@@ -1,141 +1,14 @@
 // Annotation Metadata Protocol
 
-use crate::{config, fail, util};
-use std::{collections, ffi, fmt, fs, path};
-
-#[derive(Clone, PartialEq)]
-pub enum Part {
-    Folder { name: ffi::OsString },
-    File { name: ffi::OsString },
-    Range { begin: usize, size: usize },
-}
-
-#[derive(Clone)]
-pub struct Path {
-    parts: Vec<Part>,
-}
-impl Path {
-    pub fn root() -> Path {
-        Path { parts: Vec::new() }
-    }
-    pub fn folder(path: impl AsRef<path::Path>) -> Path {
-        let mut p = Path::root();
-        for component in path.as_ref().components() {
-            let component = component.as_os_str();
-            if component != "/" {
-                p = p.push(Part::Folder {
-                    name: component.into(),
-                });
-            }
-        }
-        p
-    }
-    fn include(&self, rhs: &Path) -> bool {
-        let parts_to_check = rhs.parts.len();
-        if self.parts.len() < parts_to_check {
-            return false;
-        }
-        for ix in 0..parts_to_check {
-            if rhs.parts[ix] != self.parts[ix] {
-                return false;
-            }
-        }
-        true
-    }
-    fn is_hidden(&self) -> bool {
-        let is_hidden = |name: &ffi::OsString| {
-            if let Some(ch) = name.to_string_lossy().chars().next() {
-                if ch == '.' {
-                    return true;
-                }
-            }
-            false
-        };
-        for part in &self.parts {
-            match part {
-                Part::Folder { name } => {
-                    if is_hidden(name) {
-                        return true;
-                    }
-                }
-                Part::File { name } => {
-                    if is_hidden(name) {
-                        return true;
-                    }
-                }
-                _ => {}
-            }
-        }
-        false
-    }
-    fn push(&self, part: Part) -> Path {
-        let mut path = self.clone();
-        path.parts.push(part);
-        path
-    }
-    pub fn fs_path(&self) -> util::Result<FsPath> {
-        let mut ret = FsPath::Folder(path::PathBuf::from("/"));
-        for part in &self.parts {
-            match part {
-                Part::Folder { name } => match ret {
-                    FsPath::Folder(mut folder) => {
-                        folder.push(name);
-                        ret = FsPath::Folder(folder)
-                    }
-                    _ => fail!("Cannot add folder part to non-folder"),
-                },
-                Part::File { name } => match ret {
-                    FsPath::Folder(mut folder) => {
-                        folder.push(name);
-                        ret = FsPath::File(folder)
-                    }
-                    _ => fail!("Cannot add file part to non-folder"),
-                },
-                Part::Range { .. } => match &ret {
-                    FsPath::File(_) => {}
-                    _ => fail!("Cannot add range part to non-file"),
-                },
-            }
-        }
-        Ok(ret)
-    }
-    pub fn keep_folder(&mut self) {
-        while let Some(part) = self.parts.last() {
-            match part {
-                Part::Folder { .. } => {
-                    break;
-                }
-                _ => {}
-            }
-        }
-    }
-}
-impl fmt::Display for Path {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "/")?;
-        for part in &self.parts {
-            match part {
-                Part::Folder { name } => write!(f, "{}/", name.to_string_lossy())?,
-                Part::File { name } => write!(f, "{} ", name.to_string_lossy())?,
-                Part::Range { begin, size } => write!(f, "[{}, {}]", begin, size)?,
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub enum FsPath {
-    Folder(path::PathBuf),
-    File(path::PathBuf),
-}
+use crate::{config, path, util};
+use std::fs;
 
 pub struct Node {
-    path: Path,
+    path: path::Path,
     name: String,
 }
 impl Node {
-    fn new(path: Path) -> Node {
+    fn new(path: path::Path) -> Node {
         Node {
             path,
             name: String::new(),
@@ -144,19 +17,19 @@ impl Node {
 }
 
 pub struct TreeSpec {
-    base: Path,
+    base: path::Path,
     pub hidden: bool,
     pub ignore: bool,
 }
 impl TreeSpec {
-    fn call(&self, path: &Path) -> bool {
+    fn call(&self, path: &path::Path) -> bool {
         self.base.include(path) || path.include(&self.base)
     }
 }
 impl From<&config::Tree> for TreeSpec {
     fn from(config_tree: &config::Tree) -> TreeSpec {
         TreeSpec {
-            base: Path::folder(&config_tree.path),
+            base: path::Path::folder(&config_tree.path),
             hidden: config_tree.hidden,
             ignore: config_tree.ignore,
         }
@@ -171,7 +44,7 @@ impl Tree {
     pub fn new() -> Tree {
         Tree {
             spec: TreeSpec {
-                base: Path::root(),
+                base: path::Path::root(),
                 hidden: false,
                 ignore: false,
             },
@@ -180,11 +53,11 @@ impl Tree {
     pub fn set_tree(&mut self, tree_spec: TreeSpec) {
         self.spec = tree_spec;
     }
-    pub fn list(&mut self, path: &Path) -> util::Result<Vec<Path>> {
+    pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
         let mut paths = Vec::new();
 
         match path.fs_path()? {
-            FsPath::Folder(folder) => {
+            path::FsPath::Folder(folder) => {
                 // @perf: Creating a new Walk for every folder is a performance killer.
                 // Better is to store the ignore::gitignore::Gitignore for folders that have a .gitignore, and reuse them.
                 for entry in ignore::WalkBuilder::new(&folder)
@@ -201,11 +74,11 @@ impl Tree {
                         let new_path;
 
                         if file_type.is_dir() {
-                            new_path = Some(path.push(Part::Folder {
+                            new_path = Some(path.push_clone(path::Part::Folder {
                                 name: entry.file_name().into(),
                             }));
                         } else if file_type.is_file() {
-                            new_path = Some(path.push(Part::File {
+                            new_path = Some(path.push_clone(path::Part::File {
                                 name: entry.file_name().into(),
                             }));
                         } else if file_type.is_symlink() {
@@ -223,11 +96,11 @@ impl Tree {
                                         metadata = fs::symlink_metadata(entry.path())?;
                                     }
                                     if metadata.is_dir() {
-                                        new_path = Some(path.push(Part::Folder {
+                                        new_path = Some(path.push_clone(path::Part::Folder {
                                             name: entry.file_name().into(),
                                         }));
                                     } else if metadata.is_file() {
-                                        new_path = Some(path.push(Part::File {
+                                        new_path = Some(path.push_clone(path::Part::File {
                                             name: entry.file_name().into(),
                                         }));
                                     } else {
@@ -247,39 +120,10 @@ impl Tree {
                     }
                 }
             }
-            FsPath::File(_file) => {}
+            path::FsPath::File(_file) => {}
         }
 
         Ok(paths)
-    }
-}
-
-struct Gitignore {
-    builder: ignore::gitignore::GitignoreBuilder,
-    matcher: ignore::gitignore::Gitignore,
-}
-
-struct GitignoreTree {
-    tree: collections::BTreeMap<Path, Gitignore>,
-}
-impl GitignoreTree {
-    fn new() -> GitignoreTree {
-        GitignoreTree {
-            tree: Default::default(),
-        }
-    }
-    fn with_matcher(
-        &mut self,
-        mut path: Path,
-        cb: impl Fn(&ignore::gitignore::Gitignore) -> (),
-    ) -> util::Result<()> {
-        path.keep_folder();
-        // @todo: Recursively insert a builder and matcher for path
-        // Below is some test code
-        let mut builder = ignore::gitignore::GitignoreBuilder::new("/");
-        let matcher = builder.build()?;
-        cb(&matcher);
-        Ok(())
     }
 }
 
@@ -291,11 +135,11 @@ mod tests {
     fn test_list() -> util::Result<()> {
         let mut tree = Tree::new();
         tree.set_tree(TreeSpec {
-            base: Path::folder("/home/geertf"),
+            base: path::Path::folder("/home/geertf"),
             hidden: true,
             ignore: true,
         });
-        let path = Path::folder("/home/geertf");
+        let path = path::Path::folder("/home/geertf");
         let paths = tree.list(&path)?;
         for p in &paths {
             println!("{}", p);

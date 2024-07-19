@@ -1,5 +1,4 @@
-use crate::{amp, config, fail, util};
-use std::path;
+use crate::{amp, config, fail, path, util};
 
 pub struct App {
     config: Config,
@@ -28,21 +27,21 @@ impl App {
                     println!("config: {:?}", self.config);
                 }
                 config::Command::List { verbose } => {
-                    self.list_files_recursive_(&amp::Path::root())?;
+                    self.list_files_recursive_(&path::Path::root())?;
                 }
             }
         }
         Ok(())
     }
 
-    fn list_files_recursive_(&mut self, parent: &amp::Path) -> util::Result<()> {
+    fn list_files_recursive_(&mut self, parent: &path::Path) -> util::Result<()> {
         match parent.fs_path()? {
-            amp::FsPath::Folder(folder) => {
+            path::FsPath::Folder(folder) => {
                 for child in self.tree.list(parent)? {
                     self.list_files_recursive_(&child)?;
                 }
             }
-            amp::FsPath::File(file) => {
+            path::FsPath::File(file) => {
                 println!("{}", file.display());
             }
         }
@@ -77,27 +76,27 @@ impl Config {
                 }
             }
         } else if let Some(root_pb) = &cli_args.root {
-            let mut root_expanded = path::PathBuf::new();
+            let mut root_expanded = std::path::PathBuf::new();
             let mut first = true;
             for component in root_pb.components() {
                 match component {
-                    path::Component::Prefix(prefix) => {
+                    std::path::Component::Prefix(prefix) => {
                         root_expanded.push(prefix.as_os_str());
                         first = false;
                     }
-                    path::Component::RootDir => {
+                    std::path::Component::RootDir => {
                         root_expanded.push("/");
                         first = false;
                     }
-                    path::Component::CurDir => {}
-                    path::Component::Normal(normal) => {
+                    std::path::Component::CurDir => {}
+                    std::path::Component::Normal(normal) => {
                         if first {
                             root_expanded.push(std::env::current_dir()?);
                             first = false;
                         }
                         root_expanded.push(normal);
                     }
-                    path::Component::ParentDir => {
+                    std::path::Component::ParentDir => {
                         fail!("No support for '..' in root dir yet");
                     }
                 }
