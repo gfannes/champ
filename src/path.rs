@@ -196,10 +196,10 @@ mod tests {
     #[test]
     fn test_path_buf() {
         let mut path = Path::root();
+        assert_eq!(path.path_buf(), std::path::PathBuf::from("/"));
         path.push(Part::Folder {
             name: "base".into(),
         });
-        let pb = path.path_buf();
-        assert_eq!(pb, std::path::PathBuf::from("/base"));
+        assert_eq!(path.path_buf(), std::path::PathBuf::from("/base"));
     }
 }
