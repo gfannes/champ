@@ -11,7 +11,6 @@ impl<'a> Filter<'a> {
     }
     pub fn call(&self, path: &path::Path) -> bool {
         let m = self.matcher.matched(path.path_buf(), path.is_folder());
-        println!("path: {}, m: {:?}", path, &m);
         match m {
             ignore::Match::Ignore(..) => return false,
             _ => return true,
@@ -19,6 +18,7 @@ impl<'a> Filter<'a> {
     }
 }
 
+#[derive(Debug)]
 struct Node {
     builder: ignore::gitignore::GitignoreBuilder,
     matcher: ignore::gitignore::Gitignore,
@@ -69,7 +69,6 @@ impl Tree {
 
         if let Some(node) = self.tree.get(&path) {
             let filter = Filter::new(&node.matcher);
-            println!("filter: {:?}", &filter);
             cb(&filter)?;
         } else {
             unreachable!();
@@ -94,12 +93,12 @@ impl Tree {
 
                 if let Some(parent_node) = self.tree.get(&parent) {
                     let mut builder = parent_node.builder.clone();
-                    builder.add(
-                        path.push_clone(path::Part::File {
+                    let gitignore_path = path
+                        .push_clone(path::Part::File {
                             name: ".gitignore".into(),
                         })
-                        .path_buf(),
-                    );
+                        .path_buf();
+                    builder.add(gitignore_path);
                     let matcher = builder.build()?;
                     self.tree.insert(path.clone(), Node { builder, matcher });
                 }
@@ -129,7 +128,6 @@ impl Tree {
             }
 
             if found_gitignore {
-                println!("Found gitignore file: {}", &path);
                 if let Some(part) = path.pop() {
                     let orig_path = path.push_clone(part);
 

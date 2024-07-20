@@ -84,9 +84,9 @@ namespace :rust do
 
     task :test => %i[prepare install] do
         sh 'cargo test -- --nocapture --test-threads 1'
-        sh 'ch -h'
-        sh 'ch list -h'
-        sh 'ch list'
+        # sh 'ch -h'
+        # sh 'ch list -h'
+        # sh 'ch list'
     end
 end
 

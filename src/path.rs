@@ -136,6 +136,7 @@ impl Path {
     }
     pub fn path_buf(&self) -> std::path::PathBuf {
         let mut res = std::path::PathBuf::new();
+        res.push("/");
         for part in &self.parts {
             match part {
                 Part::Folder { name } => res.push(name),
@@ -186,4 +187,19 @@ impl fmt::Display for Path {
 pub enum FsPath {
     Folder(path::PathBuf),
     File(path::PathBuf),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_path_buf() {
+        let mut path = Path::root();
+        path.push(Part::Folder {
+            name: "base".into(),
+        });
+        let pb = path.path_buf();
+        assert_eq!(pb, std::path::PathBuf::from("/base"));
+    }
 }
