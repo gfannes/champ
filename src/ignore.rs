@@ -58,7 +58,7 @@ impl Tree {
     pub fn new() -> Tree {
         Tree::default()
     }
-    pub fn with_matcher(
+    pub fn with_filter(
         &mut self,
         mut path: path::Path,
         cb: impl Fn(&Filter) -> util::Result<()>,
@@ -188,7 +188,7 @@ mod tests {
                 }
                 Ok(())
             };
-            tree.with_matcher(path, cb)?;
+            tree.with_filter(path, cb)?;
         }
         Ok(())
     }

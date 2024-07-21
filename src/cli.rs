@@ -79,6 +79,7 @@ impl Config {
             let mut root_expanded = std::path::PathBuf::new();
             let mut first = true;
             for component in root_pb.components() {
+                println!("component: {:?}", &component);
                 match component {
                     std::path::Component::Prefix(prefix) => {
                         root_expanded.push(prefix.as_os_str());
@@ -88,7 +89,12 @@ impl Config {
                         root_expanded.push("/");
                         first = false;
                     }
-                    std::path::Component::CurDir => {}
+                    std::path::Component::CurDir => {
+                        if first {
+                            root_expanded.push(std::env::current_dir()?);
+                            first = false;
+                        }
+                    }
                     std::path::Component::Normal(normal) => {
                         if first {
                             root_expanded.push(std::env::current_dir()?);
@@ -101,6 +107,7 @@ impl Config {
                     }
                 }
             }
+            println!("root_expanded: {:?}", &root_expanded);
             tree_opt = Some(config::Tree {
                 name: "<root>".into(),
                 path: root_expanded,

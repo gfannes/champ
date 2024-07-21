@@ -1,6 +1,6 @@
 // Annotation Metadata Protocol
 
-use crate::{config, path, util};
+use crate::{config, ignore, path, util};
 use std::fs;
 
 pub struct Node {
@@ -16,6 +16,7 @@ impl Node {
     }
 }
 
+#[derive(Debug)]
 pub struct TreeSpec {
     base: path::Path,
     pub hidden: bool,
@@ -38,6 +39,7 @@ impl From<&config::Tree> for TreeSpec {
 
 pub struct Tree {
     spec: TreeSpec,
+    ignore_tree: ignore::Tree,
 }
 
 impl Tree {
@@ -48,9 +50,11 @@ impl Tree {
                 hidden: false,
                 ignore: false,
             },
+            ignore_tree: ignore::Tree::new(),
         }
     }
     pub fn set_tree(&mut self, tree_spec: TreeSpec) {
+        println!("amp.Tree.set_tree({:?})", &tree_spec);
         self.spec = tree_spec;
     }
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
@@ -58,19 +62,12 @@ impl Tree {
 
         match path.fs_path()? {
             path::FsPath::Folder(folder) => {
-                // @perf: Creating a new Walk for every folder is a performance killer.
-                // Better is to store the ignore::gitignore::Gitignore for folders that have a .gitignore, and reuse them.
-                for entry in ignore::WalkBuilder::new(&folder)
-                    .hidden(self.spec.hidden)
-                    .ignore(self.spec.ignore)
-                    .git_ignore(self.spec.ignore)
-                    .max_depth(Some(1))
-                    .build()
-                    .skip(1)
-                {
+                // println!("folder: {}", folder.display());
+                for entry in std::fs::read_dir(&folder)? {
                     let entry = entry?;
+                    // println!("  entry: {:?}", &entry);
 
-                    if let Some(file_type) = entry.file_type() {
+                    if let Ok(file_type) = entry.file_type() {
                         let new_path;
 
                         if file_type.is_dir() {
