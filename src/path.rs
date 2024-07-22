@@ -146,6 +146,32 @@ impl Path {
         }
         res
     }
+    pub fn relative_from(&self, base: &Path) -> std::path::PathBuf {
+        let mut start_ix = Some(0);
+        for (ix, part) in base.parts.iter().enumerate() {
+            if ix >= self.parts.len() || &self.parts[ix] != part {
+                start_ix = None;
+                break;
+            }
+            start_ix = Some(ix);
+        }
+        if let Some(start_ix) = start_ix {
+            let mut rel = std::path::PathBuf::new();
+            for ix in start_ix + 1..self.parts.len() {
+                if ix < self.parts.len() {
+                    let part = &self.parts[ix];
+                    match part {
+                        Part::Folder { name } => rel.push(name),
+                        Part::File { name } => rel.push(name),
+                        Part::Range { .. } => break,
+                    }
+                }
+            }
+            rel
+        } else {
+            self.path_buf()
+        }
+    }
     pub fn exist(&self) -> bool {
         if let Ok(fs_path) = self.fs_path() {
             let path;
@@ -201,5 +227,15 @@ mod tests {
             name: "base".into(),
         });
         assert_eq!(path.path_buf(), std::path::PathBuf::from("/base"));
+    }
+
+    #[test]
+    fn test_relative() {
+        let base = Path::folder("/base");
+        let file = Path::file("/base/rel/name.txt");
+        assert_eq!(
+            file.relative_from(&base),
+            std::path::PathBuf::from("rel/name.txt")
+        );
     }
 }
