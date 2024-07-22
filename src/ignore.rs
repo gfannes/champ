@@ -10,6 +10,9 @@ impl<'a> Filter<'a> {
         Filter { matcher }
     }
     pub fn call(&self, path: &path::Path) -> bool {
+        if path.is_hidden() {
+            return false;
+        }
         let m = self.matcher.matched(path.path_buf(), path.is_folder());
         match m {
             ignore::Match::Ignore(..) => return false,
@@ -61,7 +64,7 @@ impl Tree {
     pub fn with_filter(
         &mut self,
         mut path: path::Path,
-        cb: impl Fn(&Filter) -> util::Result<()>,
+        mut cb: impl FnMut(&Filter) -> util::Result<()>,
     ) -> util::Result<()> {
         trim_to_ignore(&mut path);
 
@@ -92,13 +95,20 @@ impl Tree {
                 self.prepare(&parent)?;
 
                 if let Some(parent_node) = self.tree.get(&parent) {
-                    let mut builder = parent_node.builder.clone();
                     let gitignore_path = path
                         .push_clone(path::Part::File {
                             name: ".gitignore".into(),
                         })
                         .path_buf();
-                    builder.add(gitignore_path);
+
+                    let mut builder;
+                    if false {
+                        builder = parent_node.builder.clone();
+                        builder.add(gitignore_path);
+                    } else {
+                        builder = ignore::gitignore::GitignoreBuilder::new(gitignore_path);
+                    }
+
                     let matcher = builder.build()?;
                     self.tree.insert(path.clone(), Node { builder, matcher });
                 }

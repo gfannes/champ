@@ -16,4 +16,4 @@ test/
 
 # Added by cargo
 
-/target
+target/

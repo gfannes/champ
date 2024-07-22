@@ -60,64 +60,62 @@ impl Tree {
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
         let mut paths = Vec::new();
 
-        match path.fs_path()? {
-            path::FsPath::Folder(folder) => {
-                // println!("folder: {}", folder.display());
-                for entry in std::fs::read_dir(&folder)? {
-                    let entry = entry?;
-                    // println!("  entry: {:?}", &entry);
+        if path.is_folder() {
+            self.ignore_tree
+                .with_filter(path.clone(), |filter: &ignore::Filter| {
+                    for entry in std::fs::read_dir(&path.path_buf())? {
+                        let entry = entry?;
+                        if let Ok(file_type) = entry.file_type() {
+                            let new_path;
 
-                    if let Ok(file_type) = entry.file_type() {
-                        let new_path;
-
-                        if file_type.is_dir() {
-                            new_path = Some(path.push_clone(path::Part::Folder {
-                                name: entry.file_name().into(),
-                            }));
-                        } else if file_type.is_file() {
-                            new_path = Some(path.push_clone(path::Part::File {
-                                name: entry.file_name().into(),
-                            }));
-                        } else if file_type.is_symlink() {
-                            match fs::metadata(entry.path()) {
-                                Err(err) => {
-                                    println!(
-                                        "Warning: Skipping {}, could not read metadata: {}",
-                                        entry.path().display(),
-                                        &err
-                                    );
-                                    new_path = None;
-                                }
-                                Ok(mut metadata) => {
-                                    if metadata.is_symlink() {
-                                        metadata = fs::symlink_metadata(entry.path())?;
-                                    }
-                                    if metadata.is_dir() {
-                                        new_path = Some(path.push_clone(path::Part::Folder {
-                                            name: entry.file_name().into(),
-                                        }));
-                                    } else if metadata.is_file() {
-                                        new_path = Some(path.push_clone(path::Part::File {
-                                            name: entry.file_name().into(),
-                                        }));
-                                    } else {
+                            if file_type.is_dir() {
+                                new_path = Some(path.push_clone(path::Part::Folder {
+                                    name: entry.file_name().into(),
+                                }));
+                            } else if file_type.is_file() {
+                                new_path = Some(path.push_clone(path::Part::File {
+                                    name: entry.file_name().into(),
+                                }));
+                            } else if file_type.is_symlink() {
+                                match fs::metadata(entry.path()) {
+                                    Err(err) => {
+                                        println!(
+                                            "Warning: Skipping {}, could not read metadata: {}",
+                                            entry.path().display(),
+                                            &err
+                                        );
                                         new_path = None;
                                     }
+                                    Ok(mut metadata) => {
+                                        if metadata.is_symlink() {
+                                            metadata = fs::symlink_metadata(entry.path())?;
+                                        }
+                                        if metadata.is_dir() {
+                                            new_path = Some(path.push_clone(path::Part::Folder {
+                                                name: entry.file_name().into(),
+                                            }));
+                                        } else if metadata.is_file() {
+                                            new_path = Some(path.push_clone(path::Part::File {
+                                                name: entry.file_name().into(),
+                                            }));
+                                        } else {
+                                            new_path = None;
+                                        }
+                                    }
                                 }
+                            } else {
+                                new_path = None;
                             }
-                        } else {
-                            new_path = None;
-                        }
 
-                        if let Some(new_path) = new_path {
-                            if self.spec.call(&new_path) {
-                                paths.push(new_path);
+                            if let Some(new_path) = new_path {
+                                if filter.call(&new_path) && self.spec.call(&new_path) {
+                                    paths.push(new_path);
+                                }
                             }
                         }
                     }
-                }
-            }
-            path::FsPath::File(_file) => {}
+                    Ok(())
+                })?;
         }
 
         Ok(paths)
