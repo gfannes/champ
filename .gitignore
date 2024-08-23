@@ -8,11 +8,11 @@ compile_commands.json
 .ninja_log
 build.ninja
 *.resp
-*.a
+# *.a
 *.o
 .cache/
 main
-test/
+test/big/
 
 # Added by cargo
 

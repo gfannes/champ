@@ -3,17 +3,22 @@ use std::collections;
 
 #[derive(Debug)]
 pub struct Filter<'a> {
+    base: path::Path,
     matcher: &'a ignore::gitignore::Gitignore,
 }
 impl<'a> Filter<'a> {
-    fn new(matcher: &ignore::gitignore::Gitignore) -> Filter {
-        Filter { matcher }
+    fn new(base: path::Path, matcher: &ignore::gitignore::Gitignore) -> Filter {
+        Filter { base, matcher }
     }
     pub fn call(&self, path: &path::Path) -> bool {
+        // println!("ignore.Filter.call({}) base: {}", &path, &self.base);
         if path.is_hidden() {
             return false;
         }
-        let m = self.matcher.matched(path.path_buf(), path.is_folder());
+        let rel = path.relative_from(&self.base);
+        // let rel = path.path_buf();
+        let m = self.matcher.matched(&rel, path.is_folder());
+        // println!("  rel {}, m: {:?}", rel.display(), &m);
         match m {
             ignore::Match::Ignore(..) => return false,
             _ => return true,
@@ -47,6 +52,7 @@ fn trim_to_ignore(path: &mut path::Path) {
         }
 
         if found_gitignore {
+            println!("Found .gitignore {}", &path);
             return;
         }
 
@@ -70,8 +76,8 @@ impl Tree {
 
         self.prepare(&path)?;
 
-        if let Some(node) = self.tree.get(&path) {
-            let filter = Filter::new(&node.matcher);
+        if let Some((p, n)) = self.tree.get_key_value(&path) {
+            let filter = Filter::new(p.clone(), &n.matcher);
             cb(&filter)?;
         } else {
             unreachable!();
@@ -106,7 +112,8 @@ impl Tree {
                         builder = parent_node.builder.clone();
                         builder.add(gitignore_path);
                     } else {
-                        builder = ignore::gitignore::GitignoreBuilder::new(gitignore_path);
+                        builder = ignore::gitignore::GitignoreBuilder::new(path.path_buf());
+                        builder.add(".gitignore");
                     }
 
                     let matcher = builder.build()?;

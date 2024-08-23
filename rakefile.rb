@@ -3,10 +3,17 @@ require('pathname')
 
 
 my = Class.new() do
-    attr :test_dir
     def initialize()
-        @test_dir = Pathname.new(__FILE__).parent()/'test'
-        @test_dir.mkpath()
+    end
+
+    def test_dir(*parts)
+        @parts__dir ||= {}
+        @parts__dir.fetch(parts) do |parts|
+            dir = Pathname.new(__FILE__).parent()/'test'
+            parts.each{|part|dir/=part}
+            dir.mkpath()
+            @parts__dir[parts] = dir
+        end
     end
 
     def product(*terms)
@@ -151,8 +158,8 @@ namespace :zig do
 end
 
 namespace :test do
-    desc "Create test tree in '#{my.test_dir}'"
-    task :create_tree do
+    desc "Create big test tree in '#{my.test_dir('big')}'"
+    task :create_big_tree do
         if :create_paths_as_array_of_arrays
             paths = []
             level_count = 8
@@ -167,7 +174,7 @@ namespace :test do
         if :rework_paths_into_filenames
             paths.map! do |path|
                 path = path*'/'
-                path = my.test_dir/path
+                path = my.test_dir('big')/path
                 path.sub_ext('.ext')
             end
         end

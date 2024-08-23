@@ -54,10 +54,12 @@ impl Tree {
         }
     }
     pub fn set_tree(&mut self, tree_spec: TreeSpec) {
-        println!("amp.Tree.set_tree({:?})", &tree_spec);
+        println!("amp.Tree.set_tree({})", &tree_spec.base);
         self.spec = tree_spec;
     }
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
+        println!("\namp.Tree.list({})", &path);
+
         let mut paths = Vec::new();
 
         if path.is_folder() {
