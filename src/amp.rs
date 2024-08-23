@@ -58,7 +58,7 @@ impl Tree {
         self.spec = tree_spec;
     }
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
-        println!("\namp.Tree.list({})", &path);
+        // println!("\namp.Tree.list({})", &path);
 
         let mut paths = Vec::new();
 

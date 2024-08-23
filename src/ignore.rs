@@ -1,40 +1,55 @@
-use crate::{fail, path, util};
+use crate::{path, util};
 use std::collections;
+
+// Filter.call() returns true for files that should be considered.
 
 #[derive(Debug)]
 pub struct Filter<'a> {
-    base: path::Path,
-    matcher: &'a ignore::gitignore::Gitignore,
+    tree: &'a Tree,
+    ix: usize,
 }
 impl<'a> Filter<'a> {
-    fn new(base: path::Path, matcher: &ignore::gitignore::Gitignore) -> Filter {
-        Filter { base, matcher }
+    fn new(tree: &Tree, ix: usize) -> Filter {
+        Filter { tree, ix }
     }
     pub fn call(&self, path: &path::Path) -> bool {
         // println!("ignore.Filter.call({}) base: {}", &path, &self.base);
         if path.is_hidden() {
             return false;
         }
-        let rel = path.relative_from(&self.base);
-        // let rel = path.path_buf();
-        let m = self.matcher.matched(&rel, path.is_folder());
-        // println!("  rel {}, m: {:?}", rel.display(), &m);
-        match m {
-            ignore::Match::Ignore(..) => return false,
-            _ => return true,
+
+        let mut ix_opt = Some(self.ix);
+        while let Some(ix) = ix_opt {
+            let matcher = &self.tree.matchers[ix];
+            let rel = path.relative_from(&matcher.base);
+            let m = matcher.gitignore.matched(&rel, path.is_folder());
+            // println!("  rel {}, m: {:?}", rel.display(), &m);
+            if let ignore::Match::Ignore(..) = m {
+                // We found a matcher that ignores this file: stop searching and indicate this file should not be used.
+                return false;
+            } else {
+                ix_opt = matcher.parent_ix;
+            }
         }
+
+        true
     }
 }
 
-#[derive(Debug)]
-struct Node {
-    builder: ignore::gitignore::GitignoreBuilder,
-    matcher: ignore::gitignore::Gitignore,
+// Tree keeps track of all the .gitignore files already loaded.
+#[derive(Default, Debug)]
+pub struct Tree {
+    map: collections::BTreeMap<path::Path, usize>,
+    matchers: Vec<Matcher>,
 }
 
-#[derive(Default)]
-pub struct Tree {
-    tree: collections::BTreeMap<path::Path, Node>,
+#[derive(Debug)]
+struct Matcher {
+    gitignore: ignore::gitignore::Gitignore,
+    // Folder of the .gitignore file
+    base: path::Path,
+    // Points to the first Matcher towards the root
+    parent_ix: Option<usize>,
 }
 
 // Pops parts from path until we either find a .gitignore file, or are at the root
@@ -52,7 +67,7 @@ fn trim_to_ignore(path: &mut path::Path) {
         }
 
         if found_gitignore {
-            println!("Found .gitignore {}", &path);
+            // println!("Found .gitignore {}", &path);
             return;
         }
 
@@ -67,17 +82,21 @@ impl Tree {
     pub fn new() -> Tree {
         Tree::default()
     }
+
+    // Calls cb with a Filter for the given path. A callback is used to avoid copying the gitignore matchers.
     pub fn with_filter(
         &mut self,
         mut path: path::Path,
         mut cb: impl FnMut(&Filter) -> util::Result<()>,
     ) -> util::Result<()> {
+        // println!("ignore.Tree.with_filter({})", path);
+
         trim_to_ignore(&mut path);
 
         self.prepare(&path)?;
 
-        if let Some((p, n)) = self.tree.get_key_value(&path) {
-            let filter = Filter::new(p.clone(), &n.matcher);
+        if let Some(ix) = self.map.get(&path) {
+            let filter = Filter::new(self, *ix);
             cb(&filter)?;
         } else {
             unreachable!();
@@ -86,100 +105,44 @@ impl Tree {
         Ok(())
     }
 
-    fn prepare(&mut self, path: &path::Path) -> util::Result<()> {
-        if !self.tree.contains_key(&path) {
+    fn prepare(&mut self, path: &path::Path) -> util::Result<usize> {
+        let res: usize;
+        if let Some(ix) = self.map.get(&path) {
+            res = *ix;
+        } else {
+            let mut builder;
+            let parent_ix;
             if path.is_empty() {
                 // Insert new node at root level
-                let builder = ignore::gitignore::GitignoreBuilder::new("/");
-                let matcher = builder.build()?;
-                self.tree.insert(path.clone(), Node { builder, matcher });
+                builder = ignore::gitignore::GitignoreBuilder::new("/");
+                parent_ix = None;
             } else {
-                let mut parent = path.clone();
-                parent.pop();
-                trim_to_ignore(&mut parent);
-
-                self.prepare(&parent)?;
-
-                if let Some(parent_node) = self.tree.get(&parent) {
-                    let gitignore_path = path
-                        .push_clone(path::Part::File {
-                            name: ".gitignore".into(),
-                        })
-                        .path_buf();
-
-                    let mut builder;
-                    if false {
-                        builder = parent_node.builder.clone();
-                        builder.add(gitignore_path);
-                    } else {
-                        builder = ignore::gitignore::GitignoreBuilder::new(path.path_buf());
-                        builder.add(".gitignore");
-                    }
-
-                    let matcher = builder.build()?;
-                    self.tree.insert(path.clone(), Node { builder, matcher });
+                // prepare() the parent, if needed
+                {
+                    let mut parent = path.clone();
+                    parent.pop();
+                    trim_to_ignore(&mut parent);
+                    parent_ix = Some(self.prepare(&parent)?);
                 }
+
+                builder = ignore::gitignore::GitignoreBuilder::new(path.path_buf());
+                let gitignore_path = path
+                    .push_clone(path::Part::File {
+                        name: ".gitignore".into(),
+                    })
+                    .path_buf();
+                builder.add(gitignore_path);
             }
+
+            res = self.matchers.len();
+            self.map.insert(path.clone(), res);
+            self.matchers.push(Matcher {
+                gitignore: builder.build()?,
+                base: path.clone(),
+                parent_ix,
+            });
         }
-        Ok(())
-    }
-
-    fn goc(
-        &mut self,
-        path: &mut path::Path,
-        cb: impl FnOnce(&Node) -> util::Result<()>,
-    ) -> util::Result<()> {
-        while !path.is_empty() {
-            if let Some(node) = self.tree.get(path) {
-                // Found existing node
-                return cb(node);
-            }
-
-            let found_gitignore;
-            {
-                path.push(path::Part::File {
-                    name: ".gitignore".into(),
-                });
-                found_gitignore = path.exist();
-                path.pop();
-            }
-
-            if found_gitignore {
-                if let Some(part) = path.pop() {
-                    let orig_path = path.push_clone(part);
-
-                    // Create new node
-                    let mut node = None;
-                    let my_cb = |parent: &Node| {
-                        let mut builder = parent.builder.clone();
-                        builder.add(orig_path.path_buf());
-                        let matcher = builder.build()?;
-                        node = Some(Node { builder, matcher });
-                        Ok(())
-                    };
-                    self.goc(path, my_cb)?;
-
-                    // Insert new node
-                    if let Some(node) = node {
-                        self.tree.insert(orig_path, node);
-                    }
-
-                    // Retrieve new node
-                    if let Some(node) = self.tree.get(path) {
-                        // Found existing node
-                        return cb(node);
-                    }
-                } else {
-                    unreachable!();
-                }
-            }
-        }
-
-        // Retrieve root level node
-        if let Some(node) = self.tree.get(path) {
-            return cb(node);
-        }
-        unreachable!();
+        Ok(res)
     }
 }
 
@@ -190,7 +153,7 @@ mod tests {
     #[test]
     fn test_tree() -> util::Result<()> {
         let mut tree = Tree::new();
-        let mut path = path::Path::current()?;
+        let path = path::Path::current()?;
         if let path::FsPath::Folder(cwd) = path.fs_path()? {
             let cb = |filter: &Filter| {
                 for entry in std::fs::read_dir(&cwd)? {
