@@ -64,7 +64,7 @@ impl Tree {
 
         if path.is_folder() {
             self.ignore_tree
-                .with_filter(path.clone(), |filter: &ignore::Filter| {
+                .with_filter(path, |filter: &ignore::Filter| {
                     for entry in std::fs::read_dir(&path.path_buf())? {
                         let entry = entry?;
                         if let Ok(file_type) = entry.file_type() {

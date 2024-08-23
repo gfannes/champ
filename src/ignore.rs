@@ -6,10 +6,10 @@ use std::collections;
 #[derive(Debug)]
 pub struct Filter<'a> {
     tree: &'a Tree,
-    ix: usize,
+    ix: Option<usize>,
 }
 impl<'a> Filter<'a> {
-    fn new(tree: &Tree, ix: usize) -> Filter {
+    fn new(tree: &Tree, ix: Option<usize>) -> Filter {
         Filter { tree, ix }
     }
     pub fn call(&self, path: &path::Path) -> bool {
@@ -18,7 +18,7 @@ impl<'a> Filter<'a> {
             return false;
         }
 
-        let mut ix_opt = Some(self.ix);
+        let mut ix_opt = self.ix;
         while let Some(ix) = ix_opt {
             let matcher = &self.tree.matchers[ix];
             let rel = path.relative_from(&matcher.base);
@@ -52,32 +52,6 @@ struct Matcher {
     parent_ix: Option<usize>,
 }
 
-// Pops parts from path until we either find a .gitignore file, or are at the root
-fn trim_to_ignore(path: &mut path::Path) {
-    path.keep_folder();
-
-    loop {
-        let found_gitignore;
-        {
-            path.push(path::Part::File {
-                name: ".gitignore".into(),
-            });
-            found_gitignore = path.exist();
-            path.pop();
-        }
-
-        if found_gitignore {
-            // println!("Found .gitignore {}", &path);
-            return;
-        }
-
-        if path.is_empty() {
-            return;
-        }
-        path.pop();
-    }
-}
-
 impl Tree {
     pub fn new() -> Tree {
         Tree::default()
@@ -86,62 +60,133 @@ impl Tree {
     // Calls cb with a Filter for the given path. A callback is used to avoid copying the gitignore matchers.
     pub fn with_filter(
         &mut self,
-        mut path: path::Path,
+        path: &path::Path,
         mut cb: impl FnMut(&Filter) -> util::Result<()>,
     ) -> util::Result<()> {
         // println!("ignore.Tree.with_filter({})", path);
 
-        trim_to_ignore(&mut path);
-
-        self.prepare(&path)?;
-
-        if let Some(ix) = self.map.get(&path) {
-            let filter = Filter::new(self, *ix);
-            cb(&filter)?;
-        } else {
-            unreachable!();
-        }
+        let ix = self.goc_matcher_ix(path)?;
+        let filter = Filter::new(self, ix);
+        cb(&filter)?;
 
         Ok(())
     }
 
-    fn prepare(&mut self, path: &path::Path) -> util::Result<usize> {
-        let res: usize;
-        if let Some(ix) = self.map.get(&path) {
-            res = *ix;
-        } else {
-            let mut builder;
-            let parent_ix;
-            if path.is_empty() {
-                // Insert new node at root level
-                builder = ignore::gitignore::GitignoreBuilder::new("/");
-                parent_ix = None;
-            } else {
-                // prepare() the parent, if needed
-                {
-                    let mut parent = path.clone();
-                    parent.pop();
-                    trim_to_ignore(&mut parent);
-                    parent_ix = Some(self.prepare(&parent)?);
-                }
+    fn goc_matcher_ix(&mut self, path: &path::Path) -> util::Result<Option<usize>> {
+        let mut res: Option<usize> = None;
+        let mut prev_ix: Option<usize> = None;
 
-                builder = ignore::gitignore::GitignoreBuilder::new(path.path_buf());
-                let gitignore_path = path
-                    .push_clone(path::Part::File {
-                        name: ".gitignore".into(),
-                    })
-                    .path_buf();
-                builder.add(gitignore_path);
+        let mut path = path.clone();
+        path.keep_folder();
+
+        while !path.is_empty() {
+            let found_gitignore;
+            {
+                path.push(path::Part::File {
+                    name: ".gitignore".into(),
+                });
+                found_gitignore = path.exist();
+                path.pop();
             }
 
-            res = self.matchers.len();
-            self.map.insert(path.clone(), res);
+            if found_gitignore {
+                if let Some(ix) = self.map.get(&path) {
+                    // We found path in our map: we can stop searching
+
+                    // Fill-in the parent_ix for prev_ix, if present
+                    if let Some(prev_ix) = prev_ix {
+                        self.matchers[prev_ix].parent_ix = Some(*ix);
+                    }
+                    // Setup res, if this is the first time
+                    if res.is_none() {
+                        res = Some(*ix);
+                    }
+                    return Ok(res);
+                } else {
+                    // We did not find path in our map: add it and continue the search
+
+                    let mut builder = ignore::gitignore::GitignoreBuilder::new(path.path_buf());
+                    let gitignore_path = path
+                        .push_clone(path::Part::File {
+                            name: ".gitignore".into(),
+                        })
+                        .path_buf();
+                    builder.add(gitignore_path);
+
+                    let ix = self.matchers.len();
+                    self.map.insert(path.clone(), ix);
+                    self.matchers.push(Matcher {
+                        gitignore: builder.build()?,
+                        base: path.clone(),
+                        // We do not know the parent_ix yet, this will be filled-in later based on prev_ix
+                        parent_ix: None,
+                    });
+
+                    // Fill-in the parent_ix for prev_ix, if present
+                    if let Some(prev_ix) = prev_ix {
+                        self.matchers[prev_ix].parent_ix = Some(ix);
+                    }
+                    // Store ix as prev_ix to store its parent_ix later
+                    prev_ix = Some(ix);
+
+                    // Setup res, if this is the first time
+                    if res.is_none() {
+                        res = Some(ix);
+                    }
+                }
+            }
+
+            let found_git;
+            {
+                path.push(path::Part::File {
+                    name: ".git".into(),
+                });
+                found_git = path.exist();
+                path.pop();
+            }
+
+            if found_git {
+                // When we find a .git file/folder, we stop searching and don't fill-in any parent_ix: nested git repo's do not inherit their .gitignore rules.
+                return Ok(res);
+            }
+
+            path.pop();
+        }
+
+        if let Some(ix) = self.map.get(&path) {
+            // We found the empty path in our map
+
+            // Fill-in the parent_ix for prev_ix, if present
+            if let Some(prev_ix) = prev_ix {
+                self.matchers[prev_ix].parent_ix = Some(*ix);
+            }
+            // Setup res, if this is the first time
+            if res.is_none() {
+                res = Some(*ix);
+            }
+        } else {
+            // We did not find the empty path in our map: insert it
+
+            let builder = ignore::gitignore::GitignoreBuilder::new("/");
+
+            let ix = self.matchers.len();
+            self.map.insert(path.clone(), ix);
             self.matchers.push(Matcher {
                 gitignore: builder.build()?,
                 base: path.clone(),
-                parent_ix,
+                parent_ix: None,
             });
+
+            // Fill-in the parent_ix for prev_ix, if present
+            if let Some(prev_ix) = prev_ix {
+                self.matchers[prev_ix].parent_ix = Some(ix);
+            }
+            // Setup res, if this is the first time
+            if res.is_none() {
+                res = Some(ix);
+            }
         }
+
         Ok(res)
     }
 }
@@ -168,7 +213,7 @@ mod tests {
                 }
                 Ok(())
             };
-            tree.with_filter(path, cb)?;
+            tree.with_filter(&path, cb)?;
         }
         Ok(())
     }
