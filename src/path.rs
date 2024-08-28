@@ -97,6 +97,16 @@ impl Path {
     pub fn is_file(&self) -> bool {
         !self.is_folder()
     }
+    pub fn extension(&self) -> Option<&ffi::OsStr> {
+        for part in &self.parts {
+            match part {
+                Part::Folder { .. } => {}
+                Part::File { name } => return path::Path::new(name).extension(),
+                _ => {}
+            }
+        }
+        None
+    }
     pub fn push(&mut self, part: Part) {
         self.parts.push(part);
     }

@@ -1,7 +1,7 @@
 // Annotation Metadata Protocol
 
 use crate::{config, ignore, path, util};
-use std::fs;
+use std::{ffi, fs};
 
 pub struct Node {
     path: path::Path,
@@ -21,10 +21,26 @@ pub struct TreeSpec {
     base: path::Path,
     pub hidden: bool,
     pub ignore: bool,
+    // We assume a limited amount of extensions (less than 64): linear search is faster than using a BTreeSet
+    pub include: Vec<ffi::OsString>,
+    pub max_size: Option<usize>,
 }
 impl TreeSpec {
     fn call(&self, path: &path::Path) -> bool {
-        self.base.include(path) || path.include(&self.base)
+        let includes_base = self.base.include(path) || path.include(&self.base);
+        if !includes_base {
+            return false;
+        }
+        if self.include.is_empty() {
+            // No extensions were specified
+            return true;
+        }
+        if let Some(ext) = path.extension() {
+            self.include.iter().position(|e| e == ext).is_some()
+        } else {
+            // path has no extension: we only continue when it is a folder
+            path.is_folder()
+        }
     }
 }
 impl From<&config::Tree> for TreeSpec {
@@ -33,6 +49,12 @@ impl From<&config::Tree> for TreeSpec {
             base: path::Path::folder(&config_tree.path),
             hidden: config_tree.hidden,
             ignore: config_tree.ignore,
+            include: config_tree
+                .include
+                .iter()
+                .map(ffi::OsString::from)
+                .collect(),
+            max_size: config_tree.max_size,
         }
     }
 }
@@ -49,6 +71,8 @@ impl Tree {
                 base: path::Path::root(),
                 hidden: false,
                 ignore: false,
+                include: Vec::new(),
+                max_size: None,
             },
             ignore_tree: ignore::Tree::new(),
         }
@@ -56,6 +80,9 @@ impl Tree {
     pub fn set_tree(&mut self, tree_spec: TreeSpec) {
         println!("amp.Tree.set_tree({})", &tree_spec.base);
         self.spec = tree_spec;
+    }
+    pub fn max_size(&self) -> Option<usize> {
+        self.spec.max_size
     }
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
         // println!("\namp.Tree.list({})", &path);
@@ -65,6 +92,7 @@ impl Tree {
         if path.is_folder() {
             self.ignore_tree
                 .with_filter(path, |filter: &ignore::Filter| {
+                    // Process each file/folder in path
                     for entry in std::fs::read_dir(&path.path_buf())? {
                         let entry = entry?;
                         if let Ok(file_type) = entry.file_type() {
@@ -106,6 +134,7 @@ impl Tree {
                                     }
                                 }
                             } else {
+                                // Something else
                                 new_path = None;
                             }
 
@@ -135,6 +164,8 @@ mod tests {
             base: path::Path::folder("/home/geertf"),
             hidden: true,
             ignore: true,
+            include: Vec::new(),
+            max_size: None,
         });
         let path = path::Path::folder("/home/geertf");
         let paths = tree.list(&path)?;

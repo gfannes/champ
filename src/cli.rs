@@ -1,8 +1,11 @@
 use crate::{amp, config, fail, path, util};
+use std::{fs, io};
 
 pub struct App {
     config: Config,
     tree: amp::Tree,
+    buffer: Vec<u8>,
+    size: usize,
 }
 
 impl App {
@@ -12,6 +15,8 @@ impl App {
         let app = App {
             config,
             tree: amp::Tree::new(),
+            buffer: Vec::new(),
+            size: 0,
         };
         Ok(app)
     }
@@ -31,6 +36,9 @@ impl App {
                 }
             }
         }
+
+        println!("Total size: {}", self.size);
+
         Ok(())
     }
 
@@ -41,8 +49,20 @@ impl App {
                     self.list_files_recursive_(&child)?;
                 }
             }
-            path::FsPath::File(file) => {
-                println!("=>{}", file.display());
+            path::FsPath::File(fp) => {
+                let mut file = fs::File::open(&fp)?;
+
+                let do_process = self.tree.max_size().map_or(true, |max_size| {
+                    // Do not process large files
+                    file.metadata()
+                        .map_or(false, |md| md.len() <= max_size as u64)
+                });
+
+                if do_process {
+                    let size = io::Read::read_to_end(&mut file, &mut self.buffer)?;
+                    self.size += size;
+                    println!("{}\t{}", size, fp.display());
+                }
             }
         }
         Ok(())
@@ -113,6 +133,8 @@ impl Config {
                 path: root_expanded,
                 hidden: !cli_args.hidden,
                 ignore: !cli_args.ignored,
+                include: Vec::new(),
+                max_size: None,
             });
         }
 

@@ -70,6 +70,10 @@ pub struct Tree {
     pub hidden: bool,
     #[serde(default = "default_true")]
     pub ignore: bool,
+    #[serde(default)]
+    pub include: Vec<String>,
+    #[serde(default)]
+    pub max_size: Option<usize>,
 }
 fn default_true() -> bool {
     true
