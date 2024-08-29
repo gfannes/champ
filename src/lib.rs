@@ -5,6 +5,7 @@ pub mod config;
 mod ctrl;
 mod data;
 mod ignore;
+mod lex;
 pub mod mero;
 mod path;
 mod show;

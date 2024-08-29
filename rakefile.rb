@@ -90,7 +90,7 @@ namespace :rust do
     end
 
     task :test => %i[prepare install] do
-        # sh 'cargo test -- --nocapture --test-threads 1 ignore'
+        # sh 'cargo test -- --nocapture --test-threads 1 lex'
         sh 'cargo test -- --nocapture --test-threads 1'
         # sh 'ch -h'
         # sh 'ch list -h'

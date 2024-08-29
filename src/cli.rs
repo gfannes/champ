@@ -1,4 +1,4 @@
-use crate::{amp, config, fail, path, util};
+use crate::{amp, config, fail, lex, path, util};
 use std::{fs, io};
 
 pub struct App {
@@ -59,9 +59,20 @@ impl App {
                 });
 
                 if do_process {
+                    self.buffer.clear();
                     let size = io::Read::read_to_end(&mut file, &mut self.buffer)?;
                     self.size += size;
                     println!("{}\t{}", size, fp.display());
+                    match std::str::from_utf8(&self.buffer) {
+                        Err(_) => eprintln!("Could not convert '{}' to UTF8", fp.display()),
+                        Ok(content) => {
+                            let mut lexer = lex::Lexer::new(content);
+                            let tokens = lexer.tokenize();
+                            for token in tokens.iter().take(0) {
+                                token.print("\t", content);
+                            }
+                        }
+                    }
                 }
             }
         }
