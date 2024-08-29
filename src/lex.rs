@@ -46,6 +46,7 @@ impl<'a> Lexer<'a> {
 
         for (ix, ch) in self.content.char_indices() {
             match ch {
+                // &todo: support all styles of newlines
                 '\n' => {
                     if let Some(mut token) = token {
                         token.range.end = ix;
