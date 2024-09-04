@@ -9,6 +9,7 @@ mod lex;
 pub mod mero;
 mod path;
 mod show;
+mod strange;
 mod tree;
 pub mod tui;
 pub mod util;
