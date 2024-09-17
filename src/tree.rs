@@ -1,42 +1,116 @@
-use std::ffi;
+use crate::util;
+use std::{collections, fs, path};
 
-// A filesystem tree
-pub struct Root {
-    folders: Vec<Folder>,
-    files: Vec<File>,
+#[derive(Default, Debug)]
+pub struct Forest {
+    files: collections::BTreeMap<path::PathBuf, usize>,
+    trees: Vec<Tree>,
+    names: Vec<String>,
 }
 
-impl Root {
-    pub fn new() -> Root {
-        Root {
-            folders: Vec::new(),
-            files: Vec::new(),
-        }
+impl Forest {
+    pub fn new() -> Forest {
+        Default::default()
     }
 }
 
-struct Folder {
-    name: ffi::OsString,
-    folders: Vec<Folder>,
-    files: Vec<File>,
+#[derive(Default, Debug)]
+pub struct Tree {
+    root_ix: usize,
+    nodes: Vec<Node>,
+    filename: Option<path::PathBuf>,
+    format: Option<Format>,
+    text: String,
 }
 
-struct File {
-    name: ffi::OsString,
-    content: Option<ffi::OsString>,
-    ranges: Vec<Range>,
-    checksum: Option<Vec<u8>>,
+impl Tree {
+    pub fn from_path(path: &path::Path) -> util::Result<Tree> {
+        let content = fs::read_to_string(path)?;
+        let mut tree = Tree::from_str(&content);
+        tree.filename = Some(path.into());
+        Ok(tree)
+    }
+
+    // Creates a flat tree with lines split on '\n'
+    pub fn from_str(content: &str) -> Tree {
+        let mut tree: Tree = Default::default();
+        tree.text = content.into();
+        tree.root_ix = tree.nodes.len();
+        tree.nodes.push(Node::default());
+
+        let mut prev_range = Range::default();
+        for line in tree.text.split('\n') {
+            let start_ix = prev_range.end;
+            let end_ix = start_ix + line.len();
+            let node = Node {
+                prefix: Range {
+                    start: start_ix,
+                    end: start_ix,
+                },
+                postfix: Range {
+                    start: end_ix,
+                    end: end_ix + 1,
+                },
+                ..Default::default()
+            };
+            let node_ix = tree.nodes.len();
+            tree.nodes.push(node);
+            tree.nodes[tree.root_ix].childs.push(node_ix);
+
+            prev_range = Range {
+                start: start_ix,
+                end: end_ix + 1,
+            };
+        }
+        tree
+    }
 }
 
-#[derive(Clone)]
-struct Range {
-    begin: usize,
-    size: usize,
+#[derive(Debug)]
+pub enum Format {
+    Markdown,
+    MindMap,
+    SourceCode,
 }
 
-// Index into a Root
-#[derive(Clone)]
-struct Path {
-    names: Vec<ffi::OsString>,
-    range: Option<Range>,
+pub type Range = std::ops::Range<usize>;
+
+#[derive(Debug)]
+pub enum Attribute {}
+
+#[derive(Debug)]
+pub enum Aggregate {}
+
+#[derive(Default, Debug)]
+pub struct Node {
+    prefix: Range,
+    postfix: Range,
+    attributes: collections::BTreeMap<usize, Attribute>,
+    aggregates: collections::BTreeMap<usize, Aggregate>,
+    tree_ix: usize,
+    childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
+    links: Vec<usize>,      // Direct links to other Trees
+    reachables: Vec<usize>, // All other Trees that are recursively reachable
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_api() -> util::Result<()> {
+        let mut forest = Forest::new();
+        println!("{:?}", &forest);
+        {
+            let tree = Tree::from_str("# Title\n- line1\n- line 2");
+            println!("{:?}", &tree);
+        }
+        {
+            let pwd = std::env::current_dir()?;
+            let tree = Tree::from_path(&pwd.join("test/simple.md"))?;
+            println!("{:?}", &tree);
+        }
+
+        Ok(())
+    }
 }
