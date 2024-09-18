@@ -1,6 +1,11 @@
 use crate::util;
 use std::{collections, fs, path};
 
+// Represents a subset of the filesystem, corresponding with a ignore.Tree
+// &next: use ignore.Tree to iterate and populate a tree.Forest
+// &next: interconnect Forest and compute Node.reachables
+// &next: distribute attributes from root to leaf
+// &next: aggregate data from leat to root
 #[derive(Default, Debug)]
 pub struct Forest {
     files: collections::BTreeMap<path::PathBuf, usize>,
@@ -14,6 +19,7 @@ impl Forest {
     }
 }
 
+// Represents a single file or folder
 #[derive(Default, Debug)]
 pub struct Tree {
     root_ix: usize,
@@ -32,6 +38,7 @@ impl Tree {
     }
 
     // Creates a flat tree with lines split on '\n'
+    // &next: parse content into meronomy, taking Format into account
     pub fn from_str(content: &str) -> Tree {
         let mut tree: Tree = Default::default();
         tree.text = content.into();
@@ -81,6 +88,7 @@ pub enum Attribute {}
 #[derive(Debug)]
 pub enum Aggregate {}
 
+// &next: provide champ items
 #[derive(Default, Debug)]
 pub struct Node {
     prefix: Range,

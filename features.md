@@ -27,3 +27,15 @@
 ## Support copy/paste
 
 ## Show help
+
+## Show all `next` items found
+
+## Support opening found items in editor
+
+## Support cut/paste on tree.Forest
+- Support write-out as well
+
+## Check for filesystem updates from time to time
+
+## Consider using [ratatui](https://ratatui.rs/) for TUI
+- Block, Calendar, List, Table, Tabs
