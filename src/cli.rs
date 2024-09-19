@@ -1,4 +1,4 @@
-use crate::{amp, config, fail, lex, path, util};
+use crate::{amp, config, fail, lex, path, tree, util};
 use std::{fs, io};
 
 pub struct App {
@@ -6,6 +6,7 @@ pub struct App {
     tree: amp::Tree,
     buffer: Vec<u8>,
     size: usize,
+    forest: tree::Forest,
 }
 
 impl App {
@@ -17,6 +18,7 @@ impl App {
             tree: amp::Tree::new(),
             buffer: Vec::new(),
             size: 0,
+            forest: Default::default(),
         };
         Ok(app)
     }
@@ -33,6 +35,10 @@ impl App {
                 }
                 config::Command::List { verbose } => {
                     self.list_files_recursive_(&path::Path::root())?;
+                }
+                config::Command::Search { verbose } => {
+                    self.add_to_forest_recursive_(&path::Path::root())?;
+                    self.forest.print();
                 }
             }
         }
@@ -75,6 +81,39 @@ impl App {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn add_to_forest_recursive_(&mut self, parent: &path::Path) -> util::Result<()> {
+        match parent.fs_path()? {
+            path::FsPath::Folder(folder) => {
+                let mut tree = tree::Tree::folder(&folder);
+                for child in self.tree.list(parent)? {
+                    let ix = tree.nodes.len();
+                    let mut node = tree::Node::default();
+
+                    node.prefix.start = tree.content.len();
+                    node.prefix.end = tree.content.len();
+                    tree.content
+                        .push_str(&format!("{}", child.path_buf().display()));
+                    node.postfix.start = tree.content.len();
+                    node.postfix.end = tree.content.len();
+
+                    tree.nodes.push(node);
+
+                    self.add_to_forest_recursive_(&child)?;
+                }
+                self.forest.add(tree)?;
+            }
+            path::FsPath::File(fp) => match tree::Tree::from_path(&fp) {
+                Err(err) => eprintln!(
+                    "Could not create tree.Tree from '{}': {}",
+                    fp.display(),
+                    err
+                ),
+                Ok(tree) => self.forest.add(tree)?,
+            },
         }
         Ok(())
     }

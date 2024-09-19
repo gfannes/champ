@@ -29,6 +29,7 @@
 ## Show help
 
 ## Show all `next` items found
+- Filter on `proj`
 
 ## Support opening found items in editor
 
@@ -39,3 +40,13 @@
 
 ## Consider using [ratatui](https://ratatui.rs/) for TUI
 - Block, Calendar, List, Table, Tabs
+
+## Support specifying dependencies in 2 directions
+- A Node that depends on another Tree
+- A Tree that is used by another Node
+	- How to express this Node? Or only allow Tree -> Tree dependencies in this case?
+
+## Support nested projects
+- &proj=amp
+	- &proj=ch => same as `proj=/amp/ch`
+	- &proj=/ch => same as `proj=/ch`

@@ -40,7 +40,14 @@ pub enum Command {
         verbose: Option<i32>,
     },
     /// List all files for a given tree
+    #[command(name = "list", alias = "li")]
     List {
+        /// Verbosity level
+        verbose: Option<i32>,
+    },
+    /// Search for items in a given tree
+    #[command(name = "search", alias = "se")]
+    Search {
         /// Verbosity level
         verbose: Option<i32>,
     },
