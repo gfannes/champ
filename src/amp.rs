@@ -17,7 +17,7 @@ impl Node {
 }
 
 #[derive(Debug)]
-pub struct TreeSpec {
+pub struct ForestSpec {
     base: path::Path,
     pub hidden: bool,
     pub ignore: bool,
@@ -25,7 +25,7 @@ pub struct TreeSpec {
     pub include: Vec<ffi::OsString>,
     pub max_size: Option<usize>,
 }
-impl TreeSpec {
+impl ForestSpec {
     fn call(&self, path: &path::Path) -> bool {
         let includes_base = self.base.include(path) || path.include(&self.base);
         if !includes_base {
@@ -43,31 +43,31 @@ impl TreeSpec {
         }
     }
 }
-impl From<&config::Tree> for TreeSpec {
-    fn from(config_tree: &config::Tree) -> TreeSpec {
-        TreeSpec {
-            base: path::Path::folder(&config_tree.path),
-            hidden: config_tree.hidden,
-            ignore: config_tree.ignore,
-            include: config_tree
+impl From<&config::Forest> for ForestSpec {
+    fn from(config_forest: &config::Forest) -> ForestSpec {
+        ForestSpec {
+            base: path::Path::folder(&config_forest.path),
+            hidden: config_forest.hidden,
+            ignore: config_forest.ignore,
+            include: config_forest
                 .include
                 .iter()
                 .map(ffi::OsString::from)
                 .collect(),
-            max_size: config_tree.max_size,
+            max_size: config_forest.max_size,
         }
     }
 }
 
-pub struct Tree {
-    spec: TreeSpec,
+pub struct Forest {
+    spec: ForestSpec,
     ignore_tree: ignore::Tree,
 }
 
-impl Tree {
-    pub fn new() -> Tree {
-        Tree {
-            spec: TreeSpec {
+impl Forest {
+    pub fn new() -> Forest {
+        Forest {
+            spec: ForestSpec {
                 base: path::Path::root(),
                 hidden: false,
                 ignore: false,
@@ -77,15 +77,15 @@ impl Tree {
             ignore_tree: ignore::Tree::new(),
         }
     }
-    pub fn set_tree(&mut self, tree_spec: TreeSpec) {
-        println!("amp.Tree.set_tree({})", &tree_spec.base);
-        self.spec = tree_spec;
+    pub fn set_forest(&mut self, forest_spec: ForestSpec) {
+        println!("amp.Forest.set_forest({})", &forest_spec.base);
+        self.spec = forest_spec;
     }
     pub fn max_size(&self) -> Option<usize> {
         self.spec.max_size
     }
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
-        // println!("\namp.Tree.list({})", &path);
+        // println!("\namp.Forest.list({})", &path);
 
         let mut paths = Vec::new();
 
@@ -159,8 +159,8 @@ mod tests {
 
     #[test]
     fn test_list() -> util::Result<()> {
-        let mut tree = Tree::new();
-        tree.set_tree(TreeSpec {
+        let mut forest = Forest::new();
+        forest.set_forest(ForestSpec {
             base: path::Path::folder("/home/geertf"),
             hidden: true,
             ignore: true,
@@ -168,7 +168,7 @@ mod tests {
             max_size: None,
         });
         let path = path::Path::folder("/home/geertf");
-        let paths = tree.list(&path)?;
+        let paths = forest.list(&path)?;
         for p in &paths {
             println!("{}", p);
         }

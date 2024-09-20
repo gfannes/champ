@@ -37,6 +37,12 @@ impl Forest {
         Ok(())
     }
 
+    pub fn each_node(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
+        for tree in &self.trees {
+            tree.each_node(tree, &mut cb);
+        }
+    }
+
     pub fn print(&self) {
         println!("Forest with {} trees:", self.trees.len());
         for tree in &self.trees {
@@ -69,40 +75,109 @@ impl Tree {
 
     pub fn from_path(path: &path::Path) -> util::Result<Tree> {
         let content = fs::read_to_string(path)?;
-        let mut tree = Tree::from_str(&content);
+
+        let format = path
+            .extension()
+            .and_then(|ext| {
+                let format = match &ext.to_string_lossy() as &str {
+                    "md" => Format::Markdown,
+                    "mm" => Format::MindMap,
+                    "rb" | "py" | "sh" => Format::SourceCode { comment: "#" },
+                    "bat" => Format::SourceCode { comment: "REM" },
+                    "h" | "c" | "hpp" | "cpp" | "rs" | "chai" => {
+                        Format::SourceCode { comment: "//" }
+                    }
+                    _ => Format::Unknown,
+                };
+                Some(format)
+            })
+            .unwrap_or(Format::Unknown);
+
+        let mut tree = Tree::from_str(&content, format);
         tree.filename = Some(path.into());
+
         Ok(tree)
     }
 
     // Creates a flat tree with lines split on '\n'
     // &next: parse content into meronomy, taking Format into account
-    pub fn from_str(content: &str) -> Tree {
+    // &next: strip whitespace at the end of `main`
+    pub fn from_str(content: &str, format: Format) -> Tree {
         let mut tree = Self::new();
         tree.content = content.into();
+        tree.format = format;
 
-        let mut prev_range = Range::default();
-        for line in tree.content.split('\n') {
-            let start_ix = prev_range.end;
-            let end_ix = start_ix + line.len();
-            let node = Node {
-                prefix: Range {
-                    start: start_ix,
-                    end: start_ix,
-                },
-                postfix: Range {
-                    start: end_ix,
-                    end: end_ix + 1,
-                },
-                ..Default::default()
-            };
-            let node_ix = tree.nodes.len();
-            tree.nodes.push(node);
-            tree.nodes[tree.root_ix].childs.push(node_ix);
+        match &tree.format {
+            Format::MindMap => todo!("Implement XML-MM parsing"),
+            Format::Markdown => {
+                let mut prev_range = Range::default();
+                let mut line_nr = 0 as u64;
+                for line in tree.content.split('\n') {
+                    line_nr += 1;
 
-            prev_range = Range {
-                start: start_ix,
-                end: end_ix + 1,
-            };
+                    let start_ix = prev_range.end;
+                    let end_ix = start_ix + line.len();
+
+                    let node = Node {
+                        prefix: Range {
+                            start: start_ix,
+                            end: start_ix,
+                        },
+                        postfix: Range {
+                            start: end_ix,
+                            end: end_ix + 1,
+                        },
+                        line_nr: Some(line_nr),
+                        ..Default::default()
+                    };
+                    let node_ix = tree.nodes.len();
+                    tree.nodes.push(node);
+                    tree.nodes[tree.root_ix].childs.push(node_ix);
+
+                    prev_range = Range {
+                        start: start_ix,
+                        end: end_ix + 1,
+                    };
+                }
+            }
+            Format::SourceCode { comment } => {
+                let mut prev_range = Range::default();
+                let mut line_nr = 0 as u64;
+                for line in tree.content.split('\n') {
+                    line_nr += 1;
+
+                    let start_ix = prev_range.end;
+                    let end_ix = start_ix + line.len();
+
+                    if let Some(comment_ix) = line.find(comment) {
+                        let node = Node {
+                            prefix: Range {
+                                start: start_ix,
+                                end: start_ix + comment_ix + comment.len(),
+                            },
+                            postfix: Range {
+                                start: end_ix,
+                                end: end_ix + 1,
+                            },
+                            line_nr: Some(line_nr),
+                            ..Default::default()
+                        };
+                        let node_ix = tree.nodes.len();
+                        tree.nodes.push(node);
+                        tree.nodes[tree.root_ix].childs.push(node_ix);
+                    }
+
+                    prev_range = Range {
+                        start: start_ix,
+                        end: end_ix + 1,
+                    };
+                }
+            }
+            _ => {
+                if false {
+                    todo!("Implement {:?} parsing", &tree.format)
+                }
+            }
         }
         tree
     }
@@ -122,16 +197,42 @@ impl Tree {
         tree
     }
 
-    pub fn print(&self) {
-        if let Some(filename) = &self.filename {
-            println!("  Tree {}", filename.display());
+    pub fn each_node(&self, tree: &Tree, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
+        match self.format {
+            Format::Folder => {}
+            _ => {
+                let mut iter = self.nodes.iter();
+                if let Format::SourceCode { comment: _ } = self.format {
+                    // First line is the root that does not correspond with actual file content
+                    iter.next();
+                }
+                for node in iter {
+                    cb(tree, node);
+                }
+            }
         }
-        let n = match self.format {
-            Format::Folder => usize::MAX,
-            _ => 4,
-        };
-        for node in self.nodes.iter().take(n) {
-            node.print(&self.content, &self.format);
+    }
+
+    pub fn print(&self) {
+        match self.format {
+            Format::Folder => {}
+            _ => {
+                if let Some(filename) = &self.filename {
+                    println!("  Tree {:?} {}", self.format, filename.display());
+                }
+                let n = match self.format {
+                    Format::Folder => usize::MAX,
+                    _ => 4,
+                };
+                let mut iter = self.nodes.iter();
+                if let Format::SourceCode { comment: _ } = self.format {
+                    // First line is the root that does not correspond with actual file content
+                    iter.next();
+                }
+                for node in iter.take(n) {
+                    node.print(&self.content, &self.format);
+                }
+            }
         }
     }
 }
@@ -143,7 +244,9 @@ pub enum Format {
     Folder,
     Markdown,
     MindMap,
-    SourceCode,
+    SourceCode {
+        comment: &'static str,
+    },
 }
 
 pub type Range = std::ops::Range<usize>;
@@ -159,6 +262,7 @@ pub enum Aggregate {}
 pub struct Node {
     pub prefix: Range,
     pub postfix: Range,
+    pub line_nr: Option<u64>,
     attributes: collections::BTreeMap<usize, Attribute>,
     aggregates: collections::BTreeMap<usize, Aggregate>,
     pub tree_ix: usize,
@@ -168,20 +272,37 @@ pub struct Node {
 }
 
 impl Node {
+    pub fn get_main<'a>(&self, content: &'a str) -> &'a str {
+        match content.get(self.main_range()) {
+            None => {
+                eprintln!("Encountered invalid content, maybe an UTF-8 issue?");
+                ""
+            }
+            Some(s) => s,
+        }
+    }
+
     pub fn print(&self, content: &str, format: &Format) {
-        print!("....");
-        match content.get(Range {
+        if let Some(line_nr) = self.line_nr {
+            print!("{:<5}", line_nr);
+        } else {
+            print!(".....");
+        }
+
+        let main = self.get_main(content);
+        match format {
+            Format::Folder => println!("{}", main),
+            _ => {
+                let s: String = main.chars().take(80).collect();
+                println!("{}", s)
+            }
+        }
+    }
+
+    fn main_range(&self) -> Range {
+        Range {
             start: self.prefix.end,
             end: self.postfix.start,
-        }) {
-            None => println!("<invalid content>"),
-            Some(s) => match format {
-                Format::Folder => println!("{}", s),
-                _ => {
-                    let s: String = s.chars().take(30).collect();
-                    println!("{}", s)
-                }
-            },
         }
     }
 }
@@ -195,7 +316,7 @@ mod tests {
         let mut forest = Forest::new();
         println!("{:?}", &forest);
         {
-            let tree = Tree::from_str("# Title\n- line1\n- line 2");
+            let tree = Tree::from_str("# Title\n- line1\n- line 2", Format::Markdown);
             println!("{:?}", &tree);
         }
         {

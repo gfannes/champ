@@ -3,7 +3,7 @@ use std::{fs, io};
 
 pub struct App {
     config: Config,
-    tree: amp::Tree,
+    amp_forest: amp::Forest,
     buffer: Vec<u8>,
     size: usize,
     forest: tree::Forest,
@@ -15,7 +15,7 @@ impl App {
 
         let app = App {
             config,
-            tree: amp::Tree::new(),
+            amp_forest: amp::Forest::new(),
             buffer: Vec::new(),
             size: 0,
             forest: Default::default(),
@@ -24,8 +24,8 @@ impl App {
     }
 
     pub fn run(&mut self) -> util::Result<()> {
-        if let Some(tree) = &self.config.tree {
-            self.tree.set_tree(tree.into());
+        if let Some(forest) = &self.config.forest {
+            self.amp_forest.set_forest(forest.into());
         }
 
         if let Some(command) = self.config.command.as_ref() {
@@ -36,9 +36,25 @@ impl App {
                 config::Command::List { verbose } => {
                     self.list_files_recursive_(&path::Path::root())?;
                 }
-                config::Command::Search { verbose } => {
+                config::Command::Search { verbose, needle } => {
+                    let needle = format!("&{}", needle);
+
                     self.add_to_forest_recursive_(&path::Path::root())?;
-                    self.forest.print();
+                    let mut cur_filename = None;
+                    self.forest.each_node(|tree, node| {
+                        let main = node.get_main(&tree.content);
+                        if main.contains(&needle) {
+                            if false && cur_filename != tree.filename {
+                                cur_filename = tree.filename.clone();
+                                if let Some(fp) = &cur_filename {
+                                    println!("{}", fp.display());
+                                } else {
+                                    println!("<Unknown filename>");
+                                }
+                            }
+                            node.print(&tree.content, &tree.format);
+                        }
+                    });
                 }
             }
         }
@@ -51,14 +67,14 @@ impl App {
     fn list_files_recursive_(&mut self, parent: &path::Path) -> util::Result<()> {
         match parent.fs_path()? {
             path::FsPath::Folder(folder) => {
-                for child in self.tree.list(parent)? {
+                for child in self.amp_forest.list(parent)? {
                     self.list_files_recursive_(&child)?;
                 }
             }
             path::FsPath::File(fp) => {
                 let mut file = fs::File::open(&fp)?;
 
-                let do_process = self.tree.max_size().map_or(true, |max_size| {
+                let do_process = self.amp_forest.max_size().map_or(true, |max_size| {
                     // Do not process large files
                     file.metadata()
                         .map_or(false, |md| md.len() <= max_size as u64)
@@ -89,7 +105,7 @@ impl App {
         match parent.fs_path()? {
             path::FsPath::Folder(folder) => {
                 let mut tree = tree::Tree::folder(&folder);
-                for child in self.tree.list(parent)? {
+                for child in self.amp_forest.list(parent)? {
                     let ix = tree.nodes.len();
                     let mut node = tree::Node::default();
 
@@ -123,26 +139,26 @@ impl App {
 struct Config {
     global: config::Global,
     command: Option<config::Command>,
-    tree: Option<config::Tree>,
+    forest: Option<config::Forest>,
 }
 
 impl Config {
     fn load(cli_args: config::CliArgs) -> util::Result<Config> {
         let global = config::Global::load(&cli_args)?;
 
-        let mut tree_opt = None;
-        if let Some(tree_str) = &cli_args.tree {
-            for tree in &global.tree {
-                if &tree.name == tree_str {
-                    tree_opt = Some(tree.clone());
+        let mut forest_opt = None;
+        if let Some(forest_str) = &cli_args.forest {
+            for forest in &global.forest {
+                if &forest.name == forest_str {
+                    forest_opt = Some(forest.clone());
                 }
             }
-            match &tree_opt {
-                Some(tree) => {
-                    println!("Using tree {:?}", tree);
+            match &forest_opt {
+                Some(forest) => {
+                    println!("Using forest {:?}", forest);
                 }
                 None => {
-                    fail!("Unknown tree '{}'", tree_str);
+                    fail!("Unknown forest '{}'", forest_str);
                 }
             }
         } else if let Some(root_pb) = &cli_args.root {
@@ -178,7 +194,7 @@ impl Config {
                 }
             }
             println!("root_expanded: {:?}", &root_expanded);
-            tree_opt = Some(config::Tree {
+            forest_opt = Some(config::Forest {
                 name: "<root>".into(),
                 path: root_expanded,
                 hidden: !cli_args.hidden,
@@ -191,7 +207,7 @@ impl Config {
         let config = Config {
             global,
             command: cli_args.command,
-            tree: tree_opt,
+            forest: forest_opt,
         };
 
         Ok(config)

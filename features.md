@@ -55,3 +55,18 @@
 - For backtrace support when errors occur
 
 ## Parse tree.Tree MT
+
+## Support for default forest selection
+- Store in `.config/champ/active.toml`
+
+## Rename tree into forest for ch
+
+## Create naft CLI to work with folders in a single file
+
+## &tdb Discriminate between AMP data and commented-out code
+- Only allow AMP at the start of a comment for SourceCode?
+- Check for parenthesis nesting? => cannot handle commented-out variable definitions
+
+## Rework/merge amp.Forest and tree.Forest
+- amp.Forest is more like enumeration
+- tree.Forest represents the forest

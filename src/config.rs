@@ -15,9 +15,9 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub config: Option<path::PathBuf>,
 
-    /// Named tree, defined in the config file
+    /// Named forest, defined in the config file
     #[arg(short, long)]
-    pub tree: Option<String>,
+    pub forest: Option<String>,
 
     #[arg(short = 'C', long)]
     pub root: Option<path::PathBuf>,
@@ -39,15 +39,17 @@ pub enum Command {
         /// Verbosity level
         verbose: Option<i32>,
     },
-    /// List all files for a given tree
+    /// List all files for a given forest
     #[command(name = "list", alias = "li")]
     List {
         /// Verbosity level
         verbose: Option<i32>,
     },
-    /// Search for items in a given tree
+    /// Search for items in a given forest
     #[command(name = "search", alias = "se")]
     Search {
+        /// Needle
+        needle: String,
         /// Verbosity level
         verbose: Option<i32>,
     },
@@ -56,8 +58,8 @@ pub enum Command {
 impl CliArgs {
     pub fn try_parse() -> util::Result<Self> {
         let res: CliArgs = clap::Parser::parse();
-        if res.tree.is_some() && res.root.is_some() {
-            fail!("You cannot specify both a 'tree' and a 'root'");
+        if res.forest.is_some() && res.root.is_some() {
+            fail!("You cannot specify both a 'forest' and a 'root'");
         }
         Ok(res)
     }
@@ -67,10 +69,10 @@ impl CliArgs {
 #[derive(serde::Deserialize, Debug)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
-    pub tree: Vec<Tree>,
+    pub forest: Vec<Forest>,
 }
 #[derive(serde::Deserialize, Debug, Clone)]
-pub struct Tree {
+pub struct Forest {
     pub name: String,
     pub path: path::PathBuf,
     #[serde(default = "default_true")]
