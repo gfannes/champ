@@ -70,3 +70,12 @@
 ## Rework/merge amp.Forest and tree.Forest
 - amp.Forest is more like enumeration
 - tree.Forest represents the forest
+- maybe speed-up enumeration when Forest is bounded with direct use of gitignore
+
+## Only allow AMP at the start of a comment for SourceCode
+- Also support nested comments: eg, when AMP data after a line of code gets commented-out itself
+	- `// f(&i); // @tag` => `&tag` should be detected, but `&i` should not
+
+## Create website
+- http://champ.net
+- http://amp-lang.org
