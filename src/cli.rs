@@ -37,16 +37,27 @@ impl App {
                     self.list_files_recursive_(&path::Path::root())?;
                 }
                 config::Command::Search { verbose, needle } => {
-                    let needle = format!("&{}", needle);
+                    let needle = format!("@{}", needle);
 
                     self.add_to_forest_recursive_(&path::Path::root())?;
                     let mut cur_filename = None;
                     self.forest.each_node(|tree, node| {
                         let main = node.get_main(&tree.content);
-                        // &todo: searching the needle should take tree.format into account:
                         // For Markdown, we allow a match anywhere, for SourceCode, we only allow a match at the front
-                        if main.contains(&needle) {
-                            if false && cur_filename != tree.filename {
+                        let is_match = match tree.format {
+                            tree::Format::SourceCode { comment: _ } => {
+                                !main.starts_with("&&") && main.starts_with(&needle)
+                            }
+                            _ => main.contains(&needle),
+                        };
+                        if is_match {
+                            // println!(
+                            //     "starts_with: {} needle: {}, main: {}",
+                            //     main.starts_with(&needle),
+                            //     &needle,
+                            //     &main
+                            // );
+                            if true && cur_filename != tree.filename {
                                 cur_filename = tree.filename.clone();
                                 if let Some(fp) = &cur_filename {
                                     println!("{}", fp.display());

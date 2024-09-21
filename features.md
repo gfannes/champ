@@ -72,10 +72,34 @@
 - tree.Forest represents the forest
 - maybe speed-up enumeration when Forest is bounded with direct use of gitignore
 
-## Only allow AMP at the start of a comment for SourceCode
-- Also support nested comments: eg, when AMP data after a line of code gets commented-out itself
-	- `// f(&i); // @tag` => `&tag` should be detected, but `&i` should not
-
 ## Create website
 - http://champ.net
 - http://amp-lang.org
+
+## Define AMP protocol and per-file injection
+- Below rules have no false positive on SourceCode in root-all
+- Prefer `&` over `@`
+	- Reduce false-positives on doxygen and javadoc
+	- Reduce false-positives on commented Ruby code with instance variables
+- Skip HTML entities like `&nbsp;`
+- Only allow AMP at the start of a comment for SourceCode
+	- Also support nested comments: eg, when AMP data after a line of code gets commented-out itself
+		- `// f(&i); // @tag` => `&tag` should be detected, but `&i` should not
+- Only allow `&` if there is a none-`&` following
+- Check that AMP does not end with `,` or `)` to filter-out function calls with address parameters, each on a separate line
+```
+	// f(
+	//	&i,
+	//	&j);
+```
+
+## Make config persistent
+- `ch`: list current config
+- `ch -f abc`: select forest `abc`
+- `ch se test`: search for test in forest `abc`
+- `ch clear`: clear persistence
+- Support using `ch` without persistence for in scripts and MT
+- Store config in `.config/champ`
+- Rename `.config/champ/config.toml` into `forests.toml`
+- Could support push/pop to create a list of configs
+
