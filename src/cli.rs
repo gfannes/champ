@@ -43,6 +43,8 @@ impl App {
                     let mut cur_filename = None;
                     self.forest.each_node(|tree, node| {
                         let main = node.get_main(&tree.content);
+                        // &todo: searching the needle should take tree.format into account:
+                        // For Markdown, we allow a match anywhere, for SourceCode, we only allow a match at the front
                         if main.contains(&needle) {
                             if false && cur_filename != tree.filename {
                                 cur_filename = tree.filename.clone();

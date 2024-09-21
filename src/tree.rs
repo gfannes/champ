@@ -109,6 +109,8 @@ impl Tree {
 
         match &tree.format {
             Format::MindMap => todo!("Implement XML-MM parsing"),
+            // &todo: handle Markdown and SourceCode in the same way, only differ the method to find the initial main.
+            // - whitespace stripping can be reused.
             Format::Markdown => {
                 let mut prev_range = Range::default();
                 let mut line_nr = 0 as u64;
@@ -150,7 +152,7 @@ impl Tree {
                     let end_ix = start_ix + line.len();
 
                     if let Some(comment_ix) = line.find(comment) {
-                        let node = Node {
+                        let mut node = Node {
                             prefix: Range {
                                 start: start_ix,
                                 end: start_ix + comment_ix + comment.len(),
@@ -162,6 +164,12 @@ impl Tree {
                             line_nr: Some(line_nr),
                             ..Default::default()
                         };
+                        // &todo: move this basic whitespace stripping to util
+                        while node.prefix.end < node.postfix.start
+                            && tree.content[node.prefix.end..].chars().next().unwrap() == ' '
+                        {
+                            node.prefix.end += 1;
+                        }
                         let node_ix = tree.nodes.len();
                         tree.nodes.push(node);
                         tree.nodes[tree.root_ix].childs.push(node_ix);
