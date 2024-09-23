@@ -1,5 +1,4 @@
 use crate::{strange, util};
-use static_assertions::const_assert;
 
 pub type KV = (String, Option<String>);
 pub type KVs = Vec<KV>;
