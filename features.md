@@ -103,3 +103,8 @@
 - Rename `.config/champ/config.toml` into `forests.toml`
 - Could support push/pop to create a list of configs
 
+## Support excluding files by pattern
+- Filter-out false positives
+
+## Fully parse Markdown
+- Do not match AMP in code blocks

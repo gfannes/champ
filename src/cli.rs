@@ -1,4 +1,4 @@
-use crate::{config, fail, fs, lex, path, tree, util};
+use crate::{amp, config, fail, fs, lex, path, tree, util};
 use std::io;
 
 pub struct App {
@@ -28,7 +28,9 @@ impl App {
             self.amp_forest.set_forest(forest.into());
         }
 
-        if let Some(command) = self.config.command.as_ref() {
+        // Using &self.config.command complicates using &mut self later.
+        // Copyng the command once does not impact performance.
+        if let Some(command) = self.config.command.clone() {
             match command {
                 config::Command::Config { verbose } => {
                     println!("config: {:?}", self.config);
@@ -37,28 +39,41 @@ impl App {
                     self.list_files_recursive_(&path::Path::root())?;
                 }
                 config::Command::Search { verbose, needle } => {
-                    let needle = format!("@{}", needle);
-
                     self.add_to_forest_recursive_(&path::Path::root(), 0)?;
+
+                    let mut parser = amp::Parser::new();
 
                     let mut cur_filename = None;
                     self.forest.dfs(|tree, node| {
-                        if let Some(filename) = &tree.filename {
-                            println!(
-                                "filename {} {}",
-                                filename.display(),
-                                node.get_main(&tree.content)
-                            );
-                        }
-                        let main = node.get_main(&tree.content);
-                        // For Markdown, we allow a match anywhere, for SourceCode, we only allow a match at the front
-                        let is_match = match tree.format {
+                        parser.parse(node.get_main(&tree.content));
+
+                        let ix = match tree.format {
+                            // For SourceCode, we only allowa match at the front
                             tree::Format::SourceCode { comment: _ } => {
-                                !main.starts_with("&&") && main.starts_with(&needle)
+                                parser.stmts.get(0).and_then(|stmt| match stmt {
+                                    amp::Statement::Metadata(md) => match &needle {
+                                        None => Some(0),
+                                        Some(needle) => (&md.kv.0 == needle).then(|| 0),
+                                    },
+                                    _ => None,
+                                })
                             }
-                            _ => main.contains(&needle),
+                            // For other Formats (Markdown), we allow a match anywhere
+                            _ => parser
+                                .stmts
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(ix, stmt)| match stmt {
+                                    amp::Statement::Metadata(md) => match &needle {
+                                        None => Some(ix),
+                                        Some(needle) => (&md.kv.0 == needle).then(|| ix),
+                                    },
+                                    _ => None,
+                                })
+                                .next(),
                         };
-                        if is_match {
+
+                        if ix.is_some() {
                             // println!(
                             //     "starts_with: {} needle: {}, main: {}",
                             //     main.starts_with(&needle),
@@ -165,7 +180,7 @@ impl App {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Config {
     global: config::Global,
     command: Option<config::Command>,

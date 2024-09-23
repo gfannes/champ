@@ -32,7 +32,7 @@ pub struct CliArgs {
     pub command: Option<Command>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Command {
     /// Print global config
     Config {
@@ -48,8 +48,8 @@ pub enum Command {
     /// Search for items in a given forest
     #[command(name = "search", alias = "se")]
     Search {
-        /// Needle
-        needle: String,
+        /// Needle, None will match any metadata
+        needle: Option<String>,
         /// Verbosity level
         verbose: Option<i32>,
     },
@@ -66,7 +66,7 @@ impl CliArgs {
 }
 
 // Global configuration, loaded from '$HOME/.config/champ/config.toml'
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, Clone)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
     pub forest: Vec<Forest>,

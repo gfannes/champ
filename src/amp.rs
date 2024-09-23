@@ -5,8 +5,8 @@ pub type KVs = Vec<KV>;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub struct Metadata {
-    kv: KV,
-    params: KVs,
+    pub kv: KV,
+    pub params: KVs,
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -22,7 +22,6 @@ impl From<&str> for Statement {
 }
 impl<const N: usize> From<[(&str, Option<&str>); N]> for Statement {
     fn from(kvs: [(&str, Option<&str>); N]) -> Self {
-        println!("N: {}", N);
         assert!(N >= 1);
 
         let first = kvs[0];
@@ -40,37 +39,50 @@ impl<const N: usize> From<[(&str, Option<&str>); N]> for Statement {
 
 pub type Statements = Vec<Statement>;
 
-pub fn parse(content: &str) -> Statements {
-    let mut ret = Statements::new();
-    let mut strange = strange::Strange::new(content);
-    while !strange.is_empty() {
-        if strange.read_char_if('&') {
-            strange.drop();
-            let mut part = strange.read_until_exc(' ');
-            if part.is_none() {
-                part = strange.read_all();
-            }
-            if let Some(s) = part {
-                ret.push(Statement::from([(s, None)]));
-            }
-        } else {
-            let mut part = strange.read_until_exc(' ');
-            if part.is_none() {
-                part = strange.read_all();
-            }
-            if let Some(s) = part {
-                ret.push(Statement::from(s));
-            }
-        }
-    }
-    ret
+#[derive(Default)]
+pub struct Parser {
+    pub stmts: Statements,
 }
 
-pub struct Parser {}
-
 impl Parser {
-    pub fn new(content: &str) -> Parser {
-        Parser {}
+    pub fn new() -> Parser {
+        Parser::default()
+    }
+    pub fn parse(&mut self, content: &str) {
+        self.stmts.clear();
+
+        let mut strange = strange::Strange::new(content);
+        while !strange.is_empty() {
+            strange.drop();
+            if strange.read_char_if('&') {
+                if let Some(s) = strange.read(|r| r.to_end().exclude().through(' ')) {
+                    if match s.chars().next() {
+                        Some('&') | Some('\\') | Some('=') => true,
+                        _ => false,
+                    } || s.starts_with("nbsp")
+                        || match s.chars().next_back() {
+                            Some(';') | Some(',') => true,
+                            _ => false,
+                        }
+                    {
+                    } else {
+                        let mut strange = strange::Strange::new(s);
+                        strange.unwrite_char_if(':');
+                        // &todo: support AMP parameters: add while loop
+                        if let Some(key) = strange.read(|r| r.to_end().exclude().through('=')) {
+                            let value = (!strange.is_empty()).then(|| strange.to_str());
+                            self.stmts.push(Statement::from([(key, value)]));
+                        }
+                        continue;
+                    }
+                }
+            }
+            strange.reset();
+
+            if let Some(s) = strange.read(|r| r.to_end().exclude().through(' ')) {
+                self.stmts.push(Statement::from(s));
+            }
+        }
     }
 }
 
@@ -86,13 +98,35 @@ mod tests {
     #[test]
     fn test_parse() {
         let scns = [
+            // String
             ("todo", vec![Statement::from("todo")]),
+            ("&&", vec![Statement::from("&&")]),
+            ("&nbsp;", vec![Statement::from("&nbsp;")]),
+            // &fixme
+            ("&nbsp;abc", vec![Statement::from("&nbsp;abc")]),
+            ("&param,", vec![Statement::from("&param,")]),
+            // Metadata
             ("&todo", vec![Statement::from([("todo", None)])]),
+            ("&todo:", vec![Statement::from([("todo", None)])]),
+            (
+                "&key=value",
+                vec![Statement::from([("key", Some("value"))])],
+            ),
+            (
+                "&key=value,param=vilue",
+                vec![Statement::from([("key", Some("value,param=vilue"))])],
+                // &todo: parse parameters
+                // vec![Statement::from([
+                //     ("key", Some("value")),
+                //     ("param", Some("vilue")),
+                // ])],
+            ),
         ];
 
+        let mut parser = Parser::new();
         for scn in scns {
-            let stmts = parse(scn.0);
-            assert_eq!(stmts, scn.1);
+            parser.parse(scn.0);
+            assert_eq!(parser.stmts, scn.1);
         }
     }
 }
