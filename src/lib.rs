@@ -1,9 +1,9 @@
 // pub mod app;
-mod amp;
 pub mod cli;
 pub mod config;
 mod ctrl;
 mod data;
+mod fs;
 mod ignore;
 mod lex;
 pub mod mero;

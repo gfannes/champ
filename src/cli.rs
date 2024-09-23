@@ -1,9 +1,9 @@
-use crate::{amp, config, fail, lex, path, tree, util};
-use std::{fs, io};
+use crate::{config, fail, fs, lex, path, tree, util};
+use std::io;
 
 pub struct App {
     config: Config,
-    amp_forest: amp::Forest,
+    amp_forest: fs::Forest,
     buffer: Vec<u8>,
     size: usize,
     forest: tree::Forest,
@@ -15,7 +15,7 @@ impl App {
 
         let app = App {
             config,
-            amp_forest: amp::Forest::new(),
+            amp_forest: fs::Forest::new(),
             buffer: Vec::new(),
             size: 0,
             forest: Default::default(),
@@ -93,7 +93,7 @@ impl App {
                 }
             }
             path::FsPath::File(fp) => {
-                let mut file = fs::File::open(&fp)?;
+                let mut file = std::fs::File::open(&fp)?;
 
                 let do_process = self.amp_forest.max_size().map_or(true, |max_size| {
                     // Do not process large files
