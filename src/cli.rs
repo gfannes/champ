@@ -39,9 +39,17 @@ impl App {
                 config::Command::Search { verbose, needle } => {
                     let needle = format!("@{}", needle);
 
-                    self.add_to_forest_recursive_(&path::Path::root())?;
+                    self.add_to_forest_recursive_(&path::Path::root(), 0)?;
+
                     let mut cur_filename = None;
-                    self.forest.each_node(|tree, node| {
+                    self.forest.dfs(|tree, node| {
+                        if let Some(filename) = &tree.filename {
+                            println!(
+                                "filename {} {}",
+                                filename.display(),
+                                node.get_main(&tree.content)
+                            );
+                        }
                         let main = node.get_main(&tree.content);
                         // For Markdown, we allow a match anywhere, for SourceCode, we only allow a match at the front
                         let is_match = match tree.format {
@@ -114,37 +122,46 @@ impl App {
         Ok(())
     }
 
-    fn add_to_forest_recursive_(&mut self, parent: &path::Path) -> util::Result<()> {
-        match parent.fs_path()? {
+    fn add_to_forest_recursive_(
+        &mut self,
+        parent: &path::Path,
+        level: u64,
+    ) -> util::Result<Option<usize>> {
+        let tree_ix = match parent.fs_path()? {
             path::FsPath::Folder(folder) => {
                 let mut tree = tree::Tree::folder(&folder);
                 for child in self.amp_forest.list(parent)? {
-                    let ix = tree.nodes.len();
-                    let mut node = tree::Node::default();
+                    if let Some(tree_ix) = self.add_to_forest_recursive_(&child, level + 1)? {
+                        tree.root().links.push(tree_ix);
 
-                    node.prefix.start = tree.content.len();
-                    node.prefix.end = tree.content.len();
-                    tree.content
-                        .push_str(&format!("{}", child.path_buf().display()));
-                    node.postfix.start = tree.content.len();
-                    node.postfix.end = tree.content.len();
+                        let ix = tree.nodes.len();
+                        let mut node = tree::Node::default();
 
-                    tree.nodes.push(node);
+                        node.prefix.start = tree.content.len();
+                        node.prefix.end = tree.content.len();
+                        tree.content
+                            .push_str(&format!("{}", child.path_buf().display()));
+                        node.postfix.start = tree.content.len();
+                        node.postfix.end = tree.content.len();
 
-                    self.add_to_forest_recursive_(&child)?;
+                        tree.nodes.push(node);
+                    }
                 }
-                self.forest.add(tree)?;
+                Some(self.forest.add(tree, level)?)
             }
             path::FsPath::File(fp) => match tree::Tree::from_path(&fp) {
-                Err(err) => eprintln!(
-                    "Could not create tree.Tree from '{}': {}",
-                    fp.display(),
-                    err
-                ),
-                Ok(tree) => self.forest.add(tree)?,
+                Err(err) => {
+                    eprintln!(
+                        "Could not create tree.Tree from '{}': {}",
+                        fp.display(),
+                        err
+                    );
+                    None
+                }
+                Ok(tree) => Some(self.forest.add(tree, level)?),
             },
-        }
-        Ok(())
+        };
+        Ok(tree_ix)
     }
 }
 

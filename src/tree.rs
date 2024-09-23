@@ -10,6 +10,7 @@ use std::{collections, fs, path};
 pub struct Forest {
     files: collections::BTreeMap<path::PathBuf, usize>,
     trees: Vec<Tree>,
+    roots: Vec<usize>,
     names: Vec<String>,
 }
 
@@ -18,8 +19,12 @@ impl Forest {
         Default::default()
     }
 
-    pub fn add(&mut self, mut tree: Tree) -> util::Result<()> {
+    pub fn add(&mut self, mut tree: Tree, level: u64) -> util::Result<usize> {
         let ix = self.trees.len();
+
+        if level == 0 {
+            self.roots.push(ix);
+        }
 
         if let Some(filename) = &tree.filename {
             if self.files.contains_key(filename) {
@@ -34,13 +39,34 @@ impl Forest {
         }
         self.trees.push(tree);
 
-        Ok(())
+        Ok(ix)
     }
 
     pub fn each_node(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
         for tree in &self.trees {
             tree.each_node(tree, &mut cb);
         }
+    }
+
+    pub fn dfs(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
+        for &root_ix in &self.roots {
+            println!("root_ix {root_ix}");
+            let root = &self.trees[root_ix];
+            self.dfs_(root, &mut cb);
+        }
+    }
+    fn dfs_(&self, tree: &Tree, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
+        for node in &tree.nodes {
+            cb(tree, node);
+            for &tree_ix in &node.links {
+                let tree = &self.trees[tree_ix];
+                self.dfs_(tree, cb);
+            }
+        }
+    }
+
+    pub fn connect(&mut self) -> util::Result<()> {
+        Ok(())
     }
 
     pub fn print(&self) {
@@ -221,6 +247,10 @@ impl Tree {
         }
     }
 
+    pub fn root(&mut self) -> &mut Node {
+        &mut self.nodes[self.root_ix]
+    }
+
     pub fn print(&self) {
         match self.format {
             Format::Folder => {}
@@ -275,7 +305,7 @@ pub struct Node {
     aggregates: collections::BTreeMap<usize, Aggregate>,
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
-    links: Vec<usize>,      // Direct links to other Trees
+    pub links: Vec<usize>,  // Direct links to other Trees
     reachables: Vec<usize>, // All other Trees that are recursively reachable
 }
 
@@ -326,12 +356,16 @@ mod tests {
         {
             let tree = Tree::from_str("# Title\n- line1\n- line 2", Format::Markdown);
             println!("{:?}", &tree);
+            forest.add(tree, 0)?;
         }
         {
             let pwd = std::env::current_dir()?;
             let tree = Tree::from_path(&pwd.join("test/simple.md"))?;
             println!("{:?}", &tree);
+            forest.add(tree, 0)?;
         }
+
+        forest.connect()?;
 
         Ok(())
     }
