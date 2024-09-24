@@ -159,15 +159,21 @@ mod tests {
 
     #[test]
     fn test_list() -> util::Result<()> {
+        let home_dir = if cfg!(target_os = "macos") {
+            "/Users/geertf"
+        } else {
+            "/home/geertf"
+        };
+
         let mut forest = Forest::new();
         forest.set_forest(ForestSpec {
-            base: path::Path::folder("/home/geertf"),
+            base: path::Path::folder(home_dir),
             hidden: true,
             ignore: true,
             include: Vec::new(),
             max_size: None,
         });
-        let path = path::Path::folder("/home/geertf");
+        let path = path::Path::folder(home_dir);
         let paths = forest.list(&path)?;
         for p in &paths {
             println!("{}", p);
