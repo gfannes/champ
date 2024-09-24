@@ -37,3 +37,11 @@
 ## &tdb Discriminate between AMP data and commented-out code
 - Only allow AMP at the start of a comment for SourceCode?
 - Check for parenthesis nesting? => cannot handle commented-out variable definitions
+
+## Support AMP links
+- `&[[title]]`
+	- Still works as a link in Obsidian
+
+## Document typical metadata usage
+- `mef`: mental effort
+	- [surge: unit of mef](https://jonisalminen.com/unit-of-cognitive-effort/)

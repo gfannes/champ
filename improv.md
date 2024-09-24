@@ -11,4 +11,5 @@
 - maybe speed-up enumeration when Forest is bounded with direct use of gitignore
 
 ## Fully parse Markdown
-- Do not match AMP in code blocks
+- &[[parse Markdown into tree.Tree]]
+- Do not match AMP in code blocks, latex formulas, quoted things or links

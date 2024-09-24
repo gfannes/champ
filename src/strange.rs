@@ -1,3 +1,6 @@
+// &todo: add peek functions
+// &todo: rename read_char_opt() into try_read_char()
+
 pub type Range = std::ops::Range<usize>;
 
 #[derive(Clone)]
@@ -138,13 +141,13 @@ impl<'a> Strange<'a> {
         self.rest = self.safepoint;
     }
 
-    pub fn drop(&mut self) {
+    pub fn save(&mut self) {
         self.safepoint = self.rest;
     }
 
     pub fn pop_str(&mut self) -> &str {
         let ret = &self.safepoint[..distance(self.safepoint, self.rest)];
-        self.drop();
+        self.save();
         ret
     }
     pub fn pop_range(&mut self) -> Range {
@@ -152,7 +155,7 @@ impl<'a> Strange<'a> {
             start: distance(self.all, self.safepoint),
             end: distance(self.all, self.rest),
         };
-        self.drop();
+        self.save();
         ret
     }
 }

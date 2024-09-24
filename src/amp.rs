@@ -1,4 +1,4 @@
-use crate::{strange, util};
+use crate::strange;
 
 pub type KV = (String, Option<String>);
 pub type KVs = Vec<KV>;
@@ -53,7 +53,7 @@ impl Parser {
 
         let mut strange = strange::Strange::new(content);
         while !strange.is_empty() {
-            strange.drop();
+            strange.save();
             if strange.read_char_if('&') {
                 if let Some(s) = strange.read(|r| r.to_end().exclude().through(' ')) {
                     if match s.chars().next() {
@@ -93,6 +93,13 @@ mod tests {
     #[test]
     fn test_statement() {
         let md = Statement::from([("todo", None)]);
+        assert_eq!(
+            md,
+            Statement::Metadata(Metadata {
+                kv: ("todo".to_owned(), None),
+                ..Default::default()
+            })
+        )
     }
 
     #[test]
