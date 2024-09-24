@@ -51,6 +51,18 @@ impl<'a> Strange<'a> {
         })
     }
 
+    pub fn read_char_when(&mut self, cb: impl FnOnce(char) -> bool) -> bool {
+        self.read_char_when_opt(cb).is_some()
+    }
+    pub fn read_char_when_opt(&mut self, cb: impl FnOnce(char) -> bool) -> Option<char> {
+        split_first(self.rest).and_then(|(ch, rest)| {
+            cb(ch).then(|| {
+                self.rest = rest;
+                ch
+            })
+        })
+    }
+
     pub fn unwrite_char_if(&mut self, wanted: char) -> bool {
         self.unwrite_char_if_opt(wanted).is_some()
     }
@@ -258,6 +270,16 @@ mod tests {
             let mut s = s.clone();
             s.read_char_if_opt('a')
                 .and_then(|_| s.read_char_if_opt('b'));
+            assert_eq!(s.to_str(), "c");
+        }
+
+        {
+            let mut s = s.clone();
+            s.read_char_when(|ch| match ch {
+                'a' | 'b' => true,
+                _ => false,
+            });
+            assert_eq!(s.to_str(), "bc");
         }
     }
 

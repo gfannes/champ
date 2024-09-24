@@ -1,3 +1,5 @@
+pub mod md;
+
 use crate::{fail, util};
 use std::{collections, fs, path};
 

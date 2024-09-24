@@ -1,4 +1,4 @@
-## Split document in Lines
+## &done Split document in Lines
 - Prefix: ` #-*$` and backtick
 - Main
 - Postfix: newline
