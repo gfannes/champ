@@ -1,5 +1,115 @@
 use crate::{strange, util};
 
+#[derive(Default, Debug)]
+struct Node {
+    range: Range,
+    childs: Vec<usize>,
+}
+
+#[derive(Default, Debug)]
+struct Tree {
+    nodes: Vec<Node>,
+    headers: Vec<usize>,
+    bullets: Vec<usize>,
+}
+impl Tree {
+    fn init(&mut self, tokens: &[Token]) {
+        self.nodes.clear();
+        self.headers.clear();
+        self.bullets.clear();
+
+        let root_ix = self.append(Node::default());
+        self.headers.push(root_ix);
+
+        let mut is_new_line = true;
+        let mut is_header = false;
+        for token in tokens {
+            if token.kind == Kind::Newline {
+                is_new_line = true;
+                is_header = false;
+                self.bullets.clear();
+            } else if is_new_line {
+                match token.kind {
+                    Kind::Hash => {
+                        let level = len(&token.range);
+                        assert!(level > 0);
+                        // Drop all headers that are nested deeper
+                        while self.headers.len() > level {
+                            self.headers.pop();
+                        }
+                        // Create missing headers
+                        while self.headers.len() <= level {
+                            let node = Node::default();
+                            let ix = self.append(node);
+                            self.header().childs.push(ix);
+                            self.headers.push(ix);
+                        }
+                        let header = self.header();
+                        header.range = token.range.clone();
+
+                        is_header = true;
+                    }
+                    _ => {
+                        let bullet = self.bullet();
+                        bullet.range = token.range.clone();
+                    }
+                }
+                is_new_line = false;
+            } else {
+                if is_header {
+                    let header = self.header();
+                    header.range.end = token.range.end;
+                } else {
+                    let bullet = self.bullet();
+                    bullet.range.end = token.range.end;
+                }
+            }
+        }
+    }
+
+    fn print(&self, content: &str) -> String {
+        let mut s = String::new();
+        if let Some(root) = self.nodes.get(0) {
+            self.print_(root, &mut s, content);
+        }
+        s
+    }
+    fn print_(&self, node: &Node, os: &mut String, content: &str) {
+        os.push_str("(");
+        if let Some(s) = content.get(node.range.clone()) {
+            os.push_str(s);
+        }
+        for child in &node.childs {
+            os.push_str(" ");
+            self.print_(&self.nodes[*child], os, content);
+        }
+        os.push_str(")");
+    }
+
+    fn header(&mut self) -> &mut Node {
+        let ix = self.headers.last().unwrap();
+        &mut self.nodes[*ix]
+    }
+    fn bullet(&mut self) -> &mut Node {
+        if self.bullets.is_empty() {
+            let ix = self.append(Node::default());
+            self.header().childs.push(ix);
+            self.bullets.push(ix);
+        }
+        let ix = self.bullets.last().unwrap();
+        &mut self.nodes[*ix]
+    }
+
+    fn append(&mut self, node: Node) -> usize {
+        let ix = self.nodes.len();
+        self.nodes.push(node);
+        ix
+    }
+}
+fn len(range: &Range) -> usize {
+    range.end - range.start
+}
+
 type Range = std::ops::Range<usize>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -150,6 +260,31 @@ fn split_lines(str: &str) -> Lines {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tree() -> util::Result<()> {
+        let scns = [
+            ("", "()"),
+            ("# Title", "( (# Title))"),
+            ("# Title\nLine1\nLine2", "( (# Title (Line1) (Line2)))"),
+            (
+                "# T1\nL1\nL2\n# T2\nL3\nL4",
+                "( (# T1 (L1) (L2)) (# T2 (L3) (L4)))",
+            ),
+        ];
+        let mut lexer = Lexer::default();
+
+        for (content, exp) in scns {
+            lexer.tokenize(content)?;
+
+            let mut tree = Tree::default();
+            tree.init(&lexer.tokens);
+
+            assert_eq!(&tree.print(content), exp);
+        }
+
+        Ok(())
+    }
 
     #[test]
     fn test_tokenize() -> util::Result<()> {
