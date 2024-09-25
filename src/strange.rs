@@ -1,5 +1,4 @@
 // &todo: add peek functions
-// &todo: rename read_char_opt() into try_read_char()
 
 pub type Range = std::ops::Range<usize>;
 
@@ -29,10 +28,14 @@ impl<'a> Strange<'a> {
         self.rest.len()
     }
 
-    pub fn read_char(&mut self) -> bool {
-        self.read_char_opt().is_some()
+    pub fn index(&self) -> usize {
+        distance(self.all, self.rest)
     }
-    pub fn read_char_opt(&mut self) -> Option<char> {
+
+    pub fn read_char(&mut self) -> bool {
+        self.try_read_char().is_some()
+    }
+    pub fn try_read_char(&mut self) -> Option<char> {
         split_first(self.rest).and_then(|(ch, rest)| {
             self.rest = rest;
             Some(ch)
@@ -40,9 +43,9 @@ impl<'a> Strange<'a> {
     }
 
     pub fn read_char_if(&mut self, wanted: char) -> bool {
-        self.read_char_if_opt(wanted).is_some()
+        self.try_read_char_if(wanted).is_some()
     }
-    pub fn read_char_if_opt(&mut self, wanted: char) -> Option<char> {
+    pub fn try_read_char_if(&mut self, wanted: char) -> Option<char> {
         split_first(self.rest).and_then(|(ch, rest)| {
             (ch == wanted).then(|| {
                 self.rest = rest;
@@ -52,9 +55,9 @@ impl<'a> Strange<'a> {
     }
 
     pub fn read_char_when(&mut self, cb: impl FnOnce(char) -> bool) -> bool {
-        self.read_char_when_opt(cb).is_some()
+        self.try_read_char_when(cb).is_some()
     }
-    pub fn read_char_when_opt(&mut self, cb: impl FnOnce(char) -> bool) -> Option<char> {
+    pub fn try_read_char_when(&mut self, cb: impl FnOnce(char) -> bool) -> Option<char> {
         split_first(self.rest).and_then(|(ch, rest)| {
             cb(ch).then(|| {
                 self.rest = rest;
@@ -64,10 +67,10 @@ impl<'a> Strange<'a> {
     }
 
     pub fn unwrite_char_if(&mut self, wanted: char) -> bool {
-        self.unwrite_char_if_opt(wanted).is_some()
+        self.try_unwrite_char_if(wanted).is_some()
     }
 
-    pub fn unwrite_char_if_opt(&mut self, wanted: char) -> Option<char> {
+    pub fn try_unwrite_char_if(&mut self, wanted: char) -> Option<char> {
         split_last(self.rest).and_then(|(rest, ch)| {
             (ch == wanted).then(|| {
                 self.rest = rest;
@@ -268,8 +271,8 @@ mod tests {
 
         {
             let mut s = s.clone();
-            s.read_char_if_opt('a')
-                .and_then(|_| s.read_char_if_opt('b'));
+            s.try_read_char_if('a')
+                .and_then(|_| s.try_read_char_if('b'));
             assert_eq!(s.to_str(), "c");
         }
 
