@@ -151,6 +151,15 @@ impl Tree {
 
                 for (ix, md_node) in md_tree.nodes.iter().enumerate() {
                     let node = &mut tree.nodes[ix];
+                    let kind = if md_node.verbatim {
+                        Kind::Metadata
+                    } else {
+                        Kind::Text
+                    };
+                    node.parts.push(Part {
+                        range: md_node.range.clone(),
+                        kind,
+                    });
 
                     let prefix_end = if md_node.verbatim {
                         md_node.range.end
@@ -176,8 +185,14 @@ impl Tree {
                     let end_ix = start_ix + line.len();
 
                     if let Some(comment_ix) = line.find(comment) {
+                        let main_start = start_ix + comment_ix + comment.len();
                         let mut node = Node {
-                            prefix: start_ix..start_ix + comment_ix + comment.len(),
+                            parts: vec![
+                                Part::new(start_ix..main_start, Kind::Metadata),
+                                Part::new(main_start..end_ix, Kind::Text),
+                                Part::new(end_ix..end_ix + 1, Kind::Metadata),
+                            ],
+                            prefix: start_ix..main_start,
                             postfix: end_ix..end_ix + 1,
                             line_nr: Some(line_nr),
                             ..Default::default()
@@ -210,11 +225,18 @@ impl Tree {
         let mut tree = Tree::new();
         {
             let root = &mut tree.nodes[tree.root_ix];
+
+            let mut range = Range::default();
+            range.start = tree.content.len();
+
             root.prefix.start = tree.content.len();
             root.prefix.end = tree.content.len();
             tree.content.push_str(&format!("{}", path.display()));
             root.postfix.start = tree.content.len();
             root.postfix.end = tree.content.len();
+            range.end = tree.content.len();
+
+            root.parts.push(Part::new(range, Kind::Metadata));
         }
         tree.filename = Some(path.into());
         tree.format = Format::Folder;
@@ -285,9 +307,26 @@ pub enum Attribute {}
 #[derive(Debug)]
 pub enum Aggregate {}
 
+#[derive(PartialEq, Eq, Debug)]
+pub enum Kind {
+    Metadata,
+    Text,
+}
+#[derive(Debug)]
+pub struct Part {
+    pub range: Range,
+    pub kind: Kind,
+}
+impl Part {
+    fn new(range: Range, kind: Kind) -> Part {
+        Part { range, kind }
+    }
+}
+
 // &next: provide amp items
 #[derive(Default, Debug)]
 pub struct Node {
+    pub parts: Vec<Part>,
     pub prefix: Range,
     pub postfix: Range,
     pub line_nr: Option<u64>,

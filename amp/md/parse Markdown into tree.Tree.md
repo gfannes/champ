@@ -1,22 +1,16 @@
-## &done Split document in Lines
-- Prefix: ` #-*$` and backtick
-- Main
-- Postfix: newline
-- Output: Ranges
+## &done Tokenize a document
 
-## Create hierarchy in Lines
-- Stack of headers
-- Stack of bullets
+## &done Parse md.Tokens into a md.Tree
 
-## Parse Line.main
-- Take context from previous prefixes into account
-	- Ad-hoc detection of code block of formula
-- Tokenize
-- Parse into Statements
-	- Metadata
-	- Link
-	- String
-	- Filter-out `&nbsp;`, ...
+## &done Translate md.Tree into tree.Tree
+
+## Improve Markdown parser
+- Detect `&nbsp;`
+- Detect normal Markdown links
+
+## Update tree.Tree to represent
+- Markup
+- Text
 
 ## Populate Node.attributes and Node.links from Line.stmts
 

@@ -45,50 +45,55 @@ impl App {
 
                     let mut cur_filename = None;
                     self.forest.dfs(|tree, node| {
-                        parser.parse(node.get_main(&tree.content));
+                        for part in &node.parts {
+                            if part.kind == tree::Kind::Text {
+                                // parser.parse(node.get_main(&tree.content));
+                                parser.parse(tree.content.get(part.range.clone()).unwrap());
 
-                        let ix = match tree.format {
-                            // For SourceCode, we only allowa match at the front
-                            tree::Format::SourceCode { comment: _ } => {
-                                parser.stmts.get(0).and_then(|stmt| match stmt {
-                                    amp::Statement::Metadata(md) => match &needle {
-                                        None => Some(0),
-                                        Some(needle) => (&md.kv.0 == needle).then(|| 0),
-                                    },
-                                    _ => None,
-                                })
-                            }
-                            // For other Formats (Markdown), we allow a match anywhere
-                            _ => parser
-                                .stmts
-                                .iter()
-                                .enumerate()
-                                .filter_map(|(ix, stmt)| match stmt {
-                                    amp::Statement::Metadata(md) => match &needle {
-                                        None => Some(ix),
-                                        Some(needle) => (&md.kv.0 == needle).then(|| ix),
-                                    },
-                                    _ => None,
-                                })
-                                .next(),
-                        };
+                                let ix = match tree.format {
+                                    // For SourceCode, we only allow a match at the front
+                                    tree::Format::SourceCode { comment: _ } => {
+                                        parser.stmts.get(0).and_then(|stmt| match stmt {
+                                            amp::Statement::Metadata(md) => match &needle {
+                                                None => Some(0),
+                                                Some(needle) => (&md.kv.0 == needle).then(|| 0),
+                                            },
+                                            _ => None,
+                                        })
+                                    }
+                                    // For other Formats (Markdown), we allow a match anywhere
+                                    _ => parser
+                                        .stmts
+                                        .iter()
+                                        .enumerate()
+                                        .filter_map(|(ix, stmt)| match stmt {
+                                            amp::Statement::Metadata(md) => match &needle {
+                                                None => Some(ix),
+                                                Some(needle) => (&md.kv.0 == needle).then(|| ix),
+                                            },
+                                            _ => None,
+                                        })
+                                        .next(),
+                                };
 
-                        if ix.is_some() {
-                            // println!(
-                            //     "starts_with: {} needle: {}, main: {}",
-                            //     main.starts_with(&needle),
-                            //     &needle,
-                            //     &main
-                            // );
-                            if true && cur_filename != tree.filename {
-                                cur_filename = tree.filename.clone();
-                                if let Some(fp) = &cur_filename {
-                                    println!("{}", fp.display());
-                                } else {
-                                    println!("<Unknown filename>");
+                                if ix.is_some() {
+                                    // println!(
+                                    //     "starts_with: {} needle: {}, main: {}",
+                                    //     main.starts_with(&needle),
+                                    //     &needle,
+                                    //     &main
+                                    // );
+                                    if true && cur_filename != tree.filename {
+                                        cur_filename = tree.filename.clone();
+                                        if let Some(fp) = &cur_filename {
+                                            println!("{}", fp.display());
+                                        } else {
+                                            println!("<Unknown filename>");
+                                        }
+                                    }
+                                    node.print(&tree.content, &tree.format);
                                 }
                             }
-                            node.print(&tree.content, &tree.format);
                         }
                     });
                 }
