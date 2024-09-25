@@ -137,37 +137,33 @@ impl Tree {
 
         match &tree.format {
             Format::MindMap => todo!("Implement XML-MM parsing"),
-            // &todo: handle Markdown and SourceCode in the same way, only differ the method to find the initial main.
-            // - whitespace stripping can be reused.
             Format::Markdown => {
-                let mut prev_range = Range::default();
-                let mut line_nr = 0 as u64;
-                for line in tree.content.split('\n') {
-                    line_nr += 1;
+                // &improv: cache lexer for better memory reuse
+                let mut lexer = md::Lexer::default();
+                lexer.tokenize(content);
 
-                    let start_ix = prev_range.end;
-                    let end_ix = start_ix + line.len();
+                // &improv: cache md_tree for better memory reuse
+                let mut md_tree = md::Tree::default();
+                md_tree.init(&lexer.tokens);
 
-                    let node = Node {
-                        prefix: Range {
-                            start: start_ix,
-                            end: start_ix,
-                        },
-                        postfix: Range {
-                            start: end_ix,
-                            end: end_ix + 1,
-                        },
-                        line_nr: Some(line_nr),
-                        ..Default::default()
+                tree.nodes
+                    .resize_with(md_tree.nodes.len(), || Node::default());
+
+                for (ix, md_node) in md_tree.nodes.iter().enumerate() {
+                    let node = &mut tree.nodes[ix];
+
+                    let prefix_end = if md_node.verbatim {
+                        md_node.range.end
+                    } else {
+                        md_node.range.start
                     };
-                    let node_ix = tree.nodes.len();
-                    tree.nodes.push(node);
-                    tree.nodes[tree.root_ix].childs.push(node_ix);
+                    node.prefix = md_node.range.start..prefix_end;
 
-                    prev_range = Range {
-                        start: start_ix,
-                        end: end_ix + 1,
-                    };
+                    node.postfix = md_node.range.end..md_node.range.end;
+
+                    for child_ix in &md_node.childs {
+                        node.childs.push(*child_ix);
+                    }
                 }
             }
             Format::SourceCode { comment } => {
@@ -181,14 +177,8 @@ impl Tree {
 
                     if let Some(comment_ix) = line.find(comment) {
                         let mut node = Node {
-                            prefix: Range {
-                                start: start_ix,
-                                end: start_ix + comment_ix + comment.len(),
-                            },
-                            postfix: Range {
-                                start: end_ix,
-                                end: end_ix + 1,
-                            },
+                            prefix: start_ix..start_ix + comment_ix + comment.len(),
+                            postfix: end_ix..end_ix + 1,
                             line_nr: Some(line_nr),
                             ..Default::default()
                         };
@@ -203,10 +193,7 @@ impl Tree {
                         tree.nodes[tree.root_ix].childs.push(node_ix);
                     }
 
-                    prev_range = Range {
-                        start: start_ix,
-                        end: end_ix + 1,
-                    };
+                    prev_range = start_ix..end_ix + 1;
                 }
             }
             _ => {
@@ -215,6 +202,7 @@ impl Tree {
                 }
             }
         }
+
         tree
     }
 
@@ -340,10 +328,7 @@ impl Node {
     }
 
     fn main_range(&self) -> Range {
-        Range {
-            start: self.prefix.end,
-            end: self.postfix.start,
-        }
+        self.prefix.end..self.postfix.start
     }
 }
 
