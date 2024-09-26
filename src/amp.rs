@@ -1,4 +1,4 @@
-use crate::strange;
+use crate::rubr::strange;
 
 pub type KV = (String, Option<String>);
 pub type KVs = Vec<KV>;

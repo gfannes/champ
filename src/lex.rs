@@ -1,102 +1,164 @@
-use std::slice::SliceIndex;
+use crate::rubr::strange;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Token {
+    pub kind: Kind,
+    pub range: Range,
+    pub line: u64,
+}
+
+pub struct Lexer {
+    pub tokens: Vec<Token>,
+}
+
+type Range = std::ops::Range<usize>;
+
+impl Token {
+    fn new(kind: Kind, range: Range, line: u64) -> Token {
+        Token { kind, range, line }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Kind {
+    Idle,
+    Hash,
+    Space,
+    Dash,
+    Star,
+    Backtick,
+    Dollar,
+    Slash,
     Text,
     Newline,
 }
-
-#[derive(Debug, Clone)]
-pub struct Token {
-    kind: Kind,
-    range: std::ops::Range<usize>,
-}
-
-impl Token {
-    pub fn print(&self, prefix: &str, content: &str) {
-        match self.kind {
-            Kind::Newline => {
-                println!("{prefix}[Token](kind:{:?})", self.kind,)
-            }
-            _ => println!(
-                "{prefix}[Token](kind:{:?})(text:{})",
-                self.kind,
-                content.get(self.range.clone()).unwrap_or("none")
-            ),
+impl From<char> for Kind {
+    fn from(ch: char) -> Kind {
+        match ch {
+            '#' => Kind::Hash,
+            ' ' => Kind::Space,
+            '-' => Kind::Dash,
+            '*' => Kind::Star,
+            '`' => Kind::Backtick,
+            '$' => Kind::Dollar,
+            '/' => Kind::Slash,
+            '\n' | '\r' => Kind::Newline,
+            _ => Kind::Text,
         }
     }
 }
 
-pub struct Lexer<'a> {
-    content: &'a str,
-    current: &'a str,
-}
-
-impl<'a> Lexer<'a> {
-    pub fn new(content: &'a str) -> Lexer<'a> {
-        Lexer {
-            content,
-            current: content,
-        }
+impl Lexer {
+    pub fn new() -> Lexer {
+        Lexer { tokens: Vec::new() }
     }
+    pub fn tokenize(&mut self, content: &str) {
+        self.tokens.clear();
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
-        let mut tokens = Vec::new();
-        let mut token: Option<Token> = None;
-
-        for (ix, ch) in self.content.char_indices() {
-            match ch {
-                // &todo: support all styles of newlines
-                '\n' => {
-                    if let Some(mut token) = token {
-                        token.range.end = ix;
-                        tokens.push(token);
+        let mut line: u64 = 0;
+        let mut current = Token {
+            kind: Kind::Idle,
+            range: 0..0,
+            line,
+        };
+        let mut strange = strange::Strange::new(content);
+        while let Some(ch) = strange.try_read_char() {
+            if ch == '\n' {
+                match current.kind {
+                    Kind::Idle => {
+                        self.tokens.push(Token::new(
+                            Kind::Newline,
+                            current.range.end..strange.index(),
+                            line,
+                        ));
                     }
-                    token = Some(Token {
-                        kind: Kind::Newline,
-                        range: ix..ix,
-                    });
+                    Kind::Newline => {
+                        current.range.end = strange.index();
+                        self.tokens.push(current);
+                    }
+                    _ => {
+                        let new_start = current.range.end;
+                        self.tokens.push(current);
+                        self.tokens.push(Token::new(
+                            Kind::Newline,
+                            new_start..strange.index(),
+                            line,
+                        ));
+                    }
                 }
-                _ => match &mut token {
-                    None => {
-                        token = Some(Token {
-                            kind: Kind::Text,
-                            range: ix..ix,
-                        })
-                    }
-                    Some(token) => match token.kind {
-                        Kind::Text => {}
-                        _ => {
-                            token.range.end = ix;
-                            tokens.push(token.clone());
 
-                            token.kind = Kind::Text;
-                            token.range = ix..ix;
-                        }
-                    },
-                },
+                line += 1;
+                current = Token {
+                    kind: Kind::Idle,
+                    range: strange.index()..strange.index(),
+                    line,
+                };
+            } else {
+                let kind = Kind::from(ch);
+                if kind == current.kind {
+                    // Same token kind: extend the range
+                    current.range.end = strange.index();
+                } else {
+                    // Different token kind: push the previous token and start a new one
+                    let new_start = current.range.end;
+                    if current.kind != Kind::Idle {
+                        self.tokens.push(current);
+                    }
+                    current = Token {
+                        kind,
+                        range: new_start..strange.index(),
+                        line,
+                    };
+                }
             }
         }
-        if let Some(mut token) = token {
-            token.range.end = self.content.len();
-            tokens.push(token);
+        if current.kind != Kind::Idle {
+            self.tokens.push(current);
         }
-
-        tokens
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_lexing() {
-        let content = "line1\nline2";
-        let mut lexer = Lexer::new(content);
-        let tokens = lexer.tokenize();
-        for token in tokens {
-            token.print("\t", content);
+    fn test_tokenize() {
+        let scns = [
+            ("", vec![]),
+            ("#", vec![Token::new(Kind::Hash, 0..1, 0)]),
+            ("##", vec![Token::new(Kind::Hash, 0..2, 0)]),
+            ("abc", vec![Token::new(Kind::Text, 0..3, 0)]),
+            (
+                "## Title",
+                vec![
+                    Token::new(Kind::Hash, 0..2, 0),
+                    Token::new(Kind::Space, 2..3, 0),
+                    Token::new(Kind::Text, 3..8, 0),
+                ],
+            ),
+            ("\n", vec![Token::new(Kind::Newline, 0..1, 0)]),
+            ("\r\n", vec![Token::new(Kind::Newline, 0..2, 0)]),
+            (
+                "\n\n",
+                vec![
+                    Token::new(Kind::Newline, 0..1, 0),
+                    Token::new(Kind::Newline, 1..2, 1),
+                ],
+            ),
+            (
+                "\n\r\n\r\r\n",
+                vec![
+                    Token::new(Kind::Newline, 0..1, 0),
+                    Token::new(Kind::Newline, 1..3, 1),
+                    Token::new(Kind::Newline, 3..6, 2),
+                ],
+            ),
+        ];
+
+        let mut lexer = Lexer::new();
+        for (content, exp) in scns {
+            lexer.tokenize(content);
+            assert_eq!(&lexer.tokens, &exp);
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::strange;
+use crate::lex;
 
 #[derive(Default, Debug)]
 pub struct Node {
@@ -26,7 +26,14 @@ enum State {
     FormulaBlock,
 }
 
+type Token = lex::Token;
+type Kind = lex::Kind;
+
 impl Tree {
+    pub fn new() -> Tree {
+        Tree::default()
+    }
+
     pub fn init(&mut self, tokens: &[Token]) {
         self.nodes.clear();
         self.headers.clear();
@@ -66,7 +73,7 @@ impl Tree {
                             Kind::Hash => {
                                 self.bullets.clear();
 
-                                let level = len(&token.range);
+                                let level = token.range.len();
                                 assert!(level > 0);
                                 // Drop all headers that are nested deeper
                                 while self.headers.len() > level {
@@ -85,7 +92,7 @@ impl Tree {
                                 state = State::Header;
                             }
                             Kind::Dash | Kind::Star => {
-                                let level = len(&token.range);
+                                let level = token.range.len();
                                 assert!(level > 0);
                                 // Drop all bullets that are nested deeper
                                 while self.bullets.len() > level {
@@ -104,7 +111,7 @@ impl Tree {
                                 state = State::Bullet;
                             }
                             Kind::Backtick => {
-                                let level = len(&token.range);
+                                let level = token.range.len();
                                 match level {
                                     1 => state = State::Code,
                                     3 => {
@@ -124,7 +131,7 @@ impl Tree {
                                 }
                             }
                             Kind::Dollar => {
-                                let level = len(&token.range);
+                                let level = token.range.len();
                                 match level {
                                     1 => state = State::Formula,
                                     2 => {
@@ -171,7 +178,7 @@ impl Tree {
                     let node = &mut self.nodes[self.codeblock.unwrap()];
                     node.range.end = token.range.end;
 
-                    if token.kind == Kind::Backtick && len(&token.range) == 3 {
+                    if token.kind == Kind::Backtick && token.range.len() == 3 {
                         self.codeblock = None;
                         state = State::Idle;
                     }
@@ -186,7 +193,7 @@ impl Tree {
                     let node = &mut self.nodes[self.formulablock.unwrap()];
                     node.range.end = token.range.end;
 
-                    if token.kind == Kind::Dollar && len(&token.range) == 2 {
+                    if token.kind == Kind::Dollar && token.range.len() == 2 {
                         self.formulablock = None;
                         state = State::Idle;
                     }
@@ -234,121 +241,7 @@ impl Tree {
     }
 }
 
-fn len(range: &Range) -> usize {
-    range.end - range.start
-}
-
 type Range = std::ops::Range<usize>;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Token {
-    kind: Kind,
-    range: Range,
-    line: u64,
-}
-impl Token {
-    fn new(kind: Kind, range: Range, line: u64) -> Token {
-        Token { kind, range, line }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-enum Kind {
-    Idle,
-    Hash,
-    Space,
-    Dash,
-    Star,
-    Backtick,
-    Dollar,
-    Text,
-    Newline,
-}
-impl From<char> for Kind {
-    fn from(ch: char) -> Kind {
-        match ch {
-            '#' => Kind::Hash,
-            ' ' => Kind::Space,
-            '-' => Kind::Dash,
-            '*' => Kind::Star,
-            '`' => Kind::Backtick,
-            '$' => Kind::Dollar,
-            '\n' | '\r' => Kind::Newline,
-            _ => Kind::Text,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct Lexer {
-    pub tokens: Vec<Token>,
-}
-impl Lexer {
-    pub fn tokenize(&mut self, content: &str) {
-        self.tokens.clear();
-
-        let mut line: u64 = 0;
-        let mut current = Token {
-            kind: Kind::Idle,
-            range: 0..0,
-            line,
-        };
-        let mut strange = strange::Strange::new(content);
-        while let Some(ch) = strange.try_read_char() {
-            if ch == '\n' {
-                match current.kind {
-                    Kind::Idle => {
-                        self.tokens.push(Token::new(
-                            Kind::Newline,
-                            current.range.end..strange.index(),
-                            line,
-                        ));
-                    }
-                    Kind::Newline => {
-                        current.range.end = strange.index();
-                        self.tokens.push(current);
-                    }
-                    _ => {
-                        let new_start = current.range.end;
-                        self.tokens.push(current);
-                        self.tokens.push(Token::new(
-                            Kind::Newline,
-                            new_start..strange.index(),
-                            line,
-                        ));
-                    }
-                }
-
-                line += 1;
-                current = Token {
-                    kind: Kind::Idle,
-                    range: strange.index()..strange.index(),
-                    line,
-                };
-            } else {
-                let kind = Kind::from(ch);
-                if kind == current.kind {
-                    // Same token kind: extend the range
-                    current.range.end = strange.index();
-                } else {
-                    // Different token kind: push the previous token and start a new one
-                    let new_start = current.range.end;
-                    if current.kind != Kind::Idle {
-                        self.tokens.push(current);
-                    }
-                    current = Token {
-                        kind,
-                        range: new_start..strange.index(),
-                        line,
-                    };
-                }
-            }
-        }
-        if current.kind != Kind::Idle {
-            self.tokens.push(current);
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -370,7 +263,7 @@ mod tests {
             ("# T\n```\n## code\n```", "((# T(```\n## code\n```)))"),
             ("# T\n$$\n- formula\n$$", "((# T($$\n- formula\n$$)))"),
         ];
-        let mut lexer = Lexer::default();
+        let mut lexer = lex::Lexer::new();
 
         for (content, exp) in scns {
             lexer.tokenize(content);
@@ -379,47 +272,6 @@ mod tests {
             tree.init(&lexer.tokens);
 
             assert_eq!(&tree.print(content), exp);
-        }
-    }
-
-    #[test]
-    fn test_tokenize() {
-        let scns = [
-            ("", vec![]),
-            ("#", vec![Token::new(Kind::Hash, 0..1, 0)]),
-            ("##", vec![Token::new(Kind::Hash, 0..2, 0)]),
-            ("abc", vec![Token::new(Kind::Text, 0..3, 0)]),
-            (
-                "## Title",
-                vec![
-                    Token::new(Kind::Hash, 0..2, 0),
-                    Token::new(Kind::Space, 2..3, 0),
-                    Token::new(Kind::Text, 3..8, 0),
-                ],
-            ),
-            ("\n", vec![Token::new(Kind::Newline, 0..1, 0)]),
-            ("\r\n", vec![Token::new(Kind::Newline, 0..2, 0)]),
-            (
-                "\n\n",
-                vec![
-                    Token::new(Kind::Newline, 0..1, 0),
-                    Token::new(Kind::Newline, 1..2, 1),
-                ],
-            ),
-            (
-                "\n\r\n\r\r\n",
-                vec![
-                    Token::new(Kind::Newline, 0..1, 0),
-                    Token::new(Kind::Newline, 1..3, 1),
-                    Token::new(Kind::Newline, 3..6, 2),
-                ],
-            ),
-        ];
-
-        let mut lexer = Lexer::default();
-        for (content, exp) in scns {
-            lexer.tokenize(content);
-            assert_eq!(&lexer.tokens, &exp);
         }
     }
 }

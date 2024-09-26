@@ -28,31 +28,20 @@ pub struct CliArgs {
     #[arg(short = 'U', long, default_value_t = false)]
     pub ignored: bool,
 
-    #[command(subcommand)]
-    pub command: Option<Command>,
-}
+    /// Query AMP metadata
+    #[arg(short = 'q', long, default_value_t = false)]
+    pub query: bool,
 
-#[derive(Subcommand, Debug, Clone)]
-pub enum Command {
-    /// Print global config
-    Config {
-        /// Verbosity level
-        verbose: Option<i32>,
-    },
-    /// List all files for a given forest
-    #[command(name = "list", alias = "li")]
-    List {
-        /// Verbosity level
-        verbose: Option<i32>,
-    },
-    /// Search for items in a given forest
-    #[command(name = "search", alias = "se")]
-    Search {
-        /// Needle, None will match any metadata
-        needle: Option<String>,
-        /// Verbosity level
-        verbose: Option<i32>,
-    },
+    /// Free-form search in all metadata
+    #[arg(short = 's', long, default_value_t = false)]
+    pub search: bool,
+
+    /// List all files
+    #[arg(short = 'l', long, default_value_t = false)]
+    pub list: bool,
+
+    #[clap(value_parser)]
+    pub rest: Vec<String>,
 }
 
 impl CliArgs {

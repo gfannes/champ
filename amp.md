@@ -24,6 +24,17 @@
 	//	&j);
 ```
 
+## Define metadata aggregation
+- Original _relative_ AMP metadata definition
+- Root-to-leaf pass to transform relative MD into _absolute_
+	- Path, link targets
+- Root-to-leaf pass to distribute MD
+	- Only non-aggregate MD
+- Leaf-to-root pass to aggregate MD
+	- Sum numerical values, duration
+	- Min deadlines
+	- Collect non-aggregate MD from `Map<String, String>` into `Map<String, Set<String>>`
+
 ## Support specifying dependencies in 2 directions
 - A Node that depends on another Tree
 - A Tree that is used by another Node

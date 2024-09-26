@@ -1,6 +1,7 @@
 pub mod md;
+pub mod src;
 
-use crate::{fail, util};
+use crate::{fail, lex, util};
 use std::{collections, fs, path};
 
 // Represents a subset of the filesystem, corresponding with a ignore.Tree
@@ -111,7 +112,6 @@ impl Tree {
                     "md" => Format::Markdown,
                     "mm" => Format::MindMap,
                     "rb" | "py" | "sh" => Format::SourceCode { comment: "#" },
-                    "bat" => Format::SourceCode { comment: "REM" },
                     "h" | "c" | "hpp" | "cpp" | "rs" | "chai" => {
                         Format::SourceCode { comment: "//" }
                     }
@@ -130,20 +130,21 @@ impl Tree {
     // Creates a flat tree with lines split on '\n'
     // &next: parse content into meronomy, taking Format into account
     // &next: strip whitespace at the end of `main`
+    // &todo: make this fail when the parsing Tree cannot be created
     pub fn from_str(content: &str, format: Format) -> Tree {
         let mut tree = Self::new();
         tree.content = content.into();
         tree.format = format;
 
+        // &improv: cache lexer for better memory reuse
+        let mut lexer = lex::Lexer::new();
+        lexer.tokenize(content);
+
         match &tree.format {
             Format::MindMap => todo!("Implement XML-MM parsing"),
             Format::Markdown => {
-                // &improv: cache lexer for better memory reuse
-                let mut lexer = md::Lexer::default();
-                lexer.tokenize(content);
-
                 // &improv: cache md_tree for better memory reuse
-                let mut md_tree = md::Tree::default();
+                let mut md_tree = md::Tree::new();
                 md_tree.init(&lexer.tokens);
 
                 tree.nodes
@@ -152,9 +153,9 @@ impl Tree {
                 for (ix, md_node) in md_tree.nodes.iter().enumerate() {
                     let node = &mut tree.nodes[ix];
                     let kind = if md_node.verbatim {
-                        Kind::Metadata
+                        Kind::Data
                     } else {
-                        Kind::Text
+                        Kind::Meta
                     };
                     node.parts.push(Part {
                         range: md_node.range.clone(),
@@ -176,39 +177,80 @@ impl Tree {
                 }
             }
             Format::SourceCode { comment } => {
-                let mut prev_range = Range::default();
-                let mut line_nr = 0 as u64;
-                for line in tree.content.split('\n') {
-                    line_nr += 1;
-
-                    let start_ix = prev_range.end;
-                    let end_ix = start_ix + line.len();
-
-                    if let Some(comment_ix) = line.find(comment) {
-                        let main_start = start_ix + comment_ix + comment.len();
-                        let mut node = Node {
-                            parts: vec![
-                                Part::new(start_ix..main_start, Kind::Metadata),
-                                Part::new(main_start..end_ix, Kind::Text),
-                                Part::new(end_ix..end_ix + 1, Kind::Metadata),
-                            ],
-                            prefix: start_ix..main_start,
-                            postfix: end_ix..end_ix + 1,
-                            line_nr: Some(line_nr),
-                            ..Default::default()
-                        };
-                        // &todo: move this basic whitespace stripping to util
-                        while node.prefix.end < node.postfix.start
-                            && tree.content[node.prefix.end..].chars().next().unwrap() == ' '
-                        {
-                            node.prefix.end += 1;
+                if true {
+                    match src::Tree::new(comment) {
+                        Err(err) => {
+                            eprintln!("Could not create src.Tree from '{}': {}", comment, err)
                         }
-                        let node_ix = tree.nodes.len();
-                        tree.nodes.push(node);
-                        tree.nodes[tree.root_ix].childs.push(node_ix);
-                    }
+                        Ok(mut src_tree) => {
+                            // &improv: cache src_tree for better memory reuse
+                            src_tree.init(&lexer.tokens);
 
-                    prev_range = start_ix..end_ix + 1;
+                            tree.nodes
+                                .resize_with(src_tree.nodes.len(), || Node::default());
+
+                            for (ix, src_node) in src_tree.nodes.iter().enumerate() {
+                                let node = &mut tree.nodes[ix];
+                                let kind = if src_node.comment {
+                                    Kind::Meta
+                                } else {
+                                    Kind::Data
+                                };
+                                node.parts.push(Part {
+                                    range: src_node.range.clone(),
+                                    kind,
+                                });
+
+                                let prefix_end = if src_node.comment {
+                                    src_node.range.start
+                                } else {
+                                    src_node.range.end
+                                };
+                                node.prefix = src_node.range.start..prefix_end;
+
+                                node.postfix = src_node.range.end..src_node.range.end;
+
+                                for child_ix in &src_node.childs {
+                                    node.childs.push(*child_ix);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    let mut prev_range = Range::default();
+                    let mut line_nr = 0 as u64;
+                    for line in tree.content.split('\n') {
+                        line_nr += 1;
+
+                        let start_ix = prev_range.end;
+                        let end_ix = start_ix + line.len();
+
+                        if let Some(comment_ix) = line.find(comment) {
+                            let main_start = start_ix + comment_ix + comment.len();
+                            let mut node = Node {
+                                parts: vec![
+                                    Part::new(start_ix..main_start, Kind::Data),
+                                    Part::new(main_start..end_ix, Kind::Meta),
+                                    Part::new(end_ix..end_ix + 1, Kind::Data),
+                                ],
+                                prefix: start_ix..main_start,
+                                postfix: end_ix..end_ix + 1,
+                                line_nr: Some(line_nr),
+                                ..Default::default()
+                            };
+                            // &todo: move this basic whitespace stripping to util
+                            while node.prefix.end < node.postfix.start
+                                && tree.content[node.prefix.end..].chars().next().unwrap() == ' '
+                            {
+                                node.prefix.end += 1;
+                            }
+                            let node_ix = tree.nodes.len();
+                            tree.nodes.push(node);
+                            tree.nodes[tree.root_ix].childs.push(node_ix);
+                        }
+
+                        prev_range = start_ix..end_ix + 1;
+                    }
                 }
             }
             _ => {
@@ -236,7 +278,7 @@ impl Tree {
             root.postfix.end = tree.content.len();
             range.end = tree.content.len();
 
-            root.parts.push(Part::new(range, Kind::Metadata));
+            root.parts.push(Part::new(range, Kind::Data));
         }
         tree.filename = Some(path.into());
         tree.format = Format::Folder;
@@ -309,8 +351,8 @@ pub enum Aggregate {}
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum Kind {
-    Metadata,
-    Text,
+    Meta,
+    Data,
 }
 #[derive(Debug)]
 pub struct Part {

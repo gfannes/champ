@@ -30,74 +30,76 @@ impl App {
 
         // Using &self.config.command complicates using &mut self later.
         // Copyng the command once does not impact performance.
-        if let Some(command) = self.config.command.clone() {
-            match command {
-                config::Command::Config { verbose } => {
-                    println!("config: {:?}", self.config);
-                }
-                config::Command::List { verbose } => {
-                    self.list_files_recursive_(&path::Path::root())?;
-                }
-                config::Command::Search { verbose, needle } => {
-                    self.add_to_forest_recursive_(&path::Path::root(), 0)?;
+        match self.config.command {
+            Command::Config => {
+                println!("config: {:?}", self.config);
+            }
+            Command::List => {
+                self.list_files_recursive_(&path::Path::root())?;
+            }
+            Command::Search => {
+                let needle = self.config.args.get(0).map(|s| s.clone());
+                println!("needle: {:?}", &needle);
 
-                    let mut parser = amp::Parser::new();
+                self.add_to_forest_recursive_(&path::Path::root(), 0)?;
 
-                    let mut cur_filename = None;
-                    self.forest.dfs(|tree, node| {
-                        for part in &node.parts {
-                            if part.kind == tree::Kind::Text {
-                                // parser.parse(node.get_main(&tree.content));
-                                parser.parse(tree.content.get(part.range.clone()).unwrap());
+                let mut amp_parser = amp::Parser::new();
 
-                                let ix = match tree.format {
-                                    // For SourceCode, we only allow a match at the front
-                                    tree::Format::SourceCode { comment: _ } => {
-                                        parser.stmts.get(0).and_then(|stmt| match stmt {
-                                            amp::Statement::Metadata(md) => match &needle {
-                                                None => Some(0),
-                                                Some(needle) => (&md.kv.0 == needle).then(|| 0),
-                                            },
-                                            _ => None,
-                                        })
-                                    }
-                                    // For other Formats (Markdown), we allow a match anywhere
-                                    _ => parser
-                                        .stmts
-                                        .iter()
-                                        .enumerate()
-                                        .filter_map(|(ix, stmt)| match stmt {
-                                            amp::Statement::Metadata(md) => match &needle {
-                                                None => Some(ix),
-                                                Some(needle) => (&md.kv.0 == needle).then(|| ix),
-                                            },
-                                            _ => None,
-                                        })
-                                        .next(),
-                                };
+                let mut cur_filename = None;
+                self.forest.dfs(|tree, node| {
+                    for part in &node.parts {
+                        if part.kind == tree::Kind::Meta {
+                            // parser.parse(node.get_main(&tree.content));
+                            amp_parser.parse(tree.content.get(part.range.clone()).unwrap());
+                            let mut amp_iter = amp_parser.stmts.iter();
 
-                                if ix.is_some() {
-                                    // println!(
-                                    //     "starts_with: {} needle: {}, main: {}",
-                                    //     main.starts_with(&needle),
-                                    //     &needle,
-                                    //     &main
-                                    // );
-                                    if true && cur_filename != tree.filename {
-                                        cur_filename = tree.filename.clone();
-                                        if let Some(fp) = &cur_filename {
-                                            println!("{}", fp.display());
-                                        } else {
-                                            println!("<Unknown filename>");
-                                        }
-                                    }
-                                    node.print(&tree.content, &tree.format);
+                            let ix = match tree.format {
+                                // For SourceCode, we only allow a match at the front
+                                tree::Format::SourceCode { comment: _ } => {
+                                    amp_parser.stmts.get(0).and_then(|stmt| match stmt {
+                                        amp::Statement::Metadata(md) => match &needle {
+                                            None => Some(0),
+                                            Some(needle) => (&md.kv.0 == needle).then(|| 0),
+                                        },
+                                        _ => None,
+                                    })
                                 }
+                                // For other Formats (Markdown), we allow a match anywhere
+                                _ => amp_iter
+                                    .enumerate()
+                                    .filter_map(|(ix, stmt)| match stmt {
+                                        amp::Statement::Metadata(md) => match &needle {
+                                            None => Some(ix),
+                                            Some(needle) => (&md.kv.0 == needle).then(|| ix),
+                                        },
+                                        _ => None,
+                                    })
+                                    .next(),
+                            };
+
+                            if ix.is_some() {
+                                // println!(
+                                //     "starts_with: {} needle: {}, main: {}",
+                                //     main.starts_with(&needle),
+                                //     &needle,
+                                //     &main
+                                // );
+                                if true && cur_filename != tree.filename {
+                                    cur_filename = tree.filename.clone();
+                                    if let Some(fp) = &cur_filename {
+                                        println!("{}", fp.display());
+                                    } else {
+                                        println!("<Unknown filename>");
+                                    }
+                                }
+                                node.print(&tree.content, &tree.format);
                             }
                         }
-                    });
-                }
+                    }
+                });
             }
+            Command::None => {}
+            Command::Query => {}
         }
 
         println!("Total size: {}", self.size);
@@ -129,10 +131,12 @@ impl App {
                     match std::str::from_utf8(&self.buffer) {
                         Err(_) => eprintln!("Could not convert '{}' to UTF8", fp.display()),
                         Ok(content) => {
-                            let mut lexer = lex::Lexer::new(content);
-                            let tokens = lexer.tokenize();
-                            for token in tokens.iter().take(0) {
-                                token.print("\t", content);
+                            let mut lexer = lex::Lexer::new();
+                            lexer.tokenize(content);
+                            for token in lexer.tokens.iter().take(0) {
+                                if let Some(s) = content.get(token.range.clone()) {
+                                    println!("\t{s}");
+                                }
                             }
                         }
                     }
@@ -186,9 +190,19 @@ impl App {
 }
 
 #[derive(Debug, Clone)]
+enum Command {
+    None,
+    Config,
+    Query,
+    Search,
+    List,
+}
+
+#[derive(Debug, Clone)]
 struct Config {
     global: config::Global,
-    command: Option<config::Command>,
+    command: Command,
+    args: Vec<String>,
     forest: Option<config::Forest>,
 }
 
@@ -254,9 +268,20 @@ impl Config {
             });
         }
 
+        let command = if cli_args.query {
+            Command::Query
+        } else if cli_args.search {
+            Command::Search
+        } else if cli_args.list {
+            Command::List
+        } else {
+            Command::None
+        };
+
         let config = Config {
             global,
-            command: cli_args.command,
+            command,
+            args: cli_args.rest.clone(),
             forest: forest_opt,
         };
 
