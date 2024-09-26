@@ -1,8 +1,9 @@
+pub mod builder;
 pub mod md;
 pub mod src;
 
-use crate::{fail, lex, util};
-use std::{collections, fs, path};
+use crate::{amp, fail, util};
+use std::{collections, path};
 
 // Represents a subset of the filesystem, corresponding with a ignore.Tree
 // &next: use ignore.Tree to iterate and populate a tree.Forest
@@ -47,7 +48,13 @@ impl Forest {
 
     pub fn each_node(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
         for tree in &self.trees {
-            tree.each_node(tree, &mut cb);
+            tree.each_node(&mut cb);
+        }
+    }
+
+    pub fn each_node_mut(&mut self, mut cb: impl FnMut(&mut Node, &str) -> ()) {
+        for tree in &mut self.trees {
+            tree.each_node_mut(&mut cb);
         }
     }
 
@@ -101,168 +108,6 @@ impl Tree {
             ..Default::default()
         }
     }
-
-    pub fn from_path(path: &path::Path) -> util::Result<Tree> {
-        let content = fs::read_to_string(path)?;
-
-        let format = path
-            .extension()
-            .and_then(|ext| {
-                let format = match &ext.to_string_lossy() as &str {
-                    "md" => Format::Markdown,
-                    "mm" => Format::MindMap,
-                    "rb" | "py" | "sh" => Format::SourceCode { comment: "#" },
-                    "h" | "c" | "hpp" | "cpp" | "rs" | "chai" => {
-                        Format::SourceCode { comment: "//" }
-                    }
-                    _ => Format::Unknown,
-                };
-                Some(format)
-            })
-            .unwrap_or(Format::Unknown);
-
-        let mut tree = Tree::from_str(&content, format);
-        tree.filename = Some(path.into());
-
-        Ok(tree)
-    }
-
-    // Creates a flat tree with lines split on '\n'
-    // &next: parse content into meronomy, taking Format into account
-    // &next: strip whitespace at the end of `main`
-    // &todo: make this fail when the parsing Tree cannot be created
-    pub fn from_str(content: &str, format: Format) -> Tree {
-        let mut tree = Self::new();
-        tree.content = content.into();
-        tree.format = format;
-
-        // &improv: cache lexer for better memory reuse
-        let mut lexer = lex::Lexer::new();
-        lexer.tokenize(content);
-
-        match &tree.format {
-            Format::MindMap => todo!("Implement XML-MM parsing"),
-            Format::Markdown => {
-                // &improv: cache md_tree for better memory reuse
-                let mut md_tree = md::Tree::new();
-                md_tree.init(&lexer.tokens);
-
-                tree.nodes
-                    .resize_with(md_tree.nodes.len(), || Node::default());
-
-                for (ix, md_node) in md_tree.nodes.iter().enumerate() {
-                    let node = &mut tree.nodes[ix];
-                    let kind = if md_node.verbatim {
-                        Kind::Data
-                    } else {
-                        Kind::Meta
-                    };
-                    node.parts.push(Part {
-                        range: md_node.range.clone(),
-                        kind,
-                    });
-
-                    let prefix_end = if md_node.verbatim {
-                        md_node.range.end
-                    } else {
-                        md_node.range.start
-                    };
-                    node.prefix = md_node.range.start..prefix_end;
-
-                    node.postfix = md_node.range.end..md_node.range.end;
-
-                    for child_ix in &md_node.childs {
-                        node.childs.push(*child_ix);
-                    }
-                }
-            }
-            Format::SourceCode { comment } => {
-                if true {
-                    match src::Tree::new(comment) {
-                        Err(err) => {
-                            eprintln!("Could not create src.Tree from '{}': {}", comment, err)
-                        }
-                        Ok(mut src_tree) => {
-                            // &improv: cache src_tree for better memory reuse
-                            src_tree.init(&lexer.tokens);
-
-                            tree.nodes
-                                .resize_with(src_tree.nodes.len(), || Node::default());
-
-                            for (ix, src_node) in src_tree.nodes.iter().enumerate() {
-                                let node = &mut tree.nodes[ix];
-                                let kind = if src_node.comment {
-                                    Kind::Meta
-                                } else {
-                                    Kind::Data
-                                };
-                                node.parts.push(Part {
-                                    range: src_node.range.clone(),
-                                    kind,
-                                });
-
-                                let prefix_end = if src_node.comment {
-                                    src_node.range.start
-                                } else {
-                                    src_node.range.end
-                                };
-                                node.prefix = src_node.range.start..prefix_end;
-
-                                node.postfix = src_node.range.end..src_node.range.end;
-
-                                for child_ix in &src_node.childs {
-                                    node.childs.push(*child_ix);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    let mut prev_range = Range::default();
-                    let mut line_nr = 0 as u64;
-                    for line in tree.content.split('\n') {
-                        line_nr += 1;
-
-                        let start_ix = prev_range.end;
-                        let end_ix = start_ix + line.len();
-
-                        if let Some(comment_ix) = line.find(comment) {
-                            let main_start = start_ix + comment_ix + comment.len();
-                            let mut node = Node {
-                                parts: vec![
-                                    Part::new(start_ix..main_start, Kind::Data),
-                                    Part::new(main_start..end_ix, Kind::Meta),
-                                    Part::new(end_ix..end_ix + 1, Kind::Data),
-                                ],
-                                prefix: start_ix..main_start,
-                                postfix: end_ix..end_ix + 1,
-                                line_nr: Some(line_nr),
-                                ..Default::default()
-                            };
-                            // &todo: move this basic whitespace stripping to util
-                            while node.prefix.end < node.postfix.start
-                                && tree.content[node.prefix.end..].chars().next().unwrap() == ' '
-                            {
-                                node.prefix.end += 1;
-                            }
-                            let node_ix = tree.nodes.len();
-                            tree.nodes.push(node);
-                            tree.nodes[tree.root_ix].childs.push(node_ix);
-                        }
-
-                        prev_range = start_ix..end_ix + 1;
-                    }
-                }
-            }
-            _ => {
-                if false {
-                    todo!("Implement {:?} parsing", &tree.format)
-                }
-            }
-        }
-
-        tree
-    }
-
     pub fn folder(path: &path::Path) -> Tree {
         let mut tree = Tree::new();
         {
@@ -271,11 +116,7 @@ impl Tree {
             let mut range = Range::default();
             range.start = tree.content.len();
 
-            root.prefix.start = tree.content.len();
-            root.prefix.end = tree.content.len();
             tree.content.push_str(&format!("{}", path.display()));
-            root.postfix.start = tree.content.len();
-            root.postfix.end = tree.content.len();
             range.end = tree.content.len();
 
             root.parts.push(Part::new(range, Kind::Data));
@@ -285,7 +126,7 @@ impl Tree {
         tree
     }
 
-    pub fn each_node(&self, tree: &Tree, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
+    pub fn each_node(&self, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
         match self.format {
             Format::Folder => {}
             _ => {
@@ -295,7 +136,24 @@ impl Tree {
                     iter.next();
                 }
                 for node in iter {
-                    cb(tree, node);
+                    cb(self, node);
+                }
+            }
+        }
+    }
+
+    pub fn each_node_mut(&mut self, cb: &mut impl FnMut(&mut Node, &str) -> ()) {
+        match self.format {
+            Format::Folder => {}
+            _ => {
+                let content = self.content.to_owned();
+                let mut iter = self.nodes.iter_mut();
+                if let Format::SourceCode { comment: _ } = self.format {
+                    // First line is the root that does not correspond with actual file content
+                    iter.next();
+                }
+                for node in iter {
+                    cb(node, &content);
                 }
             }
         }
@@ -369,11 +227,9 @@ impl Part {
 #[derive(Default, Debug)]
 pub struct Node {
     pub parts: Vec<Part>,
-    pub prefix: Range,
-    pub postfix: Range,
     pub line_nr: Option<u64>,
-    attributes: collections::BTreeMap<usize, Attribute>,
-    aggregates: collections::BTreeMap<usize, Aggregate>,
+    pub orig: Vec<amp::Metadata>,
+    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
     pub links: Vec<usize>,  // Direct links to other Trees
@@ -381,16 +237,6 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn get_main<'a>(&self, content: &'a str) -> &'a str {
-        match content.get(self.main_range()) {
-            None => {
-                eprintln!("Encountered invalid content, maybe an UTF-8 issue?");
-                ""
-            }
-            Some(s) => s,
-        }
-    }
-
     pub fn print(&self, content: &str, format: &Format) {
         if let Some(line_nr) = self.line_nr {
             print!("{:<5}", line_nr);
@@ -398,43 +244,10 @@ impl Node {
             print!(".....");
         }
 
-        let main = self.get_main(content);
-        match format {
-            Format::Folder => println!("{}", main),
-            _ => {
-                let s: String = main.chars().take(80).collect();
-                println!("{}", s)
+        for part in &self.parts {
+            if let Some(s) = content.get(part.range.clone()) {
+                println!("{}", s);
             }
         }
-    }
-
-    fn main_range(&self) -> Range {
-        self.prefix.end..self.postfix.start
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_api() -> util::Result<()> {
-        let mut forest = Forest::new();
-        println!("{:?}", &forest);
-        {
-            let tree = Tree::from_str("# Title\n- line1\n- line 2", Format::Markdown);
-            println!("{:?}", &tree);
-            forest.add(tree, 0)?;
-        }
-        {
-            let pwd = std::env::current_dir()?;
-            let tree = Tree::from_path(&pwd.join("test/simple.md"))?;
-            println!("{:?}", &tree);
-            forest.add(tree, 0)?;
-        }
-
-        forest.connect()?;
-
-        Ok(())
     }
 }

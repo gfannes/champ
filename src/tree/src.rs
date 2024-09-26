@@ -60,6 +60,8 @@ impl Tree {
     }
 
     pub fn init(&mut self, tokens: &[Token]) {
+        self.nodes.clear();
+
         let mut state = State::Idle;
         for token in tokens {
             if token.kind == Kind::Newline {

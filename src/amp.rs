@@ -3,7 +3,7 @@ use crate::rubr::strange;
 pub type KV = (String, Option<String>);
 pub type KVs = Vec<KV>;
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default, Clone)]
 pub struct Metadata {
     pub kv: KV,
     pub params: KVs,
@@ -37,11 +37,9 @@ impl<const N: usize> From<[(&str, Option<&str>); N]> for Statement {
     }
 }
 
-pub type Statements = Vec<Statement>;
-
 #[derive(Default)]
 pub struct Parser {
-    pub stmts: Statements,
+    pub stmts: Vec<Statement>,
 }
 
 impl Parser {
@@ -104,6 +102,7 @@ mod tests {
 
     #[test]
     fn test_parse() {
+        // &todo: rework into exp with String
         let scns = [
             // String
             ("todo", vec![Statement::from("todo")]),
