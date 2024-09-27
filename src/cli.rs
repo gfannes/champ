@@ -40,9 +40,28 @@ impl App {
             }
             Command::None => {}
             Command::Query => {
+                let needle = self.config.args.get(0);
+
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    if !node.orig.is_empty() {
+                    let do_print;
+                    if let Some(needle) = needle {
+                        do_print = node
+                            .orig
+                            .iter()
+                            .filter(|md| &md.kv.0 == needle)
+                            .next()
+                            .is_some();
+                        // if !node.orig.is_empty() {
+                        //     for md in &node.orig {
+                        //         println!("\t{:?}", &md.kv.0);
+                        //     }
+                        // }
+                    } else {
+                        do_print = !node.orig.is_empty();
+                    }
+
+                    if do_print {
                         if let Some(filename) = &tree.filename {
                             println!("{}:{}", filename.display(), node.line_nr.unwrap_or(0));
                         }
