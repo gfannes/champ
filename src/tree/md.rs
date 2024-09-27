@@ -1,21 +1,28 @@
-use crate::lex;
-
-#[derive(Default, Debug)]
-pub struct Node {
-    pub range: Range,
-    pub verbatim: bool,
-    pub childs: Vec<usize>,
-}
+use crate::{lex, tree};
 
 #[derive(Default, Debug)]
 pub struct Tree {
+    // Tree data itself
     pub nodes: Vec<Node>,
+
+    // Used during Tree.init()
     headers: Vec<usize>,
     bullets: Vec<usize>,
     codeblock: Option<usize>,
     formulablock: Option<usize>,
+    state: State,
+    prev_state: State,
 }
 
+#[derive(Default, Debug)]
+pub struct Node {
+    pub parts: Vec<Part>,
+    pub childs: Vec<usize>,
+}
+
+type Part = tree::Part;
+
+#[derive(Debug, Clone)]
 enum State {
     Idle,
     Header,
@@ -25,9 +32,13 @@ enum State {
     Formula,
     FormulaBlock,
 }
+impl Default for State {
+    fn default() -> State {
+        State::Idle
+    }
+}
 
 type Token = lex::Token;
-type Kind = lex::Kind;
 
 impl Tree {
     pub fn new() -> Tree {
@@ -42,35 +53,17 @@ impl Tree {
         let root_ix = self.append(Node::default());
         self.headers.push(root_ix);
 
-        let mut state = State::Idle;
+        self.state = State::Idle;
         for token in tokens {
-            let check_newline = |state: &mut State| {
-                if token.kind == Kind::Newline {
-                    *state = State::Idle;
-                    true
-                } else {
-                    false
-                }
-            };
-
-            match state {
+            match self.state {
                 State::Idle => {
-                    if !check_newline(&mut state) {
-                        let mut default = || {
-                            let node = Node {
-                                range: token.range.clone(),
-                                ..Default::default()
-                            };
-                            let ix = self.append(node);
-                            self.header().childs.push(ix);
-                            self.bullets.clear();
-                            self.bullets.push(ix);
-
-                            state = State::Bullet;
-                        };
-
+                    if false {
+                    } else if self.handle_newline(token) {
+                    } else if self.handle_backtick(token) {
+                    } else if self.handle_dollar(token) {
+                    } else {
                         match token.kind {
-                            Kind::Hash => {
+                            lex::Kind::Hash => {
                                 self.bullets.clear();
 
                                 let level = token.range.len();
@@ -87,11 +80,11 @@ impl Tree {
                                     self.headers.push(ix);
                                 }
                                 let header = self.header();
-                                header.range = token.range.clone();
+                                header.parts.push(Part::new(&token.range, tree::Kind::Data));
 
-                                state = State::Header;
+                                self.state = State::Header;
                             }
-                            Kind::Dash | Kind::Star => {
+                            lex::Kind::Dash | lex::Kind::Star => {
                                 let level = token.range.len();
                                 assert!(level > 0);
                                 // Drop all bullets that are nested deeper
@@ -106,99 +99,162 @@ impl Tree {
                                     self.bullets.push(ix);
                                 }
                                 let bullet = self.bullet();
-                                bullet.range = token.range.clone();
+                                bullet.parts.push(Part::new(&token.range, tree::Kind::Data));
 
-                                state = State::Bullet;
-                            }
-                            Kind::Backtick => {
-                                let level = token.range.len();
-                                match level {
-                                    1 => state = State::Code,
-                                    3 => {
-                                        let node = Node {
-                                            range: token.range.clone(),
-                                            verbatim: true,
-                                            ..Default::default()
-                                        };
-                                        let ix = self.append(node);
-                                        self.bullet().childs.push(ix);
-                                        self.bullets.push(ix);
-                                        self.codeblock = Some(ix);
-
-                                        state = State::CodeBlock;
-                                    }
-                                    _ => default(),
-                                }
-                            }
-                            Kind::Dollar => {
-                                let level = token.range.len();
-                                match level {
-                                    1 => state = State::Formula,
-                                    2 => {
-                                        let node = Node {
-                                            range: token.range.clone(),
-                                            verbatim: true,
-                                            ..Default::default()
-                                        };
-                                        let ix = self.append(node);
-                                        self.bullet().childs.push(ix);
-                                        self.bullets.push(ix);
-                                        self.formulablock = Some(ix);
-
-                                        state = State::FormulaBlock;
-                                    }
-                                    _ => default(),
-                                }
+                                self.state = State::Bullet;
                             }
                             _ => {
-                                default();
+                                let mut node = Node::default();
+                                node.parts.push(Part::new(&token.range, tree::Kind::Meta));
+                                let ix = self.append(node);
+                                self.header().childs.push(ix);
+                                self.bullets.clear();
+                                self.bullets.push(ix);
+
+                                self.state = State::Bullet;
                             }
                         }
                     }
                 }
                 State::Header => {
-                    if !check_newline(&mut state) {
+                    if false {
+                    } else if self.handle_newline(token) {
+                    } else if self.handle_backtick(token) {
+                    } else if self.handle_dollar(token) {
+                    } else {
                         let header = self.header();
-                        header.range.end = token.range.end;
+                        header.parts.push(Part::new(&token.range, tree::Kind::Meta));
                     }
                 }
                 State::Bullet => {
-                    if !check_newline(&mut state) {
+                    if false {
+                    } else if self.handle_newline(token) {
+                    } else if self.handle_backtick(token) {
+                    } else if self.handle_dollar(token) {
+                    } else {
                         let bullet = self.bullet();
-                        bullet.range.end = token.range.end;
+                        bullet.parts.push(Part::new(&token.range, tree::Kind::Meta));
                     }
                 }
                 State::Code => {
-                    if !check_newline(&mut state) {
+                    if false {
+                    } else if self.handle_newline(token) {
+                    } else {
                         let bullet = self.bullet();
-                        bullet.range.end = token.range.end;
+                        bullet.parts.push(Part::new(&token.range, tree::Kind::Data));
+                        // &improv: clean this up and handle multi-ticks as well
+                        if token.kind == lex::Kind::Backtick {
+                            self.state = self.prev_state.clone();
+                        }
                     }
                 }
                 State::CodeBlock => {
                     let node = &mut self.nodes[self.codeblock.unwrap()];
-                    node.range.end = token.range.end;
+                    node.parts.push(Part::new(&token.range, tree::Kind::Data));
 
-                    if token.kind == Kind::Backtick && token.range.len() == 3 {
+                    if token.kind == lex::Kind::Backtick && token.range.len() == 3 {
                         self.codeblock = None;
-                        state = State::Idle;
+                        self.state = State::Idle;
                     }
                 }
                 State::Formula => {
-                    if !check_newline(&mut state) {
+                    if false {
+                    } else if self.handle_newline(token) {
+                    } else {
                         let bullet = self.bullet();
-                        bullet.range.end = token.range.end;
+                        bullet.parts.push(Part::new(&token.range, tree::Kind::Data));
+                        // &improv: clean this up and handle multi-dollar as well
+                        if token.kind == lex::Kind::Dollar {
+                            self.state = self.prev_state.clone();
+                        }
                     }
                 }
                 State::FormulaBlock => {
                     let node = &mut self.nodes[self.formulablock.unwrap()];
-                    node.range.end = token.range.end;
+                    node.parts.push(Part::new(&token.range, tree::Kind::Data));
 
-                    if token.kind == Kind::Dollar && token.range.len() == 2 {
+                    if token.kind == lex::Kind::Dollar && token.range.len() == 2 {
                         self.formulablock = None;
-                        state = State::Idle;
+                        self.state = State::Idle;
                     }
                 }
             }
+        }
+    }
+
+    fn handle_newline(&mut self, token: &Token) -> bool {
+        if token.kind == lex::Kind::Newline {
+            self.state = State::Idle;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn handle_backtick(&mut self, token: &Token) -> bool {
+        if token.kind == lex::Kind::Backtick {
+            let level = token.range.len();
+
+            if level % 2 == 1 {
+                if level == 3 {
+                    let node = Node {
+                        parts: vec![Part::new(&token.range, tree::Kind::Data)],
+                        ..Default::default()
+                    };
+                    let ix = self.append(node);
+                    self.bullet().childs.push(ix);
+                    self.bullets.push(ix);
+                    self.codeblock = Some(ix);
+
+                    self.prev_state = self.state.clone();
+                    self.state = State::CodeBlock;
+                } else {
+                    let bullet = self.bullet();
+                    bullet.parts.push(Part::new(&token.range, tree::Kind::Data));
+
+                    self.prev_state = self.state.clone();
+                    self.state = State::Code;
+                };
+
+                return true;
+            }
+        }
+        false
+    }
+
+    fn handle_dollar(&mut self, token: &Token) -> bool {
+        if token.kind == lex::Kind::Dollar {
+            let level = token.range.len();
+
+            match level {
+                1 => {
+                    let bullet = self.bullet();
+                    bullet.parts.push(Part::new(&token.range, tree::Kind::Data));
+
+                    self.prev_state = self.state.clone();
+                    self.state = State::Formula;
+
+                    true
+                }
+                2 => {
+                    let node = Node {
+                        parts: vec![Part::new(&token.range, tree::Kind::Data)],
+                        ..Default::default()
+                    };
+                    let ix = self.append(node);
+                    self.bullet().childs.push(ix);
+                    self.bullets.push(ix);
+                    self.formulablock = Some(ix);
+
+                    self.prev_state = self.state.clone();
+                    self.state = State::FormulaBlock;
+
+                    true
+                }
+                _ => false,
+            }
+        } else {
+            false
         }
     }
 
@@ -211,8 +267,14 @@ impl Tree {
     }
     fn print_(&self, node: &Node, os: &mut String, content: &str) {
         os.push_str("(");
-        if let Some(s) = content.get(node.range.clone()) {
-            os.push_str(s);
+        for part in &node.parts {
+            os.push_str(match part.kind {
+                tree::Kind::Meta => "M",
+                tree::Kind::Data => "D",
+            });
+            if let Some(s) = content.get(part.range.clone()) {
+                os.push_str(s);
+            }
         }
         for child in &node.childs {
             self.print_(&self.nodes[*child], os, content);
@@ -251,17 +313,30 @@ mod tests {
     fn test_tree() {
         let scns = [
             ("", "()"),
-            ("# Title", "((# Title))"),
-            ("# Title\nLine1\nLine2", "((# Title(Line1)(Line2)))"),
+            ("# Title", "((D#M MTitle))"),
+            ("# Title\nLine1\nLine2", "((D#M MTitle(MLine1)(MLine2)))"),
             (
                 "# T1\nL1\nL2\n# T2\nL3\nL4",
-                "((# T1(L1)(L2))(# T2(L3)(L4)))",
+                "((D#M MT1(ML1)(ML2))(D#M MT2(ML3)(ML4)))",
             ),
-            ("# T1\n## T2\n## T3\n# T4", "((# T1(## T2)(## T3))(# T4))"),
-            ("L1\n- L2\n- L3\nL4", "((L1(- L2)(- L3))(L4))"),
-            ("L1\n- L2\n** L3\nL4", "((L1(- L2(** L3)))(L4))"),
-            ("# T\n```\n## code\n```", "((# T(```\n## code\n```)))"),
-            ("# T\n$$\n- formula\n$$", "((# T($$\n- formula\n$$)))"),
+            (
+                "# T1\n## T2\n## T3\n# T4",
+                "((D#M MT1(D##M MT2)(D##M MT3))(D#M MT4))",
+            ),
+            ("L1\n- L2\n- L3\nL4", "((ML1(D-M ML2)(D-M ML3))(ML4))"),
+            ("L1\n- L2\n** L3\nL4", "((ML1(D-M ML2(D**M ML3)))(ML4))"),
+            (
+                "# T\n```\n## code\n```",
+                "((D#M MT(D```D\nD##D DcodeD\nD```)))",
+            ),
+            (
+                "# T\n$$\n- formula\n$$",
+                "((D#M MT(D$$D\nD-D DformulaD\nD$$)))",
+            ),
+            ("abc`code`def", "((MabcD`DcodeD`Mdef))"),
+            ("# abc`code`def", "((D#M MabcD`DcodeD`Mdef))"),
+            ("abc$formula$def", "((MabcD$DformulaD$Mdef))"),
+            ("# abc$formula$def", "((D#M MabcD$DformulaD$Mdef))"),
         ];
         let mut lexer = lex::Lexer::new();
 

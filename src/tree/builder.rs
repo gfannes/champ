@@ -29,25 +29,30 @@ impl Builder {
         let mut forest = tree::Forest::new();
         self.add_to_forest_recursive_(&path::Path::root(), 0, fs_forest, &mut forest)?;
 
-        forest.each_node_mut(|node, content| {
-            for part in &node.parts {
-                if part.kind == tree::Kind::Meta {
-                    if let Some(part_content) = content.get(part.range.clone()) {
-                        // println!("Could find part_content: {}", part_content);
-                        self.amp_parser.parse(part_content);
-                        for stmt in &self.amp_parser.stmts {
-                            if let amp::Statement::Metadata(md) = stmt {
-                                // println!("stmt: {:?}", stmt);
-                                node.orig.push(md.clone());
-                                // println!("node.orig {:?}", &node.orig);
+        forest.each_node_mut(|node, content, format| {
+            let m = match format {
+                Format::Markdown => Some(amp::Match::Everywhere),
+                Format::SourceCode { comment: _ } => Some(amp::Match::OnlyStart),
+                _ => None,
+            };
+
+            if let Some(m) = m {
+                for part in &node.parts {
+                    if part.kind == tree::Kind::Meta {
+                        if let Some(part_content) = content.get(part.range.clone()) {
+                            self.amp_parser.parse(part_content, &m);
+                            for stmt in &self.amp_parser.stmts {
+                                if let amp::Statement::Metadata(md) = stmt {
+                                    node.orig.push(md.clone());
+                                }
                             }
+                        } else {
+                            eprintln!(
+                                "Failed to get part_content for {:?} from {}",
+                                &part.range,
+                                content.len()
+                            );
                         }
-                    } else {
-                        eprintln!(
-                            "Failed to get part_content for {:?} from {}",
-                            &part.range,
-                            content.len()
-                        );
                     }
                 }
             }
@@ -102,15 +107,9 @@ impl Builder {
 
                 for (ix, md_node) in self.md_tree.nodes.iter().enumerate() {
                     let node = &mut tree.nodes[ix];
-                    let kind = if md_node.verbatim {
-                        Kind::Data
-                    } else {
-                        Kind::Meta
-                    };
-                    node.parts.push(Part {
-                        range: md_node.range.clone(),
-                        kind,
-                    });
+
+                    // &improv: combine parts of same kind
+                    node.parts = md_node.parts.clone();
 
                     for child_ix in &md_node.childs {
                         node.childs.push(*child_ix);
@@ -174,7 +173,6 @@ impl Builder {
         fs_forest: &mut fs::Forest,
         forest: &mut tree::Forest,
     ) -> util::Result<Option<usize>> {
-        println!("Loading tree from {}", parent);
         let tree_ix = match parent.fs_path()? {
             path::FsPath::Folder(folder) => {
                 let mut tree = tree::Tree::folder(&folder);

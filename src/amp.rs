@@ -42,14 +42,28 @@ pub struct Parser {
     pub stmts: Vec<Statement>,
 }
 
+#[derive(PartialEq, Eq)]
+pub enum Match {
+    Everywhere,
+    OnlyStart,
+}
+
 impl Parser {
     pub fn new() -> Parser {
         Parser::default()
     }
-    pub fn parse(&mut self, content: &str) {
+    pub fn parse(&mut self, content: &str, m: &Match) {
         self.stmts.clear();
 
         let mut strange = strange::Strange::new(content);
+
+        if m == &Match::OnlyStart {
+            if !strange.read_char_if('&') {
+                return;
+            }
+            strange.reset();
+        }
+
         while !strange.is_empty() {
             strange.save();
             if strange.read_char_if('&') {
@@ -131,7 +145,7 @@ mod tests {
 
         let mut parser = Parser::new();
         for scn in scns {
-            parser.parse(scn.0);
+            parser.parse(scn.0, &Match::Everywhere);
             assert_eq!(parser.stmts, scn.1);
         }
     }

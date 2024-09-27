@@ -18,6 +18,55 @@ pub struct Forest {
     names: Vec<String>,
 }
 
+// Represents a single file or folder
+// &next: create default root always
+#[derive(Default, Debug)]
+pub struct Tree {
+    pub ix: usize,
+    pub root_ix: usize,
+    pub nodes: Vec<Node>,
+    pub filename: Option<path::PathBuf>,
+    pub format: Format,
+    pub content: String,
+}
+
+// &next: provide amp items
+#[derive(Default, Debug)]
+pub struct Node {
+    pub parts: Vec<Part>,
+    pub line_nr: Option<u64>,
+    pub orig: Vec<amp::Metadata>,
+    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
+    pub tree_ix: usize,
+    childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
+    pub links: Vec<usize>,  // Direct links to other Trees
+    reachables: Vec<usize>, // All other Trees that are recursively reachable
+}
+
+#[derive(Debug, Clone)]
+pub struct Part {
+    pub range: Range,
+    pub kind: Kind,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Kind {
+    Meta, // Meta parts are searched for AMP info
+    Data,
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum Format {
+    #[default]
+    Unknown,
+    Folder,
+    Markdown,
+    MindMap,
+    SourceCode {
+        comment: &'static str,
+    },
+}
+
 impl Forest {
     pub fn new() -> Forest {
         Default::default()
@@ -52,7 +101,7 @@ impl Forest {
         }
     }
 
-    pub fn each_node_mut(&mut self, mut cb: impl FnMut(&mut Node, &str) -> ()) {
+    pub fn each_node_mut(&mut self, mut cb: impl FnMut(&mut Node, &str, &Format) -> ()) {
         for tree in &mut self.trees {
             tree.each_node_mut(&mut cb);
         }
@@ -60,7 +109,6 @@ impl Forest {
 
     pub fn dfs(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
         for &root_ix in &self.roots {
-            println!("root_ix {root_ix}");
             let root = &self.trees[root_ix];
             self.dfs_(root, &mut cb);
         }
@@ -87,18 +135,6 @@ impl Forest {
     }
 }
 
-// Represents a single file or folder
-// &next: create default root always
-#[derive(Default, Debug)]
-pub struct Tree {
-    pub ix: usize,
-    pub root_ix: usize,
-    pub nodes: Vec<Node>,
-    pub filename: Option<path::PathBuf>,
-    pub format: Format,
-    pub content: String,
-}
-
 impl Tree {
     // Create a default root node
     pub fn new() -> Tree {
@@ -113,13 +149,11 @@ impl Tree {
         {
             let root = &mut tree.nodes[tree.root_ix];
 
-            let mut range = Range::default();
-            range.start = tree.content.len();
-
+            let start = tree.content.len();
             tree.content.push_str(&format!("{}", path.display()));
-            range.end = tree.content.len();
+            let end = tree.content.len();
 
-            root.parts.push(Part::new(range, Kind::Data));
+            root.parts.push(Part::new(&(start..end), Kind::Data));
         }
         tree.filename = Some(path.into());
         tree.format = Format::Folder;
@@ -142,20 +176,12 @@ impl Tree {
         }
     }
 
-    pub fn each_node_mut(&mut self, cb: &mut impl FnMut(&mut Node, &str) -> ()) {
-        match self.format {
-            Format::Folder => {}
-            _ => {
-                let content = self.content.to_owned();
-                let mut iter = self.nodes.iter_mut();
-                if let Format::SourceCode { comment: _ } = self.format {
-                    // First line is the root that does not correspond with actual file content
-                    iter.next();
-                }
-                for node in iter {
-                    cb(node, &content);
-                }
-            }
+    pub fn each_node_mut(&mut self, cb: &mut impl FnMut(&mut Node, &str, &Format) -> ()) {
+        let content = self.content.to_owned();
+        let format = self.format.clone();
+
+        for node in &mut self.nodes {
+            cb(node, &content, &format);
         }
     }
 
@@ -187,18 +213,6 @@ impl Tree {
     }
 }
 
-#[derive(Debug, Default)]
-pub enum Format {
-    #[default]
-    Unknown,
-    Folder,
-    Markdown,
-    MindMap,
-    SourceCode {
-        comment: &'static str,
-    },
-}
-
 pub type Range = std::ops::Range<usize>;
 
 #[derive(Debug)]
@@ -207,33 +221,13 @@ pub enum Attribute {}
 #[derive(Debug)]
 pub enum Aggregate {}
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum Kind {
-    Meta,
-    Data,
-}
-#[derive(Debug)]
-pub struct Part {
-    pub range: Range,
-    pub kind: Kind,
-}
 impl Part {
-    fn new(range: Range, kind: Kind) -> Part {
-        Part { range, kind }
+    fn new(range: &Range, kind: Kind) -> Part {
+        Part {
+            range: range.clone(),
+            kind,
+        }
     }
-}
-
-// &next: provide amp items
-#[derive(Default, Debug)]
-pub struct Node {
-    pub parts: Vec<Part>,
-    pub line_nr: Option<u64>,
-    pub orig: Vec<amp::Metadata>,
-    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
-    pub tree_ix: usize,
-    childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
-    pub links: Vec<usize>,  // Direct links to other Trees
-    reachables: Vec<usize>, // All other Trees that are recursively reachable
 }
 
 impl Node {

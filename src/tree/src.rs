@@ -43,24 +43,21 @@ impl Tree {
         match kind {
             None => fail!("Could not determine comment Kind"),
             Some(kind) => {
-                let tree = Tree {
-                    nodes: vec![Node {
-                        range: 0..0,
-                        comment: false,
-                        childs: Vec::new(),
-                    }],
+                let mut tree = Tree {
+                    nodes: Vec::new(),
                     delim: Comment {
                         kind,
                         count: comment.len(),
                     },
                 };
+                tree.init_only_root();
                 Ok(tree)
             }
         }
     }
 
     pub fn init(&mut self, tokens: &[Token]) {
-        self.nodes.clear();
+        self.init_only_root();
 
         let mut state = State::Idle;
         for token in tokens {
@@ -123,14 +120,23 @@ impl Tree {
         if let Some(body) = content.get(node.range.clone()) {
             s.push_str(body);
         }
-        for child_ix in &node.childs {
-            self.print_(&self.nodes[*child_ix], s, content);
+        for &child_ix in &node.childs {
+            // println!("child_ix: {child_ix}");
+            self.print_(&self.nodes[child_ix], s, content);
         }
         s.push_str(")");
     }
 
     fn root(&mut self) -> &mut Node {
         &mut self.nodes[0]
+    }
+    fn init_only_root(&mut self) {
+        self.nodes.clear();
+        self.nodes.push(Node {
+            range: 0..0,
+            comment: false,
+            childs: Vec::new(),
+        });
     }
     fn last(&mut self) -> &mut Node {
         self.nodes.last_mut().unwrap()
@@ -164,10 +170,12 @@ mod tests {
         let mut lexer = lex::Lexer::new();
 
         for (comment, content, exp) in scns {
+            println!("content: {content}");
             lexer.tokenize(content);
 
             let mut tree = Tree::new(comment)?;
             tree.init(&lexer.tokens);
+            println!("{:?}", &tree);
 
             assert_eq!(tree.print(content), exp);
         }
