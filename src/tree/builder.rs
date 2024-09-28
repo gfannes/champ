@@ -43,7 +43,7 @@ impl Builder {
                             self.amp_parser.parse(part_content, &m);
                             for stmt in &self.amp_parser.stmts {
                                 if let amp::Statement::Metadata(md) = stmt {
-                                    node.orig.push(md.clone());
+                                    node.org.push(md.clone());
                                 }
                             }
                         } else {
@@ -56,6 +56,16 @@ impl Builder {
                     }
                 }
             }
+
+            node.agg = node.org.clone();
+        });
+
+        forest.each_tree_mut(|tree| {
+            tree.root_to_leaf(|src, dst| {
+                for md in &src.org {
+                    dst.agg.push(md.clone());
+                }
+            });
         });
 
         Ok(forest)

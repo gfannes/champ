@@ -40,32 +40,29 @@ impl App {
             }
             Command::None => {}
             Command::Query => {
-                let needle = self.config.args.get(0);
-
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let do_print;
-                    if let Some(needle) = needle {
-                        do_print = node
-                            .orig
-                            .iter()
-                            .filter(|md| &md.kv.0 == needle)
-                            .next()
-                            .is_some();
-                        // if !node.orig.is_empty() {
-                        //     for md in &node.orig {
-                        //         println!("\t{:?}", &md.kv.0);
-                        //     }
-                        // }
+                    let has = |v: &Vec<amp::Metadata>, n: &str| {
+                        v.iter().filter(|md| &md.kv.0 == n).next().is_some()
+                    };
+
+                    let mut do_print;
+                    if let Some((needle, constraints)) = self.config.args.split_first() {
+                        do_print = has(&node.org, needle);
+                        for constraint in constraints {
+                            if !has(&node.agg, constraint) {
+                                do_print = false;
+                            }
+                        }
                     } else {
-                        do_print = !node.orig.is_empty();
+                        do_print = !node.org.is_empty();
                     }
 
                     if do_print {
                         if let Some(filename) = &tree.filename {
                             println!("{}:{}", filename.display(), node.line_nr.unwrap_or(0));
                         }
-                        for md in &node.orig {
+                        for md in &node.org {
                             println!("\t{:?}", &md.kv.0);
                         }
                     }

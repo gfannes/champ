@@ -35,7 +35,8 @@ pub struct Tree {
 pub struct Node {
     pub parts: Vec<Part>,
     pub line_nr: Option<u64>,
-    pub orig: Vec<amp::Metadata>,
+    pub org: Vec<amp::Metadata>,
+    pub agg: Vec<amp::Metadata>,
     aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
@@ -104,6 +105,12 @@ impl Forest {
     pub fn each_node_mut(&mut self, mut cb: impl FnMut(&mut Node, &str, &Format) -> ()) {
         for tree in &mut self.trees {
             tree.each_node_mut(&mut cb);
+        }
+    }
+
+    pub fn each_tree_mut(&mut self, mut cb: impl FnMut(&mut Tree)) {
+        for tree in &mut self.trees {
+            cb(tree);
         }
     }
 
@@ -187,6 +194,18 @@ impl Tree {
 
     pub fn root(&mut self) -> &mut Node {
         &mut self.nodes[self.root_ix]
+    }
+
+    pub fn root_to_leaf(&mut self, mut cb: impl FnMut(&Node, &mut Node)) {
+        for src_ix in 0..self.nodes.len() {
+            let (srcs, dsts) = self.nodes.split_at_mut(src_ix + 1);
+            let src = &srcs[src_ix];
+            for &dst_ix in &src.childs {
+                let diff = dst_ix - src_ix - 1;
+                let dst = &mut dsts[diff];
+                cb(src, dst);
+            }
+        }
     }
 
     pub fn print(&self) {
