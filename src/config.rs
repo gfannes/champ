@@ -28,6 +28,10 @@ pub struct CliArgs {
     #[arg(short = 'U', long, default_value_t = false)]
     pub ignored: bool,
 
+    /// Open selected files in editor
+    #[arg(short = 'o', long, default_value_t = false)]
+    pub open: bool,
+
     /// Query AMP metadata
     #[arg(short = 'q', long, default_value_t = false)]
     pub query: bool,

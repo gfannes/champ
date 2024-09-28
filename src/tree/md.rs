@@ -16,6 +16,7 @@ pub struct Tree {
 
 #[derive(Default, Debug)]
 pub struct Node {
+    pub line_ix: u64,
     pub parts: Vec<Part>,
     pub childs: Vec<usize>,
 }
@@ -74,7 +75,7 @@ impl Tree {
                                 }
                                 // Create missing headers
                                 while self.headers.len() <= level {
-                                    let node = Node::default();
+                                    let node = Node::new(token.line_ix);
                                     let ix = self.append(node);
                                     self.header().childs.push(ix);
                                     self.headers.push(ix);
@@ -93,7 +94,7 @@ impl Tree {
                                 }
                                 // Create missing bullets
                                 while self.bullets.len() <= level {
-                                    let node = Node::default();
+                                    let node = Node::new(token.line_ix);
                                     let ix = self.append(node);
                                     self.bullet().childs.push(ix);
                                     self.bullets.push(ix);
@@ -104,7 +105,7 @@ impl Tree {
                                 self.state = State::Bullet;
                             }
                             _ => {
-                                let mut node = Node::default();
+                                let mut node = Node::new(token.line_ix);
                                 node.parts.push(Part::new(&token.range, tree::Kind::Meta));
                                 let ix = self.append(node);
                                 self.header().childs.push(ix);
@@ -300,6 +301,15 @@ impl Tree {
         let ix = self.nodes.len();
         self.nodes.push(node);
         ix
+    }
+}
+
+impl Node {
+    fn new(line_ix: u64) -> Node {
+        Node {
+            line_ix,
+            ..Default::default()
+        }
     }
 }
 

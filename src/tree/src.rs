@@ -6,6 +6,7 @@ type Range = std::ops::Range<usize>;
 
 #[derive(Debug)]
 pub struct Node {
+    pub line_ix: u64,
     pub range: Range,
     pub comment: bool,
     pub childs: Vec<usize>,
@@ -68,6 +69,7 @@ impl Tree {
                     // Create Code node and hook it under Root
                     let ix = self.nodes.len();
                     let node = Node {
+                        line_ix: token.line_ix,
                         range: token.range.clone(),
                         comment: false,
                         childs: Vec::new(),
@@ -88,6 +90,7 @@ impl Tree {
                         if token.kind != Kind::Space {
                             let ix = self.nodes.len();
                             let node = Node {
+                                line_ix: token.line_ix,
                                 range: token.range.clone(),
                                 comment: true,
                                 childs: Vec::new(),
@@ -133,6 +136,7 @@ impl Tree {
     fn init_only_root(&mut self) {
         self.nodes.clear();
         self.nodes.push(Node {
+            line_ix: 0,
             range: 0..0,
             comment: false,
             childs: Vec::new(),

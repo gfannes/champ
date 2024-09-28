@@ -41,16 +41,23 @@ impl App {
             Command::None => {}
             Command::Query => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+                let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
                 forest.dfs(|tree, node| {
                     let has = |v: &Vec<amp::Metadata>, n: &str| {
-                        v.iter().filter(|md| &md.kv.0 == n).next().is_some()
+                        let mut md_needle = amp::Metadata::default();
+                        if let Some((k, v)) = n.split_once('=') {
+                            md_needle.kv = (k.to_owned(), (!v.is_empty()).then(|| v.to_owned()));
+                        } else {
+                            md_needle.kv.0 = n.to_owned();
+                        };
+                        v.iter().filter(|md| md.kv == md_needle.kv).next().is_some()
                     };
 
                     let mut do_print;
                     if let Some((needle, constraints)) = self.config.args.split_first() {
                         do_print = has(&node.org, needle);
                         for constraint in constraints {
-                            if !has(&node.agg, constraint) {
+                            if !has(&node.ctx, constraint) {
                                 do_print = false;
                             }
                         }
@@ -60,13 +67,42 @@ impl App {
 
                     if do_print {
                         if let Some(filename) = &tree.filename {
-                            println!("{}:{}", filename.display(), node.line_nr.unwrap_or(0));
+                            if !filename_lines_s
+                                .last()
+                                .is_some_and(|(last_filename, _)| last_filename == filename)
+                            {
+                                println!("{}", filename.display(),);
+                                filename_lines_s.push((filename.clone(), Vec::new()));
+                            }
+                        } else {
+                            eprintln!("Could not find tree.filename");
                         }
-                        for md in &node.org {
-                            println!("\t{:?}", &md.kv.0);
+                        let line_nr = node.line_ix.unwrap_or(0) + 1;
+                        if let Some((_, lines)) = filename_lines_s.last_mut() {
+                            lines.push(line_nr);
                         }
+                        print!("{}\t", line_nr);
+                        for part in &node.parts {
+                            if let Some(s) = tree.content.get(part.range.clone()) {
+                                print!("{s}");
+                            }
+                        }
+                        println!("");
                     }
                 });
+
+                if self.config.do_open {
+                    let editor = std::env::var("EDITOR").unwrap_or("hx".to_string());
+                    let mut cmd = std::process::Command::new(editor);
+                    for (filename, lines) in filename_lines_s {
+                        let mut arg = filename.into_os_string();
+                        if let Some(line_nr) = lines.first() {
+                            arg.push(format!(":{line_nr}"));
+                        }
+                        cmd.arg(arg);
+                    }
+                    cmd.status().expect("Could not open files");
+                }
             }
         }
 
@@ -101,6 +137,7 @@ enum Command {
 struct Config {
     global: config::Global,
     command: Command,
+    do_open: bool,
     args: Vec<String>,
     forest: Option<config::Forest>,
 }
@@ -180,6 +217,7 @@ impl Config {
         let config = Config {
             global,
             command,
+            do_open: cli_args.open,
             args: cli_args.rest.clone(),
             forest: forest_opt,
         };

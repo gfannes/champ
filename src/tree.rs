@@ -34,8 +34,9 @@ pub struct Tree {
 #[derive(Default, Debug)]
 pub struct Node {
     pub parts: Vec<Part>,
-    pub line_nr: Option<u64>,
+    pub line_ix: Option<u64>,
     pub org: Vec<amp::Metadata>,
+    pub ctx: Vec<amp::Metadata>,
     pub agg: Vec<amp::Metadata>,
     aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
@@ -197,13 +198,38 @@ impl Tree {
     }
 
     pub fn root_to_leaf(&mut self, mut cb: impl FnMut(&Node, &mut Node)) {
-        for src_ix in 0..self.nodes.len() {
-            let (srcs, dsts) = self.nodes.split_at_mut(src_ix + 1);
-            let src = &srcs[src_ix];
+        let (_, tail) = self.nodes.split_at_mut(self.root_ix);
+        Self::root_to_leaf_(self.root_ix, tail, &mut cb);
+    }
+    fn root_to_leaf_(src_ix: usize, src_rest: &mut [Node], cb: &mut impl FnMut(&Node, &mut Node)) {
+        // We assume that child links only have higher indices
+        if let Some((src, rest)) = src_rest.split_first_mut() {
             for &dst_ix in &src.childs {
                 let diff = dst_ix - src_ix - 1;
-                let dst = &mut dsts[diff];
-                cb(src, dst);
+                let (_, tail) = rest.split_at_mut(diff);
+                cb(src, &mut tail[0]);
+                Self::root_to_leaf_(dst_ix, tail, cb);
+            }
+        }
+    }
+
+    pub fn leaf_to_root(&mut self, mut cb: impl FnMut(&mut Node, &mut Node)) {
+        let (_, tail) = self.nodes.split_at_mut(self.root_ix);
+        Self::leaf_to_root_(self.root_ix, tail, &mut cb);
+    }
+    fn leaf_to_root_(
+        src_ix: usize,
+        src_rest: &mut [Node],
+        cb: &mut impl FnMut(&mut Node, &mut Node),
+    ) {
+        // We assume that child links only have higher indices
+        if let Some((src, rest)) = src_rest.split_first_mut() {
+            let childs = src.childs.clone();
+            for dst_ix in childs {
+                let diff = dst_ix - src_ix - 1;
+                let (_, tail) = rest.split_at_mut(diff);
+                Self::leaf_to_root_(dst_ix, tail, cb);
+                cb(src, &mut tail[0]);
             }
         }
     }
@@ -251,7 +277,7 @@ impl Part {
 
 impl Node {
     pub fn print(&self, content: &str, format: &Format) {
-        if let Some(line_nr) = self.line_nr {
+        if let Some(line_nr) = self.line_ix {
             print!("{:<5}", line_nr);
         } else {
             print!(".....");

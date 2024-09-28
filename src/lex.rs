@@ -4,7 +4,7 @@ use crate::rubr::strange;
 pub struct Token {
     pub kind: Kind,
     pub range: Range,
-    pub line: u64,
+    pub line_ix: u64,
 }
 
 pub struct Lexer {
@@ -14,8 +14,12 @@ pub struct Lexer {
 type Range = std::ops::Range<usize>;
 
 impl Token {
-    fn new(kind: Kind, range: Range, line: u64) -> Token {
-        Token { kind, range, line }
+    fn new(kind: Kind, range: Range, line_ix: u64) -> Token {
+        Token {
+            kind,
+            range,
+            line_ix,
+        }
     }
 }
 
@@ -55,11 +59,11 @@ impl Lexer {
     pub fn tokenize(&mut self, content: &str) {
         self.tokens.clear();
 
-        let mut line: u64 = 0;
+        let mut line_ix: u64 = 0;
         let mut current = Token {
             kind: Kind::Idle,
             range: 0..0,
-            line,
+            line_ix,
         };
         let mut strange = strange::Strange::new(content);
         while let Some(ch) = strange.try_read_char() {
@@ -69,7 +73,7 @@ impl Lexer {
                         self.tokens.push(Token::new(
                             Kind::Newline,
                             current.range.end..strange.index(),
-                            line,
+                            line_ix,
                         ));
                     }
                     Kind::Newline => {
@@ -82,16 +86,16 @@ impl Lexer {
                         self.tokens.push(Token::new(
                             Kind::Newline,
                             new_start..strange.index(),
-                            line,
+                            line_ix,
                         ));
                     }
                 }
 
-                line += 1;
+                line_ix += 1;
                 current = Token {
                     kind: Kind::Idle,
                     range: strange.index()..strange.index(),
-                    line,
+                    line_ix,
                 };
             } else {
                 let kind = Kind::from(ch);
@@ -107,7 +111,7 @@ impl Lexer {
                     current = Token {
                         kind,
                         range: new_start..strange.index(),
-                        line,
+                        line_ix,
                     };
                 }
             }

@@ -57,13 +57,25 @@ impl Builder {
                 }
             }
 
+            node.ctx = node.org.clone();
             node.agg = node.org.clone();
         });
 
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
                 for md in &src.org {
-                    dst.agg.push(md.clone());
+                    // We only push data when there is nothing with the same key
+                    if dst.ctx.iter().all(|m| m.kv.0 != md.kv.0) {
+                        dst.ctx.push(md.clone());
+                    }
+                }
+            });
+            tree.leaf_to_root(|src, dst| {
+                for md in &dst.agg {
+                    // We collect everything that is different
+                    if src.agg.iter().all(|m| m != md) {
+                        src.agg.push(md.clone());
+                    }
                 }
             });
         });
@@ -117,6 +129,7 @@ impl Builder {
 
                 for (ix, md_node) in self.md_tree.nodes.iter().enumerate() {
                     let node = &mut tree.nodes[ix];
+                    node.line_ix = Some(md_node.line_ix);
 
                     // &improv: combine parts of same kind
                     node.parts = md_node.parts.clone();
@@ -148,6 +161,7 @@ impl Builder {
                     // Copy the data and setup the parental links
                     for (ix, src_node) in src_tree.nodes.iter().enumerate() {
                         let node = &mut tree.nodes[ix];
+                        node.line_ix = Some(src_node.line_ix);
                         let kind = if src_node.comment {
                             Kind::Meta
                         } else {
