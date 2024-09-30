@@ -56,3 +56,5 @@
 ## Document typical metadata usage
 - `mef`: mental effort
 	- [surge: unit of mef](https://jonisalminen.com/unit-of-cognitive-effort/)
+
+## Identify all Markdown headers as tasks?

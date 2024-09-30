@@ -21,6 +21,10 @@ impl<'a> Strange<'a> {
     pub fn to_str(&self) -> &str {
         self.rest
     }
+    pub fn to_string(&self) -> String {
+        self.to_str().to_owned()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.rest.is_empty()
     }

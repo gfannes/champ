@@ -4,13 +4,13 @@
 
 ## &done Translate md.Tree into tree.Tree
 
-## Improve Markdown parser
+## &todo Improve Markdown parser
 - Detect `&nbsp;`
 - Detect normal Markdown links
 
-## Update tree.Tree to represent
-- Markup
+## &todo Update tree.Tree to represent
+- AMP
 - Text
 
-## Populate Node.attributes and Node.links from Line.stmts
+## &todo Populate Node.attributes and Node.links from Line.stmts
 

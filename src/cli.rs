@@ -43,14 +43,20 @@ impl App {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
                 forest.dfs(|tree, node| {
-                    let has = |v: &Vec<amp::Metadata>, n: &str| {
-                        let mut md_needle = amp::Metadata::default();
+                    let has = |v: &Vec<amp::Amp>, n: &str| {
+                        let mut amp_needle = amp::Amp::default();
                         if let Some((k, v)) = n.split_once('=') {
-                            md_needle.kv = (k.to_owned(), (!v.is_empty()).then(|| v.to_owned()));
+                            amp_needle.kv = amp::KeyValue {
+                                key: k.to_owned(),
+                                value: (!v.is_empty()).then(|| v.to_owned()),
+                            };
                         } else {
-                            md_needle.kv.0 = n.to_owned();
+                            amp_needle.kv.key = n.to_owned();
                         };
-                        v.iter().filter(|md| md.kv == md_needle.kv).next().is_some()
+                        v.iter()
+                            .filter(|amp| amp.kv == amp_needle.kv)
+                            .next()
+                            .is_some()
                     };
 
                     let mut do_print;

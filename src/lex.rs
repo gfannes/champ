@@ -7,6 +7,7 @@ pub struct Token {
     pub line_ix: u64,
 }
 
+#[derive(Default)]
 pub struct Lexer {
     pub tokens: Vec<Token>,
 }
@@ -33,6 +34,10 @@ pub enum Kind {
     Backtick,
     Dollar,
     Slash,
+    Ampersand,
+    Colon,
+    Semicolon,
+    Comma,
     Text,
     Newline,
 }
@@ -46,6 +51,10 @@ impl From<char> for Kind {
             '`' => Kind::Backtick,
             '$' => Kind::Dollar,
             '/' => Kind::Slash,
+            '&' => Kind::Ampersand,
+            ':' => Kind::Colon,
+            ';' => Kind::Semicolon,
+            ',' => Kind::Comma,
             '\n' | '\r' => Kind::Newline,
             _ => Kind::Text,
         }
@@ -54,7 +63,7 @@ impl From<char> for Kind {
 
 impl Lexer {
     pub fn new() -> Lexer {
-        Lexer { tokens: Vec::new() }
+        Lexer::default()
     }
     pub fn tokenize(&mut self, content: &str) {
         self.tokens.clear();

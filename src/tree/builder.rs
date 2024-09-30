@@ -42,8 +42,8 @@ impl Builder {
                         if let Some(part_content) = content.get(part.range.clone()) {
                             self.amp_parser.parse(part_content, &m);
                             for stmt in &self.amp_parser.stmts {
-                                if let amp::Statement::Metadata(md) = stmt {
-                                    node.org.push(md.clone());
+                                if let amp::Kind::Amp(amp) = &stmt.kind {
+                                    node.org.push(amp.clone());
                                 }
                             }
                         } else {
@@ -63,10 +63,10 @@ impl Builder {
 
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
-                for md in &src.org {
+                for amp in &src.org {
                     // We only push data when there is nothing with the same key
-                    if dst.ctx.iter().all(|m| m.kv.0 != md.kv.0) {
-                        dst.ctx.push(md.clone());
+                    if dst.ctx.iter().all(|a| a.kv.key != amp.kv.key) {
+                        dst.ctx.push(amp.clone());
                     }
                 }
             });
