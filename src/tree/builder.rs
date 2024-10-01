@@ -40,12 +40,9 @@ impl Builder {
                 for part in &node.parts {
                     if part.kind == tree::Kind::Meta {
                         if let Some(part_content) = content.get(part.range.clone()) {
-                            println!("part_content: {part_content}");
                             self.amp_parser.parse(part_content, &m);
                             for stmt in &self.amp_parser.stmts {
-                                println!("\tstmt: {:?}", stmt);
                                 if let amp::Kind::Amp(amp) = &stmt.kind {
-                                    println!("\tFOUND AMP");
                                     node.org.push(amp.clone());
                                 }
                             }
@@ -134,8 +131,16 @@ impl Builder {
                     let node = &mut tree.nodes[ix];
                     node.line_ix = Some(md_node.line_ix);
 
-                    // &improv: combine parts of same kind
-                    node.parts = md_node.parts.clone();
+                    // Combine parts of same kind to ensure amp.Parser can see all metadata at once
+                    for md_part in &md_node.parts {
+                        if let Some(prev_part) = node.parts.last_mut() {
+                            if md_part.kind == prev_part.kind {
+                                prev_part.range.end = md_part.range.end;
+                                continue;
+                            }
+                        }
+                        node.parts.push(md_part.clone());
+                    }
 
                     for child_ix in &md_node.childs {
                         node.childs.push(*child_ix);

@@ -67,14 +67,10 @@ impl App {
                 } else {
                     needle = None;
                 }
-                println!("needle: {:?}", &needle);
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
                     let has = |v: &Vec<amp::Amp>, n: &amp::Amp| {
-                        if !v.is_empty() {
-                            println!("v: {:?}", v);
-                        }
                         v.iter().filter(|amp| amp.kv == n.kv).next().is_some()
                     };
 
@@ -91,9 +87,6 @@ impl App {
                     }
 
                     if do_print {
-                        println!("MATCH");
-                        println!("node.org: {:?}", &node.org);
-
                         if let Some(filename) = &tree.filename {
                             if !filename_lines_s
                                 .last()

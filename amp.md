@@ -45,7 +45,7 @@
 	- &proj=ch => same as `proj=/amp/ch`
 	- &proj=/ch => same as `proj=/ch`
 
-## &tdb Discriminate between AMP data and commented-out code
+## &tbd Discriminate between AMP data and commented-out code
 - Only allow AMP at the start of a comment for SourceCode?
 - Check for parenthesis nesting? => cannot handle commented-out variable definitions
 
