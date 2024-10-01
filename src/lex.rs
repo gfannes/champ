@@ -38,6 +38,7 @@ pub enum Kind {
     Colon,
     Semicolon,
     Comma,
+    Equal,
     Text,
     Newline,
 }
@@ -55,6 +56,7 @@ impl From<char> for Kind {
             ':' => Kind::Colon,
             ';' => Kind::Semicolon,
             ',' => Kind::Comma,
+            '=' => Kind::Equal,
             '\n' | '\r' => Kind::Newline,
             _ => Kind::Text,
         }

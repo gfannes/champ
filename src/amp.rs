@@ -1,4 +1,4 @@
-use crate::{lex, rubr::strange};
+use crate::{lex, rubr::strange, util};
 use std::fmt::Write;
 
 pub type Key = String;
@@ -92,89 +92,87 @@ impl Parser {
 
         let mut grouper = Grouper::new();
         grouper.create_groups(&self.lexer.tokens, m);
-        println!("groups: {:?}", &grouper.groups);
 
+        // Translate the Groups into Stmts
         self.stmts = grouper
             .groups
             .iter()
             .map(|group| {
                 let mut stmt = Stmt::default();
+
                 if let Some(token) = group.tokens.first() {
                     stmt.range = token.range.clone();
                 }
                 if let Some(token) = group.tokens.last() {
                     stmt.range.end = token.range.end;
                 }
+
                 match group.state {
                     State::Text => {
                         let s = content.get(stmt.range.clone()).unwrap_or_else(|| "");
                         stmt.kind = Kind::Text(s.into());
                     }
-                    State::Amp => {}
+                    State::Amp => {
+                        let mut amp: Option<Amp> = None;
+                        let mut kv = None;
+                        for token in group.tokens {
+                            match token.kind {
+                                lex::Kind::Ampersand | lex::Kind::Comma => {
+                                    if let Some(kv) = kv {
+                                        if let Some(amp) = &mut amp {
+                                            amp.params.push(kv);
+                                        } else {
+                                            amp = Some(Amp {
+                                                kv,
+                                                ..Default::default()
+                                            });
+                                        }
+                                    }
+                                    kv = Some(KeyValue::default())
+                                }
+                                lex::Kind::Equal => {
+                                    if let Some(kv) = &mut kv {
+                                        if let Some(v) = &mut kv.value {
+                                            if let Some(s) = content.get(token.range.clone()) {
+                                                v.push_str(s);
+                                            }
+                                        } else {
+                                            kv.value = Some(String::new());
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    if let Some(kv) = &mut kv {
+                                        if let Some(s) = content.get(token.range.clone()) {
+                                            if let Some(v) = &mut kv.value {
+                                                v.push_str(s);
+                                            } else {
+                                                kv.key.push_str(s);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if let Some(kv) = kv {
+                            if let Some(amp) = &mut amp {
+                                amp.params.push(kv);
+                            } else {
+                                amp = Some(Amp {
+                                    kv,
+                                    ..Default::default()
+                                });
+                            }
+                        }
+                        if let Some(amp) = amp {
+                            stmt.kind = Kind::Amp(amp);
+                        }
+                    }
                 };
+
                 stmt
             })
             .collect();
-
-        println!("stmts: {:?}", &self.stmts);
-    }
-
-    pub fn parse_(&mut self, content: &str, m: &Match) {
-        self.stmts.clear();
-
-        let mut strange = strange::Strange::new(content);
-
-        if m == &Match::OnlyStart {
-            if !strange.read_char_if('&') {
-                return;
-            }
-            strange.reset();
-        }
-
-        while !strange.is_empty() {
-            strange.save();
-            if strange.read_char_if('&') {
-                if let Some(s) = strange.read(|r| r.to_end().exclude().through(' ')) {
-                    if match s.chars().next() {
-                        Some('&') | Some('\\') | Some('=') => true,
-                        _ => false,
-                    } || s.starts_with("nbsp")
-                        || match s.chars().next_back() {
-                            Some(';') | Some(',') => true,
-                            _ => false,
-                        }
-                    {
-                    } else {
-                        let mut strange = strange::Strange::new(s);
-                        strange.unwrite_char_if(':');
-                        // &todo: support AMP parameters: add while loop
-                        if let Some(key) = strange
-                            .read(|r| r.to_end().exclude().through('='))
-                            .map(|s| s.to_owned())
-                        {
-                            let value = (!strange.is_empty()).then(|| strange.to_string());
-                            self.stmts.push(Stmt::new(
-                                strange.pop_range(),
-                                Kind::Amp(Amp {
-                                    kv: KeyValue { key, value },
-                                    params: Vec::new(),
-                                }),
-                            ));
-                        }
-                        continue;
-                    }
-                }
-            }
-            strange.reset();
-
-            if let Some(s) = strange
-                .read(|r| r.to_end().exclude().through(' '))
-                .map(|s| s.to_owned())
-            {
-                self.stmts
-                    .push(Stmt::new(strange.pop_range(), Kind::Text(s)));
-            }
-        }
     }
 }
 
@@ -185,6 +183,7 @@ struct Group<'a> {
     tokens: &'a [lex::Token],
 }
 
+// Groups a sequence of Tokens into Groups that can be easily translated into a Stmt
 struct Grouper<'a> {
     state: State,
     token_range: Range,
@@ -210,10 +209,6 @@ impl<'a> Grouper<'a> {
 
         let mut is_first = true;
         for token in tokens {
-            println!(
-                "state: {:?}, token: {:?}, token_range: {:?}",
-                self.state, token, &self.token_range
-            );
             match self.state {
                 State::Text => {
                     if token.kind == lex::Kind::Ampersand
@@ -229,7 +224,7 @@ impl<'a> Grouper<'a> {
                         self.start_new_group(State::Text, tokens);
                         self.token_range.end += 1;
                     }
-                    lex::Kind::Semicolon | lex::Kind::Comma => {
+                    lex::Kind::Semicolon => {
                         self.state = State::Text;
                         self.token_range.end += 1;
                         self.start_new_group(State::Text, tokens);
@@ -241,21 +236,47 @@ impl<'a> Grouper<'a> {
             }
             is_first = false;
         }
-        self.start_new_group(State::Text, tokens);
+        // Might require more than one additional group at the end, eg, if content ends with `@todo:`:
+        // - The `:` is splitted last-minute into a new group
+        while !self.token_range.is_empty() {
+            self.start_new_group(State::Text, tokens);
+        }
     }
 
     fn start_new_group(&mut self, state: State, tokens: &'a [lex::Token]) {
-        let ix = self.token_range.end;
+        let end = self.token_range.end;
 
-        if !self.token_range.is_empty() {
-            self.groups.push(Group::<'a> {
-                state: self.state.clone(),
-                tokens: &tokens[self.token_range.clone()],
-            });
+        while !self.token_range.is_empty() {
+            let tokens = &tokens[self.token_range.clone()];
+
+            let mut push_group = || {
+                self.groups.push(Group::<'a> {
+                    state: self.state.clone(),
+                    tokens,
+                });
+                self.token_range.start = self.token_range.end;
+            };
+
+            match self.state {
+                State::Text => push_group(),
+                State::Amp => match tokens.last().unwrap().kind {
+                    lex::Kind::Colon => {
+                        // Group ending on `:` is still Amp, but we move the `:` to the next Group
+                        self.token_range.end -= 1;
+                    }
+                    lex::Kind::Semicolon | lex::Kind::Comma => {
+                        // Group ending on `;` or `,` is considered as Text
+                        // - &nbsp; occurs ofter in Markdown and is considered a false positive
+                        // - &param, occurs in commented-out C/C++/Rust source code
+                        self.state = State::Text;
+                    }
+                    _ => push_group(),
+                },
+            }
         }
 
         self.state = state;
-        self.token_range = ix..ix;
+        self.token_range.end = end;
     }
 }
 
@@ -265,15 +286,13 @@ mod tests {
 
     #[test]
     fn test_parse() {
-        // &todo: rework into exp with String
         let scns = [
             // String
-            // ("todo", "(todo)"),
-            // ("&&", "(&&)"),
-            // ("a,b", "(a,b)"),
+            ("todo", "(todo)"),
+            ("&&", "(&&)"),
+            ("a,b", "(a,b)"),
             ("&nbsp;", "(&nbsp;)"),
-            // &fixme
-            ("&nbsp;abc", "(&nbsp;abc)"),
+            ("&nbsp;abc", "(&nbsp;)(abc)"),
             ("&param,", "(&param,)"),
             // Metadata
             ("&todo", "[todo]"),

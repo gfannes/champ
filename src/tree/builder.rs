@@ -40,9 +40,12 @@ impl Builder {
                 for part in &node.parts {
                     if part.kind == tree::Kind::Meta {
                         if let Some(part_content) = content.get(part.range.clone()) {
+                            println!("part_content: {part_content}");
                             self.amp_parser.parse(part_content, &m);
                             for stmt in &self.amp_parser.stmts {
+                                println!("\tstmt: {:?}", stmt);
                                 if let amp::Kind::Amp(amp) = &stmt.kind {
+                                    println!("\tFOUND AMP");
                                     node.org.push(amp.clone());
                                 }
                             }

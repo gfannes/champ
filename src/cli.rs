@@ -40,29 +40,48 @@ impl App {
             }
             Command::None => {}
             Command::Query => {
-                let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
+
+                let needle: Option<amp::Amp>;
+                let mut constraints = Vec::<amp::Amp>::new();
+                if let Some((needle_str, constraints_str)) = self.config.args.split_first() {
+                    let mut amp_parser = amp::Parser::new();
+                    amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
+                    if let Some(stmt) = amp_parser.stmts.first() {
+                        match &stmt.kind {
+                            amp::Kind::Amp(amp) => needle = Some(amp.clone()),
+                            _ => fail!("Expected to find AMP"),
+                        }
+                    } else {
+                        fail!("Expected to find at least one statement");
+                    }
+                    for constraint_str in constraints_str {
+                        amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
+                        if let Some(stmt) = amp_parser.stmts.first() {
+                            match &stmt.kind {
+                                amp::Kind::Amp(amp) => constraints.push(amp.clone()),
+                                _ => fail!("Expected to find AMP"),
+                            }
+                        }
+                    }
+                } else {
+                    needle = None;
+                }
+                println!("needle: {:?}", &needle);
+
+                let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let has = |v: &Vec<amp::Amp>, n: &str| {
-                        let mut amp_needle = amp::Amp::default();
-                        if let Some((k, v)) = n.split_once('=') {
-                            amp_needle.kv = amp::KeyValue {
-                                key: k.to_owned(),
-                                value: (!v.is_empty()).then(|| v.to_owned()),
-                            };
-                        } else {
-                            amp_needle.kv.key = n.to_owned();
-                        };
-                        v.iter()
-                            .filter(|amp| amp.kv == amp_needle.kv)
-                            .next()
-                            .is_some()
+                    let has = |v: &Vec<amp::Amp>, n: &amp::Amp| {
+                        if !v.is_empty() {
+                            println!("v: {:?}", v);
+                        }
+                        v.iter().filter(|amp| amp.kv == n.kv).next().is_some()
                     };
 
                     let mut do_print;
-                    if let Some((needle, constraints)) = self.config.args.split_first() {
+                    if let Some(needle) = &needle {
                         do_print = has(&node.org, needle);
-                        for constraint in constraints {
+                        for constraint in &constraints {
                             if !has(&node.ctx, constraint) {
                                 do_print = false;
                             }
@@ -72,6 +91,9 @@ impl App {
                     }
 
                     if do_print {
+                        println!("MATCH");
+                        println!("node.org: {:?}", &node.org);
+
                         if let Some(filename) = &tree.filename {
                             if !filename_lines_s
                                 .last()
