@@ -1,4 +1,6 @@
 // &todo: add peek functions
+// &perf: convert to Vec<char> and work with that.
+// - conversion can be done with is_ascii(), as_bytes() or chars().collect()
 
 pub type Range = std::ops::Range<usize>;
 
