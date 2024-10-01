@@ -208,12 +208,15 @@ impl<'a> Grouper<'a> {
         self.reset();
 
         let mut is_first = true;
+        let mut last_was_space = true;
         for token in tokens {
             match self.state {
                 State::Text => {
                     if token.kind == lex::Kind::Ampersand
                         && token.range.len() == 1
                         && (is_first || m == &Match::Everywhere)
+                        // &spec: ampersand can only start Amp at start or after a space
+                        && last_was_space
                     {
                         self.start_new_group(State::Amp, tokens);
                     }
@@ -225,6 +228,8 @@ impl<'a> Grouper<'a> {
                         self.token_range.end += 1;
                     }
                     lex::Kind::Semicolon => {
+                        // &spec: a semicolon is cannot occur in Amp.
+                        // &todo: make this more precise: an Amp cannot _end_ with a semicolon
                         self.state = State::Text;
                         self.token_range.end += 1;
                         self.start_new_group(State::Text, tokens);
@@ -234,6 +239,7 @@ impl<'a> Grouper<'a> {
                     }
                 },
             }
+            last_was_space = token.kind == lex::Kind::Space;
             is_first = false;
         }
         // Might require more than one additional group at the end, eg, if content ends with `@todo:`:
@@ -261,11 +267,15 @@ impl<'a> Grouper<'a> {
                 State::Text => push_group(),
                 State::Amp => match tokens.last().unwrap().kind {
                     lex::Kind::Colon => {
-                        // Group ending on `:` is still Amp, but we move the `:` to the next Group
+                        // &spec: Group ending on `:` is still Amp, but we move the `:` to the next Group
+                        self.token_range.end -= 1;
+                    }
+                    lex::Kind::Ampersand => {
+                        // &spec: Group ending on `&` is still Amp, but we move the `:` to the next Group
                         self.token_range.end -= 1;
                     }
                     lex::Kind::Semicolon | lex::Kind::Comma => {
-                        // Group ending on `;` or `,` is considered as Text
+                        // &spec: Group ending on `;` or `,` is considered as Text
                         // - &nbsp; occurs ofter in Markdown and is considered a false positive
                         // - &param, occurs in commented-out C/C++/Rust source code
                         self.state = State::Text;
@@ -294,6 +304,7 @@ mod tests {
             ("&nbsp;", "(&nbsp;)"),
             ("&nbsp;abc", "(&nbsp;)(abc)"),
             ("&param,", "(&param,)"),
+            ("r&d", "(r&d)"),
             // Metadata
             ("&todo", "[todo]"),
             ("&todo:", "[todo](:)"),
