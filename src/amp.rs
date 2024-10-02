@@ -1,3 +1,5 @@
+pub mod value;
+
 use crate::{lex, rubr::strange, util};
 use std::fmt::Write;
 

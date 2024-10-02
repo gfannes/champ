@@ -4,6 +4,8 @@
 
 pub type Range = std::ops::Range<usize>;
 
+use std::{fmt, ops};
+
 #[derive(Clone)]
 pub struct Strange<'a> {
     all: &'a str,
@@ -122,6 +124,50 @@ impl<'a> Strange<'a> {
             self.rest = rest;
             Some(first)
         })
+    }
+
+    pub fn read_decimals(&mut self, count: usize) -> Option<&str> {
+        if self.len() < count {
+            return None;
+        }
+
+        let sp = self.rest;
+        let mut cnt = count;
+        for ch in self.rest.chars() {
+            if cnt == 0 {
+                break;
+            }
+            if '0' <= ch && ch <= '9' {
+                cnt -= 1;
+            } else {
+                break;
+            }
+        }
+
+        if cnt == 0 {
+            self.rest = &self.rest[count..];
+            Some(&sp[0..count])
+        } else {
+            self.rest = sp;
+            None
+        }
+    }
+
+    pub fn read_number<T: ops::Add + ops::Mul>(&mut self) -> Option<T>
+    where
+        T: ops::Add<Output = T> + ops::Mul<Output = T> + From<u8> + fmt::Debug,
+    {
+        let mut ret = None;
+        while let Some(ch) = self.try_read_char_when(|ch| '0' <= ch && ch <= '9') {
+            let dec = T::from(ch as u8 - '0' as u8);
+            if let Some(mut v) = ret {
+                v = v * T::from(10) + dec;
+                ret = Some(v);
+            } else {
+                ret = Some(dec);
+            }
+        }
+        ret
     }
 
     // Builder-style reading
@@ -313,5 +359,30 @@ mod tests {
             s.pop_str();
         }
         assert_eq!(s.to_str(), "");
+    }
+
+    #[test]
+    fn test_read_decimals() {
+        let mut s = Strange::new("1234");
+        assert_eq!(s.read_decimals(0), Some(""));
+        assert_eq!(s.read_decimals(1), Some("1"));
+        assert_eq!(s.read_decimals(3), Some("234"));
+        assert_eq!(s.read_decimals(1), None);
+    }
+
+    #[test]
+    fn test_read_number() {
+        let scns = [
+            ("", None),
+            ("abc", None),
+            ("0", Some(0 as u32)),
+            ("1234", Some(1234 as u32)),
+        ];
+
+        for (s, exp) in scns {
+            println!("--------------- {s}");
+            let mut s = Strange::new(s);
+            assert_eq!(s.read_number::<u32>(), exp);
+        }
     }
 }
