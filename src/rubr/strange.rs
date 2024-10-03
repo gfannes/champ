@@ -137,7 +137,7 @@ impl<'a> Strange<'a> {
             if cnt == 0 {
                 break;
             }
-            if '0' <= ch && ch <= '9' {
+            if ch.is_digit(10) {
                 cnt -= 1;
             } else {
                 break;
@@ -158,15 +158,17 @@ impl<'a> Strange<'a> {
         T: ops::Add<Output = T> + ops::Mul<Output = T> + From<u8> + fmt::Debug,
     {
         let mut ret = None;
-        while let Some(ch) = self.try_read_char_when(|ch| '0' <= ch && ch <= '9') {
-            let dec = T::from(ch as u8 - '0' as u8);
+
+        while let Some(ch) = self.try_read_char_when(|ch| ch.is_digit(10)) {
+            let digit = T::from(ch.to_digit(10).unwrap() as u8);
             if let Some(mut v) = ret {
-                v = v * T::from(10) + dec;
+                v = v * T::from(10) + digit;
                 ret = Some(v);
             } else {
-                ret = Some(dec);
+                ret = Some(digit);
             }
         }
+
         ret
     }
 

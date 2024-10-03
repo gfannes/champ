@@ -18,8 +18,9 @@ pub struct Duration {
     minutes: u32,
 }
 
+#[derive(PartialEq, Eq, Debug)]
 pub struct Prio {
-    major: u8,
+    major: Option<u32>,
     minor: u32,
 }
 
@@ -33,6 +34,14 @@ impl Path {
     fn new(absolute: bool, parts: &[&str]) -> Path {
         let parts = parts.iter().map(ToString::to_string).collect();
         Path { absolute, parts }
+    }
+    fn set_ctx(&mut self, ctx: &Self) {
+        if !self.absolute {
+            let mut my_parts = std::mem::replace(&mut self.parts, ctx.parts.clone());
+            self.parts.append(&mut my_parts);
+
+            self.absolute = ctx.absolute;
+        }
     }
 }
 impl TryFrom<&str> for Path {
@@ -64,6 +73,7 @@ impl Date {
     fn new(year: u16, month: u8, day: u8) -> Date {
         Date { year, month, day }
     }
+    fn set_ctx(&mut self, rhs: &Self) {}
 }
 impl TryFrom<&str> for Date {
     type Error = ();
@@ -103,6 +113,7 @@ impl Duration {
         let minutes = minutes + (hours + (days + weeks * 5) * 8) * 60;
         Duration { minutes }
     }
+    fn set_ctx(&mut self, rhs: &Self) {}
 }
 impl TryFrom<&str> for Duration {
     type Error = ();
@@ -135,12 +146,43 @@ impl TryFrom<&str> for Duration {
     }
 }
 
+impl Prio {
+    fn new(major: Option<u32>, minor: u32) -> Prio {
+        Prio { major, minor }
+    }
+}
+impl TryFrom<&str> for Prio {
+    type Error = ();
+    fn try_from(s: &str) -> std::result::Result<Prio, Self::Error> {
+        let major;
+        let minor: u32;
+
+        {
+            let mut strange = strange::Strange::new(s);
+
+            if let Some(ch) = strange.try_read_char_when(|ch| ch.is_ascii_alphabetic()) {
+                major = Some(ch.to_ascii_lowercase() as u32 - 'a' as u32);
+            } else {
+                major = None;
+            }
+
+            if let Some(m) = strange.read_number() {
+                minor = m;
+            } else {
+                return Err(());
+            }
+        }
+
+        Ok(Prio::new(major, minor))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_path() {
+    fn test_path_try_from() {
         let scns = [
             ("", None as Option<Path>),
             ("a", Some(Path::new(false, &["a"]))),
@@ -155,7 +197,33 @@ mod tests {
     }
 
     #[test]
-    fn test_date() {
+    fn test_path_set_ctx() {
+        let scns = [
+            (
+                Path::new(false, &["a"]),
+                Path::new(false, &["ctx"]),
+                Path::new(false, &["ctx", "a"]),
+            ),
+            (
+                Path::new(false, &["a"]),
+                Path::new(true, &["ctx"]),
+                Path::new(true, &["ctx", "a"]),
+            ),
+            (
+                Path::new(true, &["a"]),
+                Path::new(false, &["ctx"]),
+                Path::new(true, &["a"]),
+            ),
+        ];
+
+        for (mut a, ctx, exp) in scns {
+            a.set_ctx(&ctx);
+            assert_eq!(a, exp);
+        }
+    }
+
+    #[test]
+    fn test_date_try_from() {
         let scns = [("20241002", Some(Date::new(2024, 10, 2)))];
 
         for (s, exp) in scns {
@@ -164,7 +232,33 @@ mod tests {
     }
 
     #[test]
-    fn test_duration() {
+    fn test_date_set_ctx() {
+        let scns = [
+            (
+                Date::new(2024, 10, 2),
+                Date::new(2024, 10, 1),
+                Date::new(2024, 10, 2),
+            ),
+            (
+                Date::new(2024, 10, 2),
+                Date::new(2024, 10, 2),
+                Date::new(2024, 10, 2),
+            ),
+            (
+                Date::new(2024, 10, 2),
+                Date::new(2024, 10, 3),
+                Date::new(2024, 10, 2),
+            ),
+        ];
+
+        for (mut a, ctx, exp) in scns {
+            a.set_ctx(&ctx);
+            assert_eq!(a, exp);
+        }
+    }
+
+    #[test]
+    fn test_duration_try_from() {
         let scns = [
             ("1w2d3h4m", Some(Duration::new(1, 2, 3, 4))),
             ("2d3h1w4m", Some(Duration::new(1, 2, 3, 4))),
@@ -173,6 +267,47 @@ mod tests {
 
         for (s, exp) in scns {
             assert_eq!(Duration::try_from(s).ok(), exp);
+        }
+    }
+
+    #[test]
+    fn test_duration_set_ctx() {
+        let scns = [
+            (
+                Duration::new(0, 0, 0, 2),
+                Duration::new(0, 0, 0, 1),
+                Duration::new(0, 0, 0, 2),
+            ),
+            (
+                Duration::new(0, 0, 0, 2),
+                Duration::new(0, 0, 0, 2),
+                Duration::new(0, 0, 0, 2),
+            ),
+            (
+                Duration::new(0, 0, 0, 2),
+                Duration::new(0, 0, 0, 3),
+                Duration::new(0, 0, 0, 2),
+            ),
+        ];
+
+        for (mut a, ctx, exp) in scns {
+            a.set_ctx(&ctx);
+            assert_eq!(a, exp);
+        }
+    }
+
+    #[test]
+    fn test_prio_try_from() {
+        let scns = [
+            ("0", Some(Prio::new(None, 0))),
+            ("1", Some(Prio::new(None, 1))),
+            ("a1", Some(Prio::new(Some(0), 1))),
+            ("A1", Some(Prio::new(Some(0), 1))),
+            ("b1", Some(Prio::new(Some(1), 1))),
+        ];
+
+        for (s, exp) in scns {
+            assert_eq!(Prio::try_from(s).ok(), exp);
         }
     }
 }
