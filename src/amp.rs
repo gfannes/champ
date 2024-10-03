@@ -19,16 +19,10 @@ pub struct Stmt {
     pub kind: Kind,
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default, Clone)]
-pub struct Amp {
-    pub kv: KeyValue,
-    pub params: Vec<KeyValue>,
-}
-
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Kind {
     Text(String),
-    Amp(Amp),
+    Amp(KeyValue),
 }
 impl Default for Kind {
     fn default() -> Kind {
@@ -46,7 +40,7 @@ impl Stmt {
             Kind::Text(text) => {
                 write!(s, "({text})");
             }
-            Kind::Amp(amp) => {
+            Kind::Amp(kv) => {
                 let w = |s: &mut String, kv: &KeyValue| {
                     write!(s, "{}", kv.key);
                     if let Some(value) = &kv.value {
@@ -54,11 +48,7 @@ impl Stmt {
                     }
                 };
                 write!(s, "[");
-                w(s, &amp.kv);
-                for param in &amp.params {
-                    write!(s, ",");
-                    w(s, param);
-                }
+                w(s, &kv);
                 write!(s, "]");
             }
         }
@@ -115,24 +105,17 @@ impl Parser {
                         stmt.kind = Kind::Text(s.into());
                     }
                     State::Amp => {
-                        let mut amp: Option<Amp> = None;
-                        let mut kv = None;
+                        let mut kv: Option<KeyValue> = None;
                         for token in group.tokens {
                             match token.kind {
-                                lex::Kind::Ampersand | lex::Kind::Comma => {
-                                    if let Some(kv) = kv {
-                                        if let Some(amp) = &mut amp {
-                                            amp.params.push(kv);
-                                        } else {
-                                            amp = Some(Amp {
-                                                kv,
-                                                ..Default::default()
-                                            });
-                                        }
+                                lex::Kind::Ampersand => {
+                                    if kv.is_some() {
+                                        todo!("Grouper should produce Groups that match with a single KeyValue");
                                     }
                                     kv = Some(KeyValue::default())
                                 }
                                 lex::Kind::Equal => {
+                                    // &todo &spec: only allow [a-zA-Z_\d] in Key
                                     if let Some(kv) = &mut kv {
                                         if let Some(v) = &mut kv.value {
                                             if let Some(s) = content.get(token.range.clone()) {
@@ -157,17 +140,7 @@ impl Parser {
                             }
                         }
                         if let Some(kv) = kv {
-                            if let Some(amp) = &mut amp {
-                                amp.params.push(kv);
-                            } else {
-                                amp = Some(Amp {
-                                    kv,
-                                    ..Default::default()
-                                });
-                            }
-                        }
-                        if let Some(amp) = amp {
-                            stmt.kind = Kind::Amp(amp);
+                            stmt.kind = Kind::Amp(kv);
                         }
                     }
                 };
@@ -225,6 +198,10 @@ impl<'a> Grouper<'a> {
                     self.token_range.end += 1;
                 }
                 State::Amp => match token.kind {
+                    lex::Kind::Ampersand => {
+                        self.start_new_group(State::Amp, tokens);
+                        self.token_range.end += 1;
+                    }
                     lex::Kind::Space => {
                         self.start_new_group(State::Text, tokens);
                         self.token_range.end += 1;
@@ -273,7 +250,7 @@ impl<'a> Grouper<'a> {
                         self.token_range.end -= 1;
                     }
                     lex::Kind::Ampersand => {
-                        // &spec: Group ending on `&` is still Amp, but we move the `:` to the next Group
+                        // &spec: Group ending on `&` is still Amp, but we move the `&` to the next Group
                         self.token_range.end -= 1;
                     }
                     lex::Kind::Semicolon | lex::Kind::Comma => {
@@ -312,10 +289,14 @@ mod tests {
             ("&todo:", "[todo](:)"),
             ("&key=value", "[key=value]"),
             ("&key=value,param=vilue", "[key=value,param=vilue]"),
+            ("&key=value&param=vilue", "[key=value][param=vilue]"),
+            ("&key=value &param=vilue", "[key=value]( )[param=vilue]"),
+            ("&key=value& abc", "[key=value](& abc)"),
         ];
 
         let mut parser = Parser::new();
         for (content, exp) in scns {
+            println!("--------------- {content}");
             parser.parse(content, &Match::Everywhere);
             let mut s = String::new();
             for stmt in &parser.stmts {

@@ -42,14 +42,14 @@ impl App {
             Command::Query => {
                 let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
 
-                let needle: Option<amp::Amp>;
-                let mut constraints = Vec::<amp::Amp>::new();
+                let needle: Option<amp::KeyValue>;
+                let mut constraints = Vec::<amp::KeyValue>::new();
                 if let Some((needle_str, constraints_str)) = self.config.args.split_first() {
                     let mut amp_parser = amp::Parser::new();
                     amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
                     if let Some(stmt) = amp_parser.stmts.first() {
                         match &stmt.kind {
-                            amp::Kind::Amp(amp) => needle = Some(amp.clone()),
+                            amp::Kind::Amp(kv) => needle = Some(kv.clone()),
                             _ => fail!("Expected to find AMP"),
                         }
                     } else {
@@ -59,7 +59,7 @@ impl App {
                         amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
                         if let Some(stmt) = amp_parser.stmts.first() {
                             match &stmt.kind {
-                                amp::Kind::Amp(amp) => constraints.push(amp.clone()),
+                                amp::Kind::Amp(kv) => constraints.push(kv.clone()),
                                 _ => fail!("Expected to find AMP"),
                             }
                         }
@@ -70,8 +70,8 @@ impl App {
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let has = |v: &Vec<amp::Amp>, n: &amp::Amp| {
-                        v.iter().filter(|amp| amp.kv == n.kv).next().is_some()
+                    let has = |v: &Vec<amp::KeyValue>, n: &amp::KeyValue| {
+                        v.iter().filter(|&kv| kv == n).next().is_some()
                     };
 
                     let mut do_print;

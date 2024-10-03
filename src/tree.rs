@@ -35,9 +35,9 @@ pub struct Tree {
 pub struct Node {
     pub parts: Vec<Part>,
     pub line_ix: Option<u64>,
-    pub org: Vec<amp::Amp>,
-    pub ctx: Vec<amp::Amp>,
-    pub agg: Vec<amp::Amp>,
+    pub org: Vec<amp::KeyValue>,
+    pub ctx: Vec<amp::KeyValue>,
+    pub agg: Vec<amp::KeyValue>,
     aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree

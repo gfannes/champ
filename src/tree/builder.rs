@@ -7,7 +7,6 @@ type Format = tree::Format;
 type Node = tree::Node;
 type Kind = tree::Kind;
 type Part = tree::Part;
-type Range = std::ops::Range<usize>;
 
 pub struct Builder {
     lexer: lex::Lexer,
@@ -63,10 +62,10 @@ impl Builder {
 
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
-                for amp in &src.org {
+                for kv in &src.org {
                     // We only push data when there is nothing with the same key
-                    if dst.ctx.iter().all(|a| a.kv.key != amp.kv.key) {
-                        dst.ctx.push(amp.clone());
+                    if dst.ctx.iter().all(|e| e.key != kv.key) {
+                        dst.ctx.push(kv.clone());
                     }
                 }
             });

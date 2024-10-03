@@ -166,7 +166,9 @@ impl TryFrom<&str> for Prio {
                 major = None;
             }
 
-            if let Some(m) = strange.read_number() {
+            if strange.is_empty() {
+                minor = 0;
+            } else if let Some(m) = strange.read_number() {
                 minor = m;
             } else {
                 return Err(());
@@ -304,6 +306,7 @@ mod tests {
             ("a1", Some(Prio::new(Some(0), 1))),
             ("A1", Some(Prio::new(Some(0), 1))),
             ("b1", Some(Prio::new(Some(1), 1))),
+            ("b", Some(Prio::new(Some(1), 0))),
         ];
 
         for (s, exp) in scns {

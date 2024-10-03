@@ -83,6 +83,8 @@ fn default_true() -> bool {
 
 impl Global {
     pub fn load(cli_args: &CliArgs) -> util::Result<Global> {
+        // &todo @prio=b: load Vec<Forest> from ".config/champ/forests.toml"
+
         let global_fp;
         if let Some(fp) = &cli_args.config {
             global_fp = Some(fp.to_owned());

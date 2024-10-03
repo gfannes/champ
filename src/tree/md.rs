@@ -46,6 +46,7 @@ impl Tree {
         Tree::default()
     }
 
+    // &todo: detect blocks indented with a few spaces (how many?) as a CodeBlock
     pub fn init(&mut self, tokens: &[Token]) {
         self.nodes.clear();
         self.headers.clear();
