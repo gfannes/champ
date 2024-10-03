@@ -41,8 +41,8 @@ impl Builder {
                         if let Some(part_content) = content.get(part.range.clone()) {
                             self.amp_parser.parse(part_content, &m);
                             for stmt in &self.amp_parser.stmts {
-                                if let amp::Kind::Amp(amp) = &stmt.kind {
-                                    node.org.push(amp.clone());
+                                if let amp::Kind::Amp(kv) = &stmt.kind {
+                                    node.org.push(kv.clone());
                                 }
                             }
                         } else {

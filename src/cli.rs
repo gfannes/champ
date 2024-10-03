@@ -44,34 +44,43 @@ impl App {
 
                 let needle: Option<amp::KeyValue>;
                 let mut constraints = Vec::<amp::KeyValue>::new();
-                if let Some((needle_str, constraints_str)) = self.config.args.split_first() {
-                    let mut amp_parser = amp::Parser::new();
-                    amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
-                    if let Some(stmt) = amp_parser.stmts.first() {
-                        match &stmt.kind {
-                            amp::Kind::Amp(kv) => needle = Some(kv.clone()),
-                            _ => fail!("Expected to find AMP"),
-                        }
-                    } else {
-                        fail!("Expected to find at least one statement");
-                    }
-                    for constraint_str in constraints_str {
-                        amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
+                {
+                    if let Some((needle_str, constraints_str)) = self.config.args.split_first() {
+                        let mut amp_parser = amp::Parser::new();
+                        amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
                         if let Some(stmt) = amp_parser.stmts.first() {
                             match &stmt.kind {
-                                amp::Kind::Amp(kv) => constraints.push(kv.clone()),
+                                amp::Kind::Amp(kv) => needle = Some(kv.clone()),
                                 _ => fail!("Expected to find AMP"),
                             }
+                        } else {
+                            fail!("Expected to find at least one statement");
                         }
+                        for constraint_str in constraints_str {
+                            amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
+                            if let Some(stmt) = amp_parser.stmts.first() {
+                                match &stmt.kind {
+                                    amp::Kind::Amp(kv) => constraints.push(kv.clone()),
+                                    _ => fail!("Expected to find AMP"),
+                                }
+                            }
+                        }
+                    } else {
+                        needle = None;
                     }
-                } else {
-                    needle = None;
                 }
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let has = |v: &Vec<amp::KeyValue>, n: &amp::KeyValue| {
-                        v.iter().filter(|&kv| kv == n).next().is_some()
+                    let has = |v: &Vec<amp::KeyValue>, needle: &amp::KeyValue| {
+                        v.iter()
+                            .filter(|&kv| {
+                                // needle.value works as a wildcard when set to None
+                                kv.key == needle.key
+                                    && (needle.value.is_none() || kv.value == needle.value)
+                            })
+                            .next()
+                            .is_some()
                     };
 
                     let mut do_print;

@@ -61,7 +61,7 @@ pub struct Parser {
     lexer: lex::Lexer,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Match {
     Everywhere,
     OnlyStart,
@@ -184,16 +184,19 @@ impl<'a> Grouper<'a> {
 
         let mut is_first = true;
         let mut last_was_space = true;
+        let mut m: Match = m.clone();
         for token in tokens {
             match self.state {
                 State::Text => {
                     if token.kind == lex::Kind::Ampersand
                         && token.range.len() == 1
-                        && (is_first || m == &Match::Everywhere)
+                        && (is_first || m == Match::Everywhere)
                         // &spec: ampersand can only start Amp at start or after a space
                         && last_was_space
                     {
                         self.start_new_group(State::Amp, tokens);
+                        // &spec: as soon as we found a match, we allow matches everywhere
+                        m = Match::Everywhere;
                     }
                     self.token_range.end += 1;
                 }
@@ -277,27 +280,42 @@ mod tests {
     fn test_parse() {
         let scns = [
             // String
-            ("todo", "(todo)"),
-            ("&&", "(&&)"),
-            ("a,b", "(a,b)"),
-            ("&nbsp;", "(&nbsp;)"),
-            ("&nbsp;abc", "(&nbsp;)(abc)"),
-            ("&param,", "(&param,)"),
-            ("r&d", "(r&d)"),
+            (&Match::Everywhere, "todo", "(todo)"),
+            (&Match::Everywhere, "&&", "(&&)"),
+            (&Match::Everywhere, "a,b", "(a,b)"),
+            (&Match::Everywhere, "&nbsp;", "(&nbsp;)"),
+            (&Match::Everywhere, "&nbsp;abc", "(&nbsp;)(abc)"),
+            (&Match::Everywhere, "&param,", "(&param,)"),
+            (&Match::Everywhere, "r&d", "(r&d)"),
             // Metadata
-            ("&todo", "[todo]"),
-            ("&todo:", "[todo](:)"),
-            ("&key=value", "[key=value]"),
-            ("&key=value,param=vilue", "[key=value,param=vilue]"),
-            ("&key=value&param=vilue", "[key=value][param=vilue]"),
-            ("&key=value &param=vilue", "[key=value]( )[param=vilue]"),
-            ("&key=value& abc", "[key=value](& abc)"),
+            (&Match::Everywhere, "&todo", "[todo]"),
+            (&Match::Everywhere, "&todo:", "[todo](:)"),
+            (&Match::Everywhere, "&key=value", "[key=value]"),
+            (
+                &Match::Everywhere,
+                "&key=value,param=vilue",
+                "[key=value,param=vilue]",
+            ),
+            (
+                &Match::Everywhere,
+                "&key=value&param=vilue",
+                "[key=value][param=vilue]",
+            ),
+            (
+                &Match::Everywhere,
+                "&key=value &param=vilue",
+                "[key=value]( )[param=vilue]",
+            ),
+            (&Match::Everywhere, "&key=value& abc", "[key=value](& abc)"),
+            // Match::OnlyStart
+            (&Match::OnlyStart, "abc &def", "(abc &def)"),
+            (&Match::OnlyStart, "&abc &def", "[abc]( )[def]"),
         ];
 
         let mut parser = Parser::new();
-        for (content, exp) in scns {
+        for (m, content, exp) in scns {
             println!("--------------- {content}");
-            parser.parse(content, &Match::Everywhere);
+            parser.parse(content, m);
             let mut s = String::new();
             for stmt in &parser.stmts {
                 stmt.write(&mut s);
