@@ -11,10 +11,10 @@ impl Line {
 
     pub fn draw(
         &mut self,
-        term: &mut tui::term::Term,
-        line: &data::status::Line,
+        _term: &mut tui::term::Term,
+        _line: &data::status::Line,
     ) -> util::Result<()> {
-        let mut region = self.region;
+        let _region = self.region;
         Ok(())
     }
 }

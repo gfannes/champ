@@ -1,11 +1,10 @@
 pub mod value;
 
-use crate::{lex, rubr::strange, util};
+use crate::{lex, util};
 use std::fmt::Write;
 
 pub type Key = String;
-pub type Value = Option<String>;
-pub type Range = std::ops::Range<usize>;
+pub type Value = value::Value;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default, Clone)]
 pub struct KeyValue {
@@ -24,36 +23,6 @@ pub enum Kind {
     Text(String),
     Amp(KeyValue),
 }
-impl Default for Kind {
-    fn default() -> Kind {
-        Kind::Text(String::new())
-    }
-}
-
-impl Stmt {
-    pub fn new(range: Range, kind: Kind) -> Stmt {
-        Stmt { range, kind }
-    }
-
-    pub fn write(&self, s: &mut String) {
-        match &self.kind {
-            Kind::Text(text) => {
-                write!(s, "({text})");
-            }
-            Kind::Amp(kv) => {
-                let w = |s: &mut String, kv: &KeyValue| {
-                    write!(s, "{}", kv.key);
-                    if let Some(value) = &kv.value {
-                        write!(s, "={value}");
-                    }
-                };
-                write!(s, "[");
-                w(s, &kv);
-                write!(s, "]");
-            }
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct Parser {
@@ -67,6 +36,48 @@ pub enum Match {
     OnlyStart,
 }
 
+type Range = std::ops::Range<usize>;
+
+impl Default for Kind {
+    fn default() -> Kind {
+        Kind::Text(String::new())
+    }
+}
+
+impl ToString for KeyValue {
+    fn to_string(&self) -> String {
+        if self.value == Value::None {
+            format!("{}", &self.key)
+        } else {
+            format!("{}={}", &self.key, self.value.to_string())
+        }
+    }
+}
+
+impl Stmt {
+    pub fn new(range: Range, kind: Kind) -> Stmt {
+        Stmt { range, kind }
+    }
+
+    pub fn write(&self, s: &mut String) -> util::Result<()> {
+        match &self.kind {
+            Kind::Text(text) => {
+                write!(s, "({text})")?;
+            }
+            Kind::Amp(kv) => {
+                let w = |s: &mut String, kv: &KeyValue| -> util::Result<()> {
+                    write!(s, "{}", kv.to_string())?;
+                    Ok(())
+                };
+                write!(s, "[")?;
+                w(s, &kv)?;
+                write!(s, "]")?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug)]
 enum State {
     Text,
@@ -77,6 +88,7 @@ impl Parser {
     pub fn new() -> Parser {
         Parser::default()
     }
+
     pub fn parse(&mut self, content: &str, m: &Match) {
         self.stmts.clear();
 
@@ -117,22 +129,28 @@ impl Parser {
                                 lex::Kind::Equal => {
                                     // &todo &spec: only allow [a-zA-Z_\d] in Key
                                     if let Some(kv) = &mut kv {
-                                        if let Some(v) = &mut kv.value {
-                                            if let Some(s) = content.get(token.range.clone()) {
-                                                v.push_str(s);
+                                        match &mut kv.value{
+                                            Value::None => {kv.value = Value::Tag(String::new());}
+                                            Value::Tag(tag) => {
+                                                if let Some(s) = content.get(token.range.clone()) {
+                                                    tag.push_str(s);
+                                                }
                                             }
-                                        } else {
-                                            kv.value = Some(String::new());
+                                            _=>unreachable!(),
                                         }
                                     }
                                 }
                                 _ => {
                                     if let Some(kv) = &mut kv {
                                         if let Some(s) = content.get(token.range.clone()) {
-                                            if let Some(v) = &mut kv.value {
-                                                v.push_str(s);
-                                            } else {
-                                                kv.key.push_str(s);
+                                            match &mut kv.value{
+                                                Value::None => {kv.key.push_str(s);}
+                                                Value::Tag(tag) => {
+                                                    if let Some(s) = content.get(token.range.clone()) {
+                                                        tag.push_str(s);
+                                                    }
+                                                }
+                                                _=>unreachable!(),
                                             }
                                         }
                                     }
@@ -314,11 +332,10 @@ mod tests {
 
         let mut parser = Parser::new();
         for (m, content, exp) in scns {
-            println!("--------------- {content}");
             parser.parse(content, m);
             let mut s = String::new();
             for stmt in &parser.stmts {
-                stmt.write(&mut s);
+                stmt.write(&mut s).unwrap();
             }
             assert_eq!(&s, exp)
         }

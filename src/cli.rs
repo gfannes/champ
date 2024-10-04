@@ -26,6 +26,7 @@ impl App {
         // Using &self.config.command complicates using &mut self later.
         // Copyng the command once does not impact performance.
         match self.config.command {
+            Command::None => {}
             Command::Config => {
                 println!("config: {:?}", self.config);
             }
@@ -38,7 +39,6 @@ impl App {
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
             }
-            Command::None => {}
             Command::Query => {
                 let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
 
@@ -107,6 +107,7 @@ impl App {
                         } else {
                             eprintln!("Could not find tree.filename");
                         }
+                        // &todo: replace with function
                         let line_nr = node.line_ix.unwrap_or(0) + 1;
                         if let Some((_, lines)) = filename_lines_s.last_mut() {
                             lines.push(line_nr);
@@ -133,6 +134,42 @@ impl App {
                     }
                     cmd.status().expect("Could not open files");
                 }
+            }
+            Command::Debug => {
+                let mut filename = std::path::PathBuf::new();
+
+                let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+                forest.each_node(|tree, node| {
+                    if node.ctx.is_empty() {
+                        return;
+                    }
+
+                    if let Some(fp) = &tree.filename {
+                        if fp != &filename {
+                            println!("{}", fp.display(),);
+                            filename = fp.clone();
+                        }
+                    } else {
+                        eprintln!("Could not find tree.filename");
+                    }
+
+                    // &todo: replace with function
+                    let line_nr = node.line_ix.unwrap_or(0) + 1;
+                    print!("{line_nr}\t");
+
+                    let print = |caption, kvs: &[amp::KeyValue]| {
+                        if !kvs.is_empty() {
+                            print!(" [{caption}]");
+                            // kvs.iter().for_each(|kv| print!("({})", kv.to_string()));
+                            kvs.iter().for_each(|kv| print!("({:?})", &kv));
+                        }
+                    };
+                    print("org", &node.org);
+                    print("ctx", &node.ctx);
+                    print("agg", &node.agg);
+
+                    println!("");
+                });
             }
         }
 
@@ -161,6 +198,7 @@ enum Command {
     Query,
     Search,
     List,
+    Debug,
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +278,8 @@ impl Config {
             Command::Search
         } else if cli_args.list {
             Command::List
+        } else if cli_args.debug {
+            Command::Debug
         } else {
             Command::None
         };

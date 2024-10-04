@@ -37,22 +37,22 @@ impl Index {
     }
 }
 
-type Path__Index = collections::HashMap<data::path::Path, Index>;
+type Path2Index = collections::HashMap<data::path::Path, Index>;
 pub struct Indices {
-    path__index: Path__Index,
+    path2index: Path2Index,
 }
 
 impl Indices {
     pub fn new() -> Indices {
         Indices {
-            path__index: Path__Index::new(),
+            path2index: Path2Index::new(),
         }
     }
     pub fn goc(&mut self, path: &data::Path) -> &mut Index {
-        if !self.path__index.contains_key(path) {
-            self.path__index.insert(path.clone(), Index::new());
+        if !self.path2index.contains_key(path) {
+            self.path2index.insert(path.clone(), Index::new());
         }
-        self.path__index
+        self.path2index
             .get_mut(path)
             .expect("Index should be present")
     }

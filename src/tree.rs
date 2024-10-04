@@ -103,10 +103,14 @@ impl Forest {
         }
     }
 
-    pub fn each_node_mut(&mut self, mut cb: impl FnMut(&mut Node, &str, &Format) -> ()) {
+    pub fn each_node_mut(
+        &mut self,
+        mut cb: impl FnMut(&mut Node, &str, &Format, &Option<path::PathBuf>) -> util::Result<()>,
+    ) -> util::Result<()> {
         for tree in &mut self.trees {
-            tree.each_node_mut(&mut cb);
+            tree.each_node_mut(&mut cb)?;
         }
+        Ok(())
     }
 
     pub fn each_tree_mut(&mut self, mut cb: impl FnMut(&mut Tree)) {
@@ -184,13 +188,15 @@ impl Tree {
         }
     }
 
-    pub fn each_node_mut(&mut self, cb: &mut impl FnMut(&mut Node, &str, &Format) -> ()) {
-        let content = self.content.to_owned();
-        let format = self.format.clone();
-
+    pub fn each_node_mut(
+        &mut self,
+        cb: &mut impl FnMut(&mut Node, &str, &Format, &Option<path::PathBuf>) -> util::Result<()>,
+    ) -> util::Result<()> {
         for node in &mut self.nodes {
-            cb(node, &content, &format);
+            cb(node, &self.content, &self.format, &self.filename)?;
         }
+
+        Ok(())
     }
 
     pub fn root(&mut self) -> &mut Node {
@@ -261,9 +267,6 @@ impl Tree {
 pub type Range = std::ops::Range<usize>;
 
 #[derive(Debug)]
-pub enum Attribute {}
-
-#[derive(Debug)]
 pub enum Aggregate {}
 
 impl Part {
@@ -276,9 +279,9 @@ impl Part {
 }
 
 impl Node {
-    pub fn print(&self, content: &str, format: &Format) {
-        if let Some(line_nr) = self.line_ix {
-            print!("{:<5}", line_nr);
+    pub fn print(&self, content: &str, _format: &Format) {
+        if let Some(line_ix) = self.line_ix {
+            print!("{:<5}", line_ix + 1);
         } else {
             print!(".....");
         }

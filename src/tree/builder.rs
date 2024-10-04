@@ -28,7 +28,7 @@ impl Builder {
         let mut forest = tree::Forest::new();
         self.add_to_forest_recursive_(&path::Path::root(), 0, fs_forest, &mut forest)?;
 
-        forest.each_node_mut(|node, content, format| {
+        forest.each_node_mut(|node, content, format, filename| {
             let m = match format {
                 Format::Markdown => Some(amp::Match::Everywhere),
                 Format::SourceCode { comment: _ } => Some(amp::Match::OnlyStart),
@@ -38,19 +38,49 @@ impl Builder {
             if let Some(m) = m {
                 for part in &node.parts {
                     if part.kind == tree::Kind::Meta {
-                        if let Some(part_content) = content.get(part.range.clone()) {
+                        let mut push_kv = || -> util::Result<()> {
+                            let part_content = content
+                                .get(part.range.clone())
+                                .ok_or_else(|| util::Error::create("Failed to get part content"))?;
+
                             self.amp_parser.parse(part_content, &m);
+
                             for stmt in &self.amp_parser.stmts {
-                                if let amp::Kind::Amp(kv) = &stmt.kind {
-                                    node.org.push(kv.clone());
+                                use amp::*;
+                                if let Kind::Amp(kv) = &stmt.kind {
+                                    let key = kv.key.clone();
+                                    let value = match &kv.value {
+                                        Value::Tag(tag) => {
+                                            let tag = tag.as_str();
+                                            match key.as_str() {
+                                                "proj" => Value::Path(value::Path::try_from(tag)?),
+                                                "prio" => Value::Prio(value::Prio::try_from(tag)?),
+                                                "deadline" => {
+                                                    Value::Date(value::Date::try_from(tag)?)
+                                                }
+                                                _ => kv.value.clone(),
+                                            }
+                                        }
+                                        _ => Value::None,
+                                    };
+                                    node.org.push(KeyValue { key, value });
                                 }
                             }
-                        } else {
-                            eprintln!(
-                                "Failed to get part_content for {:?} from {}",
-                                &part.range,
-                                content.len()
-                            );
+
+                            Ok(())
+                        };
+                        if let Err(err) = push_kv() {
+                            if let Some(filename) = filename {
+                                eprintln!(
+                                    "Failed to process KV for '{}:{}': {}",
+                                    filename.display(),
+                                    // &todo: replace with function
+                                    node.line_ix.unwrap_or(0) + 1,
+                                    &err
+                                );
+                            } else {
+                                eprintln!("Failed to process KV: {}", &err);
+                            }
                         }
                     }
                 }
@@ -58,7 +88,9 @@ impl Builder {
 
             node.ctx = node.org.clone();
             node.agg = node.org.clone();
-        });
+
+            Ok(())
+        })?;
 
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {

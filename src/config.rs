@@ -44,6 +44,10 @@ pub struct CliArgs {
     #[arg(short = 'l', long, default_value_t = false)]
     pub list: bool,
 
+    /// Debug view
+    #[arg(short = 'd', long, default_value_t = false)]
+    pub debug: bool,
+
     #[clap(value_parser)]
     pub rest: Vec<String>,
 }
