@@ -1,6 +1,6 @@
-use crate::{config, ctrl, data, fail, tui, util};
+use crate::{config, ctrl, data, tui, util};
 pub use crossterm::event::{Event, KeyCode};
-use std::{env, ffi, path, process};
+use std::{env, ffi, process};
 
 mod layout;
 mod list;

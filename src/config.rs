@@ -1,5 +1,5 @@
 use crate::{fail, util};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use dirs;
 use serde;
 use std::path;
