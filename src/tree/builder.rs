@@ -38,7 +38,7 @@ impl Builder {
             if let Some(m) = m {
                 for part in &node.parts {
                     if part.kind == tree::Kind::Meta {
-                        let mut push_kv = || -> util::Result<()> {
+                        let mut push_kv_lmbd = || -> util::Result<()> {
                             let part_content = content
                                 .get(part.range.clone())
                                 .ok_or_else(|| util::Error::create("Failed to get part content"))?;
@@ -69,18 +69,14 @@ impl Builder {
 
                             Ok(())
                         };
-                        if let Err(err) = push_kv() {
-                            if let Some(filename) = filename {
-                                eprintln!(
-                                    "Failed to process KV for '{}:{}': {}",
-                                    filename.display(),
-                                    // &todo: replace with function
-                                    node.line_ix.unwrap_or(0) + 1,
-                                    &err
-                                );
-                            } else {
-                                eprintln!("Failed to process KV: {}", &err);
-                            }
+                        if let Err(err) = push_kv_lmbd() {
+                            eprintln!(
+                                "Failed to process KV for '{}:{}': {}",
+                                filename.display(),
+                                // &todo: replace with function
+                                node.line_ix.unwrap_or(0) + 1,
+                                &err
+                            );
                         }
                     }
                 }
@@ -93,6 +89,17 @@ impl Builder {
         })?;
 
         forest.each_tree_mut(|tree| {
+            // Indicate each Tree is in State::OrgNode
+            // - node.org is init
+            tree.state = tree::State::OrgNode;
+        });
+
+        forest.each_tree_mut(|tree| {
+            tree.state = tree::State::OrgTree;
+        });
+
+        // Compute context for each Node
+        forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
                 for kv in &src.org {
                     // We only push data when there is nothing with the same key
@@ -101,6 +108,10 @@ impl Builder {
                     }
                 }
             });
+        });
+
+        // Aggregate data over the Forest
+        forest.each_tree_mut(|tree| {
             tree.leaf_to_root(|src, dst| {
                 for md in &dst.agg {
                     // We collect everything that is different
@@ -134,7 +145,7 @@ impl Builder {
             .unwrap_or(Format::Unknown);
 
         let mut tree = self.create_tree_from_str(&content, format);
-        tree.filename = Some(path.into());
+        tree.filename = path.into();
 
         Ok(tree)
     }

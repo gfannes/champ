@@ -1,4 +1,5 @@
 use crate::{amp, config, fail, fs, path, tree, util};
+use tracing::{info, span, Level};
 
 pub struct App {
     config: Config,
@@ -96,16 +97,12 @@ impl App {
                     }
 
                     if do_print {
-                        if let Some(filename) = &tree.filename {
-                            if !filename_lines_s
-                                .last()
-                                .is_some_and(|(last_filename, _)| last_filename == filename)
-                            {
-                                println!("{}", filename.display(),);
-                                filename_lines_s.push((filename.clone(), Vec::new()));
-                            }
-                        } else {
-                            eprintln!("Could not find tree.filename");
+                        if !filename_lines_s
+                            .last()
+                            .is_some_and(|(last_filename, _)| last_filename == &tree.filename)
+                        {
+                            println!("{}", tree.filename.display());
+                            filename_lines_s.push((tree.filename.clone(), Vec::new()));
                         }
                         // &todo: replace with function
                         let line_nr = node.line_ix.unwrap_or(0) + 1;
@@ -144,13 +141,9 @@ impl App {
                         return;
                     }
 
-                    if let Some(fp) = &tree.filename {
-                        if fp != &filename {
-                            println!("{}", fp.display(),);
-                            filename = fp.clone();
-                        }
-                    } else {
-                        eprintln!("Could not find tree.filename");
+                    if &tree.filename != &filename {
+                        println!("{}", tree.filename.display(),);
+                        filename = tree.filename.clone();
                     }
 
                     // &todo: replace with function
@@ -212,6 +205,10 @@ struct Config {
 
 impl Config {
     fn load(cli_args: config::CliArgs) -> util::Result<Config> {
+        let span = span!(Level::INFO, "Config.load");
+        let _s = span.enter();
+        info!("Some info");
+
         let global = config::Global::load(&cli_args)?;
 
         let mut forest_opt = None;

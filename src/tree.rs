@@ -25,9 +25,24 @@ pub struct Tree {
     pub ix: usize,
     pub root_ix: usize,
     pub nodes: Vec<Node>,
-    pub filename: Option<path::PathBuf>,
+    pub filename: path::PathBuf,
     pub format: Format,
     pub content: String,
+    state: State,
+}
+
+#[derive(Debug)]
+enum State {
+    None,
+    OrgNode,
+    OrgTree,
+    CtxTree,
+    CtxNode,
+}
+impl Default for State {
+    fn default() -> State {
+        State::None
+    }
 }
 
 // &next: provide amp items
@@ -81,12 +96,10 @@ impl Forest {
             self.roots.push(ix);
         }
 
-        if let Some(filename) = &tree.filename {
-            if self.files.contains_key(filename) {
-                fail!("Forest already contains '{}'", filename.display());
-            }
-            self.files.insert(filename.clone(), ix);
+        if self.files.contains_key(&tree.filename) {
+            fail!("Forest already contains '{}'", tree.filename.display());
         }
+        self.files.insert(tree.filename.clone(), ix);
 
         tree.ix = self.trees.len();
         for node in &mut tree.nodes {
@@ -105,7 +118,7 @@ impl Forest {
 
     pub fn each_node_mut(
         &mut self,
-        mut cb: impl FnMut(&mut Node, &str, &Format, &Option<path::PathBuf>) -> util::Result<()>,
+        mut cb: impl FnMut(&mut Node, &str, &Format, &path::PathBuf) -> util::Result<()>,
     ) -> util::Result<()> {
         for tree in &mut self.trees {
             tree.each_node_mut(&mut cb)?;
@@ -167,7 +180,7 @@ impl Tree {
 
             root.parts.push(Part::new(&(start..end), Kind::Data));
         }
-        tree.filename = Some(path.into());
+        tree.filename = path.into();
         tree.format = Format::Folder;
         tree
     }
@@ -190,7 +203,7 @@ impl Tree {
 
     pub fn each_node_mut(
         &mut self,
-        cb: &mut impl FnMut(&mut Node, &str, &Format, &Option<path::PathBuf>) -> util::Result<()>,
+        cb: &mut impl FnMut(&mut Node, &str, &Format, &path::PathBuf) -> util::Result<()>,
     ) -> util::Result<()> {
         for node in &mut self.nodes {
             cb(node, &self.content, &self.format, &self.filename)?;
@@ -244,9 +257,7 @@ impl Tree {
         match self.format {
             Format::Folder => {}
             _ => {
-                if let Some(filename) = &self.filename {
-                    println!("  Tree {:?} {}", self.format, filename.display());
-                }
+                println!("  Tree {:?} {}", self.format, self.filename.display());
                 let n = match self.format {
                     Format::Folder => usize::MAX,
                     _ => 4,

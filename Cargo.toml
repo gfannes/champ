@@ -6,6 +6,8 @@ authors = ["Geert Fannes <geert.fannes@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+default-run = "ch"
+
 [[bin]]
 name = "champ"
 path = "src/main.rs"
@@ -24,6 +26,8 @@ ignore = "0.4.22"
 log = "0.4.21"
 serde = { version = "1.0.203", features = ["derive"] }
 toml = "0.8.14"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 unicode-width = "0.1.10"
 
 [profile.release-with-debug]
