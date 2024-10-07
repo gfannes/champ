@@ -1,7 +1,8 @@
 pub mod value;
 
 use crate::{lex, util};
-use std::fmt::Write;
+use std::{collections, fmt::Write};
+use tracing::warn;
 
 pub type Key = String;
 pub type Value = value::Value;
@@ -10,6 +11,73 @@ pub type Value = value::Value;
 pub struct KeyValue {
     pub key: Key,
     pub value: Value,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct KVSet {
+    kvs: collections::BTreeMap<Key, Value>,
+}
+impl KVSet {
+    pub fn new() -> KVSet {
+        KVSet::default()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.kvs.is_empty()
+    }
+    pub fn has(&self, needle: &KeyValue) -> bool {
+        for (key, value) in &self.kvs {
+            if key == &needle.key {
+                match &needle.value {
+                    // None works like a wildcard
+                    Value::None => return true,
+                    // Tag matches an string representation
+                    Value::Tag(tag) => return &value.to_string() == tag,
+                    _ => return value == &needle.value,
+                }
+            }
+        }
+        false
+    }
+    pub fn for_each(&self, mut cb: impl FnMut(&Key, &Value) -> ()) {
+        for (key, value) in &self.kvs {
+            cb(key, value);
+        }
+    }
+    pub fn insert(&mut self, key: &Key, value: &Value) -> Option<Value> {
+        self.kvs.insert(key.clone(), value.clone())
+    }
+    pub fn merge(&mut self, rhs: &KVSet) {
+        rhs.for_each(|k, v| {
+            if let Some(orig_v) = self.insert(k, v) {
+                warn!(
+                    "Overwriting value {} for {} with {}",
+                    orig_v.to_string(),
+                    k,
+                    v.to_string()
+                );
+            }
+        })
+    }
+    pub fn merge_unless_present(&mut self, rhs: &KVSet) {
+        rhs.for_each(|k, v| {
+            if !self.kvs.contains_key(k) {
+                self.insert(k, v);
+            }
+        })
+    }
+}
+impl ToString for KVSet {
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        self.for_each(|k, v| {
+            s.push_str(" ");
+            s.push_str(k);
+            if v != &Value::None {
+                write!(&mut s, "={}", v.to_string()).unwrap();
+            }
+        });
+        s
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Default)]

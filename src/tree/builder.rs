@@ -68,7 +68,7 @@ impl Builder {
                                         }
                                         _ => Value::None,
                                     };
-                                    node.org.push(KeyValue { key, value });
+                                    node.org.insert(&key, &value);
                                 }
                             }
 
@@ -107,20 +107,35 @@ impl Builder {
             let _g = span.enter();
             for tree_ix in 0..forest.trees.len() {
                 {
-                    let tree = &forest.trees[tree_ix];
-                    for link_ix in &tree.root().links {
-                        if let Some(link) = forest.trees.get(*link_ix) {
-                            if link
-                                .filename
-                                .file_name()
-                                .and_then(|file_name| {
-                                    Some(file_name.to_string_lossy() == "_amp.md")
-                                })
-                                .unwrap_or(false)
-                            {
-                                trace!("Found Tree metadata for '{}'", tree.filename.display());
+                    let mut kvs_opt = None;
+
+                    {
+                        let tree = &forest.trees[tree_ix];
+                        // For a Folder, the Files are indicated by the links on the root Node
+                        for link_ix in &tree.root().links {
+                            if let Some(link) = forest.trees.get(*link_ix) {
+                                if link
+                                    .filename
+                                    .file_name()
+                                    .and_then(|file_name| {
+                                        Some(file_name.to_string_lossy() == "_amp.md")
+                                    })
+                                    .unwrap_or(false)
+                                {
+                                    trace!("Found Tree metadata for '{}'", tree.filename.display());
+                                    let mut kvs = amp::KVSet::new();
+                                    for node_ix in 0..link.nodes.len() {
+                                        let node = &link.nodes[node_ix];
+                                        kvs.merge(&node.org);
+                                    }
+                                    kvs_opt = Some(kvs);
+                                }
                             }
                         }
+                    }
+
+                    if let Some(kvs) = kvs_opt {
+                        forest.trees[tree_ix].org = kvs;
                     }
                 }
             }
@@ -130,29 +145,48 @@ impl Builder {
             });
         }
 
-        // Compute context for each Node
-        forest.each_tree_mut(|tree| {
-            tree.root_to_leaf(|src, dst| {
-                for kv in &src.org {
-                    // We only push data when there is nothing with the same key
-                    if dst.ctx.iter().all(|e| e.key != kv.key) {
-                        dst.ctx.push(kv.clone());
+        // Push Tree.org into Tree.ctx
+        {
+            for tree_ix in 0..forest.trees.len() {
+                let tree = &forest.trees[tree_ix];
+                if !tree.org.is_empty() {
+                    let org = tree.org.clone();
+                    let links = tree.root().links.clone();
+
+                    for link_ix in links {
+                        if let Some(link) = forest.trees.get_mut(link_ix) {
+                            link.ctx.merge(&org);
+                        }
                     }
                 }
+            }
+        }
+
+        // &todo: use Root.ctx directly iso below copy
+        // Copy Tree.ctx into Root.ctx
+        forest.each_tree_mut(|tree| {
+            tree.root_mut().ctx = tree.ctx.clone();
+        });
+
+        // Compute context for each Node, starting with Tree.ctx
+        forest.each_tree_mut(|tree| {
+            tree.root_to_leaf(|src, dst| {
+                dst.ctx.merge(&dst.org);
+                dst.ctx.merge_unless_present(&src.ctx);
             });
         });
 
-        // Aggregate data over the Forest
-        forest.each_tree_mut(|tree| {
-            tree.leaf_to_root(|src, dst| {
-                for md in &dst.agg {
-                    // We collect everything that is different
-                    if src.agg.iter().all(|m| m != md) {
-                        src.agg.push(md.clone());
-                    }
-                }
-            });
-        });
+        // // Aggregate data over the Forest
+        // forest.each_tree_mut(|tree| {
+        //     tree.leaf_to_root(|src, dst| {
+        //         for md in &dst.agg {
+        //             // We collect everything that is different
+        //             if src.agg.iter().all(|m| m != md) {
+        //                 src.agg.push(md.clone());
+        //             }
+        //         }
+        //     });
+        // });
 
         Ok(forest)
     }

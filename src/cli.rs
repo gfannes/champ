@@ -1,5 +1,5 @@
 use crate::{amp, config, fail, fs, path, tree, util};
-use tracing::{info, span, Level};
+use tracing::{info, span, trace, Level};
 
 pub struct App {
     config: Config,
@@ -41,6 +41,9 @@ impl App {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
             }
             Command::Query => {
+                let span = span!(Level::TRACE, "query");
+                let _g = span.enter();
+
                 let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
 
                 let needle: Option<amp::KeyValue>;
@@ -70,25 +73,16 @@ impl App {
                         needle = None;
                     }
                 }
+                trace!("needle: {:?}", needle);
+                trace!("constraints: {:?}", constraints);
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let has = |v: &Vec<amp::KeyValue>, needle: &amp::KeyValue| {
-                        v.iter()
-                            .filter(|&kv| {
-                                // needle.value works as a wildcard when set to None
-                                kv.key == needle.key
-                                    && (needle.value.is_none() || kv.value == needle.value)
-                            })
-                            .next()
-                            .is_some()
-                    };
-
                     let mut do_print;
                     if let Some(needle) = &needle {
-                        do_print = has(&node.org, needle);
+                        do_print = node.org.has(needle);
                         for constraint in &constraints {
-                            if !has(&node.ctx, constraint) {
+                            if !node.ctx.has(constraint) {
                                 do_print = false;
                             }
                         }
@@ -136,33 +130,36 @@ impl App {
                 let mut filename = std::path::PathBuf::new();
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
-                forest.each_node(|tree, node| {
-                    if node.ctx.is_empty() {
-                        return;
-                    }
+
+                for tree_ix in 0..forest.trees.len() {
+                    let tree = &forest.trees[tree_ix];
 
                     if &tree.filename != &filename {
-                        println!("{}", tree.filename.display(),);
+                        print!("{}", tree.filename.display());
+                        if !tree.org.is_empty() {
+                            print!(" org{}", tree.org.to_string());
+                        }
+                        if !tree.ctx.is_empty() {
+                            print!(" ctx{}", tree.ctx.to_string());
+                        }
+                        println!("");
                         filename = tree.filename.clone();
                     }
 
-                    // &todo: replace with function
-                    let line_nr = node.line_ix.unwrap_or(0) + 1;
-                    print!("{line_nr}\t");
+                    for node_ix in 0..tree.nodes.len() {
+                        let node = &tree.nodes[node_ix];
 
-                    let print = |caption, kvs: &[amp::KeyValue]| {
-                        if !kvs.is_empty() {
-                            print!(" [{caption}]");
-                            // kvs.iter().for_each(|kv| print!("({})", kv.to_string()));
-                            kvs.iter().for_each(|kv| print!("({:?})", &kv));
+                        let line_nr = node.line_ix.unwrap_or(0) + 1;
+                        print!("{line_nr}\t",);
+                        if !node.org.is_empty() {
+                            print!(" org{}", node.org.to_string(),);
                         }
-                    };
-                    print("org", &node.org);
-                    print("ctx", &node.ctx);
-                    print("agg", &node.agg);
-
-                    println!("");
-                });
+                        if !node.ctx.is_empty() {
+                            print!(" ctx{}", node.ctx.to_string(),);
+                        }
+                        println!("");
+                    }
+                }
             }
         }
 

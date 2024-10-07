@@ -13,7 +13,7 @@ use std::{collections, path};
 #[derive(Default, Debug)]
 pub struct Forest {
     files: collections::BTreeMap<path::PathBuf, usize>,
-    trees: Vec<Tree>,
+    pub trees: Vec<Tree>,
     roots: Vec<usize>,
     names: Vec<String>,
 }
@@ -28,6 +28,9 @@ pub struct Tree {
     pub filename: path::PathBuf,
     pub format: Format,
     pub content: String,
+    // &todo: use root() to store this data instead
+    pub org: amp::KVSet,
+    pub ctx: amp::KVSet,
     state: State,
 }
 
@@ -50,9 +53,12 @@ impl Default for State {
 pub struct Node {
     pub parts: Vec<Part>,
     pub line_ix: Option<u64>,
-    pub org: Vec<amp::KeyValue>,
-    pub ctx: Vec<amp::KeyValue>,
-    pub agg: Vec<amp::KeyValue>,
+    // pub org: Vec<amp::KeyValue>,
+    // pub ctx: Vec<amp::KeyValue>,
+    // pub agg: Vec<amp::KeyValue>,
+    pub org: amp::KVSet,
+    pub ctx: amp::KVSet,
+    pub agg: amp::KVSet,
     aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
