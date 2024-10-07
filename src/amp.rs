@@ -1,8 +1,8 @@
 pub mod value;
 
-use crate::{lex, util};
+use crate::{lex, rubr::naft, util};
 use std::{collections, fmt::Write};
-use tracing::warn;
+use tracing::{trace, warn};
 
 pub type Key = String;
 pub type Value = value::Value;
@@ -15,7 +15,7 @@ pub struct KeyValue {
 
 #[derive(Default, Debug, Clone)]
 pub struct KVSet {
-    kvs: collections::BTreeMap<Key, Value>,
+    pub kvs: collections::BTreeMap<Key, Value>,
 }
 impl KVSet {
     pub fn new() -> KVSet {
@@ -30,53 +30,69 @@ impl KVSet {
                 match &needle.value {
                     // None works like a wildcard
                     Value::None => return true,
-                    // Tag matches an string representation
-                    Value::Tag(tag) => return &value.to_string() == tag,
+                    // Tag matches with end of the string representation
+                    Value::Tag(tag) => return value.to_string().ends_with(tag),
                     _ => return value == &needle.value,
                 }
             }
         }
         false
     }
-    pub fn for_each(&self, mut cb: impl FnMut(&Key, &Value) -> ()) {
+    pub fn for_each(
+        &self,
+        mut cb: impl FnMut(&Key, &Value) -> util::Result<()>,
+    ) -> util::Result<()> {
         for (key, value) in &self.kvs {
-            cb(key, value);
+            cb(key, value)?;
         }
+        Ok(())
     }
     pub fn insert(&mut self, key: &Key, value: &Value) -> Option<Value> {
         self.kvs.insert(key.clone(), value.clone())
     }
-    pub fn merge(&mut self, rhs: &KVSet) {
+    pub fn merge(&mut self, rhs: &KVSet) -> util::Result<()> {
+        trace!("Merging");
         rhs.for_each(|k, v| {
-            if let Some(orig_v) = self.insert(k, v) {
-                warn!(
-                    "Overwriting value {} for {} with {}",
-                    orig_v.to_string(),
-                    k,
-                    v.to_string()
-                );
+            if let Some(value) = self.kvs.get_mut(k) {
+                trace!("Calling set_ctx");
+                value.set_ctx(v)?;
+            } else {
+                self.kvs.insert(k.clone(), v.clone());
             }
-        })
+            Ok(())
+        })?;
+        Ok(())
     }
-    pub fn merge_unless_present(&mut self, rhs: &KVSet) {
+    pub fn merge_unless_present(&mut self, rhs: &KVSet) -> util::Result<()> {
         rhs.for_each(|k, v| {
             if !self.kvs.contains_key(k) {
                 self.insert(k, v);
             }
-        })
+            Ok(())
+        })?;
+        Ok(())
     }
 }
-impl ToString for KVSet {
-    fn to_string(&self) -> String {
-        let mut s = String::new();
-        self.for_each(|k, v| {
-            s.push_str(" ");
-            s.push_str(k);
+impl std::fmt::Display for KVSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (k, v) in &self.kvs {
+            write!(f, " {k}")?;
             if v != &Value::None {
-                write!(&mut s, "={}", v.to_string()).unwrap();
+                write!(f, "={}", v)?;
             }
-        });
-        s
+        }
+        Ok(())
+    }
+}
+impl naft::ToNaft for KVSet {
+    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+        if !self.is_empty() {
+            let n = p.node("KVSet")?;
+            for (k, v) in &self.kvs {
+                n.attr(k, v)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -112,13 +128,14 @@ impl Default for Kind {
     }
 }
 
-impl ToString for KeyValue {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for KeyValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.value == Value::None {
-            format!("{}", &self.key)
+            write!(f, "{}", &self.key)?;
         } else {
-            format!("{}={}", &self.key, self.value.to_string())
+            write!(f, "{}={}", &self.key, &self.value)?;
         }
+        Ok(())
     }
 }
 
@@ -134,7 +151,7 @@ impl Stmt {
             }
             Kind::Amp(kv) => {
                 let w = |s: &mut String, kv: &KeyValue| -> util::Result<()> {
-                    write!(s, "{}", kv.to_string())?;
+                    write!(s, "{}", kv)?;
                     Ok(())
                 };
                 write!(s, "[")?;

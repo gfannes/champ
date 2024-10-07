@@ -2,7 +2,7 @@ pub mod builder;
 pub mod md;
 pub mod src;
 
-use crate::{amp, fail, util};
+use crate::{amp, fail, rubr::naft, util};
 use std::{collections, path};
 
 // Represents a subset of the filesystem, corresponding with a ignore.Tree
@@ -45,6 +45,19 @@ enum State {
 impl Default for State {
     fn default() -> State {
         State::None
+    }
+}
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            State::None => "None",
+            State::OrgNode => "OrgNode",
+            State::OrgTree => "OrgTree",
+            State::CtxTree => "CtxTree",
+            State::CtxNode => "CtxNode",
+        };
+        write!(f, "{s}")?;
+        Ok(())
     }
 }
 
@@ -132,10 +145,14 @@ impl Forest {
         Ok(())
     }
 
-    pub fn each_tree_mut(&mut self, mut cb: impl FnMut(&mut Tree)) {
+    pub fn each_tree_mut(
+        &mut self,
+        mut cb: impl FnMut(&mut Tree) -> util::Result<()>,
+    ) -> util::Result<()> {
         for tree in &mut self.trees {
-            cb(tree);
+            cb(tree)?;
         }
+        Ok(())
     }
 
     pub fn dfs(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
@@ -225,20 +242,29 @@ impl Tree {
         &mut self.nodes[self.root_ix]
     }
 
-    pub fn root_to_leaf(&mut self, mut cb: impl FnMut(&Node, &mut Node)) {
+    pub fn root_to_leaf(
+        &mut self,
+        mut cb: impl FnMut(&Node, &mut Node) -> util::Result<()>,
+    ) -> util::Result<()> {
         let (_, tail) = self.nodes.split_at_mut(self.root_ix);
-        Self::root_to_leaf_(self.root_ix, tail, &mut cb);
+        Self::root_to_leaf_(self.root_ix, tail, &mut cb)?;
+        Ok(())
     }
-    fn root_to_leaf_(src_ix: usize, src_rest: &mut [Node], cb: &mut impl FnMut(&Node, &mut Node)) {
+    fn root_to_leaf_(
+        src_ix: usize,
+        src_rest: &mut [Node],
+        cb: &mut impl FnMut(&Node, &mut Node) -> util::Result<()>,
+    ) -> util::Result<()> {
         // We assume that child links only have higher indices
         if let Some((src, rest)) = src_rest.split_first_mut() {
             for &dst_ix in &src.childs {
                 let diff = dst_ix - src_ix - 1;
                 let (_, tail) = rest.split_at_mut(diff);
                 cb(src, &mut tail[0]);
-                Self::root_to_leaf_(dst_ix, tail, cb);
+                Self::root_to_leaf_(dst_ix, tail, cb)?;
             }
         }
+        Ok(())
     }
 
     pub fn leaf_to_root(&mut self, mut cb: impl FnMut(&mut Node, &mut Node)) {
@@ -283,6 +309,21 @@ impl Tree {
         }
     }
 }
+impl naft::ToNaft for Tree {
+    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+        let n = p.node("Tree")?;
+        n.attr("ix", &self.ix)?;
+        n.attr("filename", &self.filename.display())?;
+        n.attr("state", &self.state)?;
+        self.org.to_naft(&n.name("org"));
+        self.ctx.to_naft(&n.name("ctx"));
+        for ix in 0..self.nodes.len() {
+            let node = &self.nodes[ix];
+            node.to_naft(&n);
+        }
+        Ok(())
+    }
+}
 
 pub type Range = std::ops::Range<usize>;
 
@@ -311,5 +352,16 @@ impl Node {
                 println!("{}", s);
             }
         }
+    }
+}
+
+impl naft::ToNaft for Node {
+    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+        let n = p.node("Node")?;
+        n.attr("line_nr", &(self.line_ix.unwrap_or(0) + 1))?;
+        self.org.to_naft(&n.name("org"));
+        self.ctx.to_naft(&n.name("ctx"));
+        self.agg.to_naft(&n.name("agg"));
+        Ok(())
     }
 }

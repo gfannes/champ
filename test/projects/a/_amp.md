@@ -1,1 +1,1 @@
-&proj=a
+&proj=/a

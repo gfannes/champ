@@ -97,6 +97,7 @@ impl Builder {
             // Indicate each Tree is in State::OrgNode
             // - node.org is init
             tree.state = tree::State::OrgNode;
+            Ok(())
         });
 
         // Populate tree.org with info from
@@ -126,7 +127,7 @@ impl Builder {
                                     let mut kvs = amp::KVSet::new();
                                     for node_ix in 0..link.nodes.len() {
                                         let node = &link.nodes[node_ix];
-                                        kvs.merge(&node.org);
+                                        kvs.merge(&node.org)?;
                                     }
                                     kvs_opt = Some(kvs);
                                 }
@@ -139,10 +140,12 @@ impl Builder {
                     }
                 }
             }
+            // Update state for each Tree
             forest.each_tree_mut(|tree| {
                 trace!("{}", tree.filename.display());
                 tree.state = tree::State::OrgTree;
-            });
+                Ok(())
+            })?;
         }
 
         // Push Tree.org into Tree.ctx
@@ -155,7 +158,7 @@ impl Builder {
 
                     for link_ix in links {
                         if let Some(link) = forest.trees.get_mut(link_ix) {
-                            link.ctx.merge(&org);
+                            link.ctx.merge(&org)?;
                         }
                     }
                 }
@@ -166,14 +169,17 @@ impl Builder {
         // Copy Tree.ctx into Root.ctx
         forest.each_tree_mut(|tree| {
             tree.root_mut().ctx = tree.ctx.clone();
+            Ok(())
         });
 
         // Compute context for each Node, starting with Tree.ctx
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
-                dst.ctx.merge(&dst.org);
-                dst.ctx.merge_unless_present(&src.ctx);
-            });
+                dst.ctx = dst.org.clone();
+                dst.ctx.merge(&src.ctx)?;
+                Ok(())
+            })?;
+            Ok(())
         });
 
         // // Aggregate data over the Forest

@@ -1,4 +1,4 @@
-use crate::{rubr::strange, util};
+use crate::{fail, rubr::strange, util};
 use std::fmt::Write;
 
 #[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
@@ -45,22 +45,46 @@ impl Value {
     pub fn is_none(&self) -> bool {
         self == &Value::None
     }
-}
-impl ToString for Value {
-    fn to_string(&self) -> String {
+    pub fn set_ctx(&mut self, rhs: &Value) -> util::Result<()> {
         match self {
-            Value::None => "".into(),
-            Value::Tag(s) => s.clone(),
-            Value::Path(p) => p.to_string(),
-            Value::Date(d) => d.to_string(),
-            Value::Duration(d) => d.to_string(),
-            Value::Prio(p) => p.to_string(),
+            Value::None => match rhs {
+                Value::None => {}
+                _ => fail!("Coerce error"),
+            },
+            Value::Path(this) => match rhs {
+                Value::Path(rhs) => this.set_ctx(rhs),
+                _ => fail!("Coerce error"),
+            },
+            Value::Date(this) => match rhs {
+                Value::Date(rhs) => this.set_ctx(rhs),
+                _ => fail!("Coerce error"),
+            },
+            Value::Duration(this) => match rhs {
+                Value::Duration(rhs) => this.set_ctx(rhs),
+                _ => fail!("Coerce error"),
+            },
+            _ => fail!("Coerce error"),
         }
+        Ok(())
     }
 }
 impl Default for Value {
     fn default() -> Value {
         Value::None
+    }
+}
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::None => {}
+            Value::Tag(s) => write!(f, "{s}")?,
+            Value::Path(p) => write!(f, "{p}")?,
+            Value::Date(d) => write!(f, "{d}")?,
+            Value::Duration(d) => write!(f, "{d}")?,
+            Value::Prio(p) => write!(f, "{p}")?,
+            _ => {}
+        }
+        Ok(())
     }
 }
 
@@ -102,25 +126,24 @@ impl TryFrom<&str> for Path {
         Ok(Path::new(absolute, &parts))
     }
 }
-impl ToString for Path {
-    fn to_string(&self) -> String {
-        let mut ret = String::new();
-
+impl std::fmt::Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut do_add_delim = self.absolute;
-        let mut add_delim = |s: &mut String, arm: bool| {
+        let mut add_delim = |f: &mut std::fmt::Formatter<'_>, arm: bool| {
             if do_add_delim {
-                s.push_str("/");
+                write!(f, "/")?;
             }
             do_add_delim = arm;
+            Ok(())
         };
 
-        add_delim(&mut ret, false);
+        add_delim(f, false)?;
         for part in self.parts.iter() {
-            add_delim(&mut ret, true);
-            ret.push_str(part);
+            add_delim(f, true)?;
+            write!(f, "{part}")?;
         }
 
-        ret
+        Ok(())
     }
 }
 
@@ -162,9 +185,10 @@ impl TryFrom<&str> for Date {
         Ok(Date { year, month, day })
     }
 }
-impl ToString for Date {
-    fn to_string(&self) -> String {
-        format!("{:.4}{:02.2}{:02.2}", self.year, self.month, self.day)
+impl std::fmt::Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.4}{:02.2}{:02.2}", self.year, self.month, self.day)?;
+        Ok(())
     }
 }
 
@@ -211,14 +235,13 @@ impl TryFrom<&str> for Duration {
         Ok(Duration { minutes })
     }
 }
-impl ToString for Duration {
-    fn to_string(&self) -> String {
-        let mut ret = String::new();
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut m = self.minutes;
         let mut cb = |div: u32, suffix: char| {
             let n = m / div;
             if n > 0 {
-                write!(&mut ret, "{n}{suffix}").unwrap();
+                write!(f, "{n}{suffix}").unwrap();
                 m -= n * div;
             }
         };
@@ -226,7 +249,7 @@ impl ToString for Duration {
         cb(60 * 8, 'd');
         cb(60, 'h');
         cb(1, 'm');
-        ret
+        Ok(())
     }
 }
 
@@ -268,9 +291,8 @@ impl TryFrom<&str> for Prio {
         Ok(Prio::new(major, minor))
     }
 }
-impl ToString for Prio {
-    fn to_string(&self) -> String {
-        let mut ret = String::new();
+impl std::fmt::Display for Prio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(major) = self.major {
             let ch: char;
             if major % 2 == 0 {
@@ -278,10 +300,10 @@ impl ToString for Prio {
             } else {
                 ch = ('a' as u8 + (major / 2) as u8) as char;
             }
-            write!(&mut ret, "{ch}").unwrap();
+            write!(f, "{ch}").unwrap();
         }
-        write!(&mut ret, "{}", self.minor).unwrap();
-        ret
+        write!(f, "{}", self.minor).unwrap();
+        Ok(())
     }
 }
 

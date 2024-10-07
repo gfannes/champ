@@ -1,4 +1,5 @@
-use crate::{amp, config, fail, fs, path, tree, util};
+use crate::{amp, config, fail, fs, path, rubr::naft, rubr::naft::ToNaft, tree, util};
+use std::io::Write;
 use tracing::{info, span, trace, Level};
 
 pub struct App {
@@ -131,34 +132,13 @@ impl App {
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
 
+                let mut out = naft::Node::new(std::io::stdout());
+
                 for tree_ix in 0..forest.trees.len() {
                     let tree = &forest.trees[tree_ix];
 
-                    if &tree.filename != &filename {
-                        print!("{}", tree.filename.display());
-                        if !tree.org.is_empty() {
-                            print!(" org{}", tree.org.to_string());
-                        }
-                        if !tree.ctx.is_empty() {
-                            print!(" ctx{}", tree.ctx.to_string());
-                        }
-                        println!("");
-                        filename = tree.filename.clone();
-                    }
-
-                    for node_ix in 0..tree.nodes.len() {
-                        let node = &tree.nodes[node_ix];
-
-                        let line_nr = node.line_ix.unwrap_or(0) + 1;
-                        print!("{line_nr}\t",);
-                        if !node.org.is_empty() {
-                            print!(" org{}", node.org.to_string(),);
-                        }
-                        if !node.ctx.is_empty() {
-                            print!(" ctx{}", node.ctx.to_string(),);
-                        }
-                        println!("");
-                    }
+                    tree.to_naft(&mut out)?;
+                    write!(&mut out, "\n")?;
                 }
             }
         }
