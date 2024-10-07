@@ -1,5 +1,6 @@
 use crate::{amp, fs, lex, path, tree, tree::md, tree::src, util};
 use std::collections;
+use tracing::{span, trace, Level};
 
 type Forest = tree::Forest;
 type Tree = tree::Tree;
@@ -29,6 +30,10 @@ impl Builder {
         self.add_to_forest_recursive_(&path::Path::root(), 0, fs_forest, &mut forest)?;
 
         forest.each_node_mut(|node, content, format, filename| {
+            let span = span!(Level::TRACE, "parse");
+            let _g = span.enter();
+            trace!("{}:{}", filename.display(), node.line_ix.unwrap_or(0) + 1,);
+
             let m = match format {
                 Format::Markdown => Some(amp::Match::Everywhere),
                 Format::SourceCode { comment: _ } => Some(amp::Match::OnlyStart),
@@ -94,9 +99,36 @@ impl Builder {
             tree.state = tree::State::OrgNode;
         });
 
-        forest.each_tree_mut(|tree| {
-            tree.state = tree::State::OrgTree;
-        });
+        // Populate tree.org with info from
+        // - _amp.md for Folders
+        // - tree.filename for Files
+        {
+            let span = span!(Level::TRACE, "OrgTree");
+            let _g = span.enter();
+            for tree_ix in 0..forest.trees.len() {
+                {
+                    let tree = &forest.trees[tree_ix];
+                    for link_ix in &tree.root().links {
+                        if let Some(link) = forest.trees.get(*link_ix) {
+                            if link
+                                .filename
+                                .file_name()
+                                .and_then(|file_name| {
+                                    Some(file_name.to_string_lossy() == "_amp.md")
+                                })
+                                .unwrap_or(false)
+                            {
+                                trace!("Found Tree metadata for '{}'", tree.filename.display());
+                            }
+                        }
+                    }
+                }
+            }
+            forest.each_tree_mut(|tree| {
+                trace!("{}", tree.filename.display());
+                tree.state = tree::State::OrgTree;
+            });
+        }
 
         // Compute context for each Node
         forest.each_tree_mut(|tree| {
@@ -247,29 +279,36 @@ impl Builder {
         fs_forest: &mut fs::Forest,
         forest: &mut tree::Forest,
     ) -> util::Result<Option<usize>> {
+        let span = span!(Level::TRACE, "forest");
+        let _g = span.enter();
+
         let tree_ix = match parent.fs_path()? {
             path::FsPath::Folder(folder) => {
+                trace!("Loading folder '{}'", folder.display());
                 let mut tree = tree::Tree::folder(&folder);
                 for child in fs_forest.list(parent)? {
                     if let Some(tree_ix) =
                         self.add_to_forest_recursive_(&child, level + 1, fs_forest, forest)?
                     {
-                        tree.root().links.push(tree_ix);
+                        tree.root_mut().links.push(tree_ix);
                     }
                 }
                 Some(forest.add(tree, level)?)
             }
-            path::FsPath::File(fp) => match self.create_tree_from_path(&fp) {
-                Err(err) => {
-                    eprintln!(
-                        "Could not create tree.Tree from '{}': {}",
-                        fp.display(),
-                        err
-                    );
-                    None
+            path::FsPath::File(fp) => {
+                trace!("Loading file '{}'", fp.display());
+                match self.create_tree_from_path(&fp) {
+                    Err(err) => {
+                        eprintln!(
+                            "Could not create tree.Tree from '{}': {}",
+                            fp.display(),
+                            err
+                        );
+                        None
+                    }
+                    Ok(tree) => Some(forest.add(tree, level)?),
                 }
-                Ok(tree) => Some(forest.add(tree, level)?),
-            },
+            }
         };
         Ok(tree_ix)
     }

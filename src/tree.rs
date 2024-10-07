@@ -212,7 +212,10 @@ impl Tree {
         Ok(())
     }
 
-    pub fn root(&mut self) -> &mut Node {
+    pub fn root(&self) -> &Node {
+        &self.nodes[self.root_ix]
+    }
+    pub fn root_mut(&mut self) -> &mut Node {
         &mut self.nodes[self.root_ix]
     }
 
