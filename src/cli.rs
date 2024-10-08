@@ -21,8 +21,8 @@ impl App {
     }
 
     pub fn run(&mut self) -> util::Result<()> {
-        if let Some(forest) = &self.config.forest {
-            self.fs_forest.set_forest(forest.into());
+        for grove in &self.config.groves {
+            self.fs_forest.add_grove(grove.into());
         }
 
         // Using &self.config.command complicates using &mut self later.
@@ -177,7 +177,7 @@ struct Config {
     command: Command,
     do_open: bool,
     args: Vec<String>,
-    forest: Option<config::Forest>,
+    groves: Vec<config::Grove>,
 }
 
 impl Config {
@@ -188,62 +188,27 @@ impl Config {
 
         let global = config::Global::load(&cli_args)?;
 
-        let mut forest_opt = None;
-        if let Some(forest_str) = &cli_args.forest {
-            for forest in &global.forest {
-                if &forest.name == forest_str {
-                    forest_opt = Some(forest.clone());
+        let mut groves = Vec::new();
+        {
+            for grove_str in &cli_args.grove {
+                if let Some(grove) = global.grove.iter().find(|grove| &grove.name == grove_str) {
+                    info!("Found grove {:?}", grove);
+                    groves.push(grove.clone());
+                } else {
+                    fail!("Unknown grove '{}'", grove_str);
                 }
             }
-            match &forest_opt {
-                Some(forest) => {
-                    println!("Using forest {:?}", forest);
-                }
-                None => {
-                    fail!("Unknown forest '{}'", forest_str);
-                }
+
+            for root in &cli_args.root {
+                groves.push(config::Grove {
+                    name: "<root>".into(),
+                    path: fs::expand_path(root)?,
+                    hidden: !cli_args.hidden,
+                    ignore: !cli_args.ignored,
+                    include: Vec::new(),
+                    max_size: None,
+                });
             }
-        } else if let Some(root_pb) = &cli_args.root {
-            let mut root_expanded = std::path::PathBuf::new();
-            let mut first = true;
-            for component in root_pb.components() {
-                println!("component: {:?}", &component);
-                match component {
-                    std::path::Component::Prefix(prefix) => {
-                        root_expanded.push(prefix.as_os_str());
-                        first = false;
-                    }
-                    std::path::Component::RootDir => {
-                        root_expanded.push("/");
-                        first = false;
-                    }
-                    std::path::Component::CurDir => {
-                        if first {
-                            root_expanded.push(std::env::current_dir()?);
-                            first = false;
-                        }
-                    }
-                    std::path::Component::Normal(normal) => {
-                        if first {
-                            root_expanded.push(std::env::current_dir()?);
-                            first = false;
-                        }
-                        root_expanded.push(normal);
-                    }
-                    std::path::Component::ParentDir => {
-                        fail!("No support for '..' in root dir yet");
-                    }
-                }
-            }
-            println!("root_expanded: {:?}", &root_expanded);
-            forest_opt = Some(config::Forest {
-                name: "<root>".into(),
-                path: root_expanded,
-                hidden: !cli_args.hidden,
-                ignore: !cli_args.ignored,
-                include: Vec::new(),
-                max_size: None,
-            });
         }
 
         let command = if cli_args.query {
@@ -263,7 +228,7 @@ impl Config {
             command,
             do_open: cli_args.open,
             args: cli_args.rest.clone(),
-            forest: forest_opt,
+            groves,
         };
 
         Ok(config)

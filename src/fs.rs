@@ -1,7 +1,8 @@
 // Annotation Metadata Protocol
 
-use crate::{config, ignore, path, util};
+use crate::{config, fail, ignore, path, util};
 use std::{ffi, fs};
+use tracing::trace;
 
 pub struct Node {
     path: path::Path,
@@ -17,15 +18,17 @@ impl Node {
 }
 
 #[derive(Debug)]
-pub struct ForestSpec {
+pub struct GroveSpec {
     base: path::Path,
     pub hidden: bool,
     pub ignore: bool,
     // We assume a limited amount of extensions (less than 64): linear search is faster than using a BTreeSet
     pub include: Vec<ffi::OsString>,
+    // &todo: enable this for multi-spec forest
     pub max_size: Option<usize>,
 }
-impl ForestSpec {
+
+impl GroveSpec {
     fn call(&self, path: &path::Path) -> bool {
         let includes_base = self.base.include(path) || path.include(&self.base);
         if !includes_base {
@@ -43,47 +46,41 @@ impl ForestSpec {
         }
     }
 }
-impl From<&config::Forest> for ForestSpec {
-    fn from(config_forest: &config::Forest) -> ForestSpec {
-        ForestSpec {
-            base: path::Path::folder(&config_forest.path),
-            hidden: config_forest.hidden,
-            ignore: config_forest.ignore,
-            include: config_forest
+
+impl From<&config::Grove> for GroveSpec {
+    fn from(config_grove: &config::Grove) -> GroveSpec {
+        GroveSpec {
+            base: path::Path::folder(&config_grove.path),
+            hidden: config_grove.hidden,
+            ignore: config_grove.ignore,
+            include: config_grove
                 .include
                 .iter()
                 .map(ffi::OsString::from)
                 .collect(),
-            max_size: config_forest.max_size,
+            max_size: config_grove.max_size,
         }
     }
 }
 
 pub struct Forest {
-    spec: ForestSpec,
+    specs: Vec<GroveSpec>,
     ignore_tree: ignore::Tree,
 }
 
 impl Forest {
     pub fn new() -> Forest {
         Forest {
-            spec: ForestSpec {
-                base: path::Path::root(),
-                hidden: false,
-                ignore: false,
-                include: Vec::new(),
-                max_size: None,
-            },
+            specs: Vec::new(),
             ignore_tree: ignore::Tree::new(),
         }
     }
-    pub fn set_forest(&mut self, forest_spec: ForestSpec) {
+
+    pub fn add_grove(&mut self, forest_spec: GroveSpec) {
         println!("amp.Forest.set_forest({})", &forest_spec.base);
-        self.spec = forest_spec;
+        self.specs.push(forest_spec);
     }
-    pub fn max_size(&self) -> Option<usize> {
-        self.spec.max_size
-    }
+
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
         // println!("\namp.Forest.list({})", &path);
 
@@ -139,7 +136,9 @@ impl Forest {
                             }
 
                             if let Some(new_path) = new_path {
-                                if filter.call(&new_path) && self.spec.call(&new_path) {
+                                if filter.call(&new_path)
+                                    && self.specs.iter().any(|spec| spec.call(&new_path))
+                                {
                                     paths.push(new_path);
                                 }
                             }
@@ -153,6 +152,41 @@ impl Forest {
     }
 }
 
+pub fn expand_path(path: &std::path::Path) -> util::Result<std::path::PathBuf> {
+    let mut res = std::path::PathBuf::new();
+    let mut first = true;
+    for component in path.components() {
+        trace!("component: {:?}", &component);
+        match component {
+            std::path::Component::Prefix(prefix) => {
+                res.push(prefix.as_os_str());
+                first = false;
+            }
+            std::path::Component::RootDir => {
+                res.push("/");
+                first = false;
+            }
+            std::path::Component::CurDir => {
+                if first {
+                    res.push(std::env::current_dir()?);
+                    first = false;
+                }
+            }
+            std::path::Component::Normal(normal) => {
+                if first {
+                    res.push(std::env::current_dir()?);
+                    first = false;
+                }
+                res.push(normal);
+            }
+            std::path::Component::ParentDir => {
+                fail!("No support for '..' in root dir yet");
+            }
+        }
+    }
+    Ok(res)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,7 +196,7 @@ mod tests {
         let home_dir = std::env::var("HOME")?;
 
         let mut forest = Forest::new();
-        forest.set_forest(ForestSpec {
+        forest.add_grove(GroveSpec {
             base: path::Path::folder(&home_dir),
             hidden: true,
             ignore: true,

@@ -15,12 +15,12 @@ pub struct CliArgs {
     #[arg(short, long)]
     pub config: Option<path::PathBuf>,
 
-    /// Named forest, defined in the config file
+    /// Named groves, defined in .config/champ/groves.toml
     #[arg(short, long)]
-    pub forest: Option<String>,
+    pub grove: Vec<String>,
 
     #[arg(short = 'C', long)]
-    pub root: Option<path::PathBuf>,
+    pub root: Vec<path::PathBuf>,
 
     #[arg(short = 'u', long, default_value_t = false)]
     pub hidden: bool,
@@ -55,9 +55,6 @@ pub struct CliArgs {
 impl CliArgs {
     pub fn try_parse() -> util::Result<Self> {
         let res: CliArgs = clap::Parser::parse();
-        if res.forest.is_some() && res.root.is_some() {
-            fail!("You cannot specify both a 'forest' and a 'root'");
-        }
         Ok(res)
     }
 }
@@ -66,10 +63,11 @@ impl CliArgs {
 #[derive(serde::Deserialize, Debug, Clone)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
-    pub forest: Vec<Forest>,
+    pub grove: Vec<Grove>,
 }
+
 #[derive(serde::Deserialize, Debug, Clone)]
-pub struct Forest {
+pub struct Grove {
     pub name: String,
     pub path: path::PathBuf,
     #[serde(default = "default_true")]
@@ -87,7 +85,7 @@ fn default_true() -> bool {
 
 impl Global {
     pub fn load(cli_args: &CliArgs) -> util::Result<Global> {
-        // &todo &prio=b: load Vec<Forest> from ".config/champ/forests.toml"
+        // &todo &prio=b: load Vec<Grove> from ".config/champ/groves.toml"
 
         let global_fp;
         if let Some(fp) = &cli_args.config {
