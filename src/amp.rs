@@ -50,9 +50,9 @@ impl KVSet {
     pub fn insert(&mut self, key: &Key, value: &Value) -> Option<Value> {
         self.kvs.insert(key.clone(), value.clone())
     }
-    pub fn merge(&mut self, rhs: &KVSet) -> util::Result<()> {
+    pub fn merge(&mut self, ctx: &KVSet) -> util::Result<()> {
         trace!("Merging");
-        rhs.for_each(|k, v| {
+        ctx.for_each(|k, v| {
             if let Some(value) = self.kvs.get_mut(k) {
                 trace!("Calling set_ctx");
                 value.set_ctx(v)?;

@@ -98,7 +98,7 @@ impl Builder {
             // - node.org is init
             tree.state = tree::State::OrgNode;
             Ok(())
-        });
+        })?;
 
         // Populate tree.org with info from
         // - _amp.md for Folders
@@ -148,29 +148,37 @@ impl Builder {
             })?;
         }
 
-        // Push Tree.org into Tree.ctx
+        // Push parent:Tree.org into child:Tree.ctx, following parent:Tree.links
         {
-            for tree_ix in 0..forest.trees.len() {
-                let tree = &forest.trees[tree_ix];
-                if !tree.org.is_empty() {
-                    let org = tree.org.clone();
-                    let links = tree.root().links.clone();
+            // Copy org to ctx for each Tree
+            for tree in &mut forest.trees {
+                tree.ctx = tree.org.clone();
+            }
 
-                    for link_ix in links {
-                        if let Some(link) = forest.trees.get_mut(link_ix) {
-                            link.ctx.merge(&org)?;
-                        }
+            // Note that we iterate backwards: forest construction places childs before parent
+            for parent_ix in (0..forest.trees.len()).rev() {
+                let parent_tree = &forest.trees[parent_ix];
+
+                if !parent_tree.ctx.is_empty() {
+                    let ctx = parent_tree.ctx.clone();
+                    let childs = parent_tree.root().links.clone();
+
+                    for child_ix in childs {
+                        let dst_tree = forest.trees.get_mut(child_ix).ok_or_else(|| {
+                            util::Error::create("Dangling link {link_ix} for for tree {tree_ix}")
+                        })?;
+                        dst_tree.ctx.merge(&ctx)?;
                     }
                 }
             }
         }
 
-        // &todo: use Root.ctx directly iso below copy
         // Copy Tree.ctx into Root.ctx
+        // &todo: use Root.ctx directly iso below copy
         forest.each_tree_mut(|tree| {
             tree.root_mut().ctx = tree.ctx.clone();
             Ok(())
-        });
+        })?;
 
         // Compute context for each Node, starting with Tree.ctx
         forest.each_tree_mut(|tree| {
@@ -180,7 +188,7 @@ impl Builder {
                 Ok(())
             })?;
             Ok(())
-        });
+        })?;
 
         // // Aggregate data over the Forest
         // forest.each_tree_mut(|tree| {
