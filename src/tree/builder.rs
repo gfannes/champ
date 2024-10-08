@@ -1,6 +1,6 @@
 use crate::{amp, fs, lex, path, tree, tree::md, tree::src, util};
 use std::collections;
-use tracing::{span, trace, Level};
+use tracing::{error, span, trace, warn, Level};
 
 type Forest = tree::Forest;
 type Tree = tree::Tree;
@@ -75,7 +75,7 @@ impl Builder {
                             Ok(())
                         };
                         if let Err(err) = push_kv_lmbd() {
-                            eprintln!(
+                            error!(
                                 "Failed to process KV for '{}:{}': {}",
                                 filename.display(),
                                 // &todo: replace with function
@@ -273,7 +273,7 @@ impl Builder {
                 if !self.src_trees.contains_key(comment) {
                     match src::Tree::new(comment) {
                         Err(err) => {
-                            eprintln!("Could not create src.Tree from '{}': {}", comment, err)
+                            error!("Could not create src.Tree from '{}': {}", comment, err)
                         }
                         Ok(src_tree) => {
                             self.src_trees.insert(comment.to_owned(), src_tree);
@@ -307,7 +307,7 @@ impl Builder {
                         }
                     }
                 } else {
-                    eprintln!("Could not find src_tree for {}", comment);
+                    error!("Could not find src_tree for {}", comment);
                 }
             }
             _ => {
@@ -347,7 +347,7 @@ impl Builder {
                 trace!("Loading file '{}'", fp.display());
                 match self.create_tree_from_path(&fp) {
                     Err(err) => {
-                        eprintln!(
+                        warn!(
                             "Could not create tree.Tree from '{}': {}",
                             fp.display(),
                             err
