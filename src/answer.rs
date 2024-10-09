@@ -1,3 +1,4 @@
+use crate::amp::value;
 use std::path;
 
 #[derive(Default)]
@@ -10,6 +11,7 @@ pub struct Location {
     pub line_nr: u64,
     pub content: String,
     pub ctx: String,
+    pub prio: value::Prio,
 }
 
 pub struct Meta {
@@ -36,10 +38,14 @@ impl Answer {
                 println!("{}", location.filename.display());
             }
             println!(
-                "  {:ctx_width$}\t{}\t{}",
-                &location.ctx, location.line_nr, &location.content
+                "  {}\t{:ctx_width$}\t{}: {}",
+                &location.prio, &location.ctx, location.line_nr, &location.content
             );
         })
+    }
+
+    pub fn order(&mut self) {
+        self.locations.sort_by(|a, b| a.prio.cmp(&b.prio));
     }
 
     pub fn each_location(&self, mut cb: impl FnMut(&Location, &Meta)) {

@@ -10,6 +10,7 @@ mod ignore;
 mod lex;
 pub mod mero;
 mod path;
+mod query;
 mod rubr;
 mod show;
 mod tree;

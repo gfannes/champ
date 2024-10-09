@@ -31,8 +31,8 @@ pub struct Duration {
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
 pub struct Prio {
-    major: Option<u32>,
-    minor: u32,
+    pub major: Option<u32>,
+    pub minor: u32,
 }
 
 pub enum State {

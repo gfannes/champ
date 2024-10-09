@@ -51,6 +51,10 @@ pub struct CliArgs {
     #[arg(short = 'q', long, default_value_t = false)]
     pub query: bool,
 
+    /// Find next task to execute
+    #[arg(short = 'n', long, default_value_t = false)]
+    pub next: bool,
+
     /// Free-form search in all metadata
     #[arg(short = 's', long, default_value_t = false)]
     pub search: bool,
@@ -108,8 +112,6 @@ pub struct Groves {
 
 impl Global {
     pub fn load(cli_args: &CliArgs) -> util::Result<Global> {
-        // &todo &prio=b: load Vec<Grove> from ".config/champ/groves.toml"
-
         let config_root = cli_args
             .config_root
             .clone()

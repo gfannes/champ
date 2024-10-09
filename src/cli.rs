@@ -1,4 +1,6 @@
-use crate::{amp, answer, config, fail, fs, path, rubr::naft, rubr::naft::ToNaft, tree, util};
+use crate::{
+    amp, answer, config, fail, fs, path, query, rubr::naft, rubr::naft::ToNaft, tree, util,
+};
 use std::io::Write as IoWrite;
 use tracing::{info, span, trace, Level};
 
@@ -27,6 +29,7 @@ impl App {
 
         // Using &self.config.command complicates using &mut self later.
         // Copyng the command once does not impact performance.
+        let mut answer: Option<answer::Answer> = None;
         match self.config.command {
             Command::None => {}
             Command::Config => {
@@ -44,87 +47,22 @@ impl App {
                 // &todo: Implement text-based search in all Part::Meta
             }
             Command::Query => {
-                let span = span!(Level::TRACE, "query");
-                let _g = span.enter();
-
-                let mut answer = answer::Answer::new();
-
-                let needle: Option<amp::KeyValue>;
-                let mut constraints = Vec::<amp::KeyValue>::new();
-                {
-                    if let Some((needle_str, constraints_str)) = self.config.args.split_first() {
-                        let mut amp_parser = amp::Parser::new();
-                        amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
-                        if let Some(stmt) = amp_parser.stmts.first() {
-                            match &stmt.kind {
-                                amp::Kind::Amp(kv) => needle = Some(kv.clone()),
-                                _ => fail!("Expected to find AMP"),
-                            }
-                        } else {
-                            fail!("Expected to find at least one statement");
-                        }
-                        for constraint_str in constraints_str {
-                            amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
-                            if let Some(stmt) = amp_parser.stmts.first() {
-                                match &stmt.kind {
-                                    amp::Kind::Amp(kv) => constraints.push(kv.clone()),
-                                    _ => fail!("Expected to find AMP"),
-                                }
-                            }
-                        }
-                    } else {
-                        needle = None;
-                    }
-                }
-                trace!("needle: {:?}", needle);
-                trace!("constraints: {:?}", constraints);
-
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
-                forest.dfs(|tree, node| {
-                    let mut is_match;
-                    if let Some(needle) = &needle {
-                        is_match = node.org.has(needle);
-                        for constraint in &constraints {
-                            if !node.ctx.has(constraint) {
-                                is_match = false;
-                            }
-                        }
-                    } else {
-                        is_match = !node.org.is_empty();
-                    }
+                let query = query::Query::try_from(&self.config.args)?;
+                answer = Some(query::search(&forest, &query)?);
 
-                    if is_match {
-                        let content = node
-                            .parts
-                            .iter()
-                            .filter_map(|part| tree.content.get(part.range.clone()))
-                            .collect();
-                        let ctx = format!("{}", &node.ctx);
+                if let Some(answer) = &answer {
+                    answer.show();
+                }
+            }
+            Command::Next => {
+                let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+                let query = query::Query::try_from(&self.config.args)?;
+                answer = Some(query::search(&forest, &query)?);
 
-                        answer.add(answer::Location {
-                            filename: tree.filename.clone(),
-                            // &todo: replace with function
-                            line_nr: node.line_ix.unwrap_or(0) + 1,
-                            ctx,
-                            content,
-                        });
-                    }
-                    Ok(())
-                })?;
-
-                answer.show();
-
-                if self.config.do_open {
-                    let editor = std::env::var("EDITOR").unwrap_or("hx".to_string());
-                    let mut cmd = std::process::Command::new(editor);
-                    answer.each_location(|location, meta| {
-                        if meta.is_first {
-                            let mut arg = location.filename.as_os_str().to_os_string();
-                            arg.push(format!(":{}", location.line_nr));
-                            cmd.arg(arg);
-                        }
-                    });
-                    cmd.status().expect("Could not open files");
+                if let Some(answer) = &mut answer {
+                    answer.order();
+                    answer.show();
                 }
             }
             Command::Debug => {
@@ -138,6 +76,21 @@ impl App {
                     tree.to_naft(&mut out)?;
                     write!(&mut out, "\n")?;
                 }
+            }
+        }
+
+        if let Some(answer) = &answer {
+            if self.config.do_open {
+                let editor = std::env::var("EDITOR").unwrap_or("hx".to_string());
+                let mut cmd = std::process::Command::new(editor);
+                answer.each_location(|location, meta| {
+                    if meta.is_first {
+                        let mut arg = location.filename.as_os_str().to_os_string();
+                        arg.push(format!(":{}", location.line_nr));
+                        cmd.arg(arg);
+                    }
+                });
+                cmd.status().expect("Could not open files");
             }
         }
 
@@ -164,6 +117,7 @@ enum Command {
     None,
     Config,
     Query,
+    Next,
     Search,
     List,
     Debug,
@@ -212,6 +166,8 @@ impl Config {
             Command::Config
         } else if cli_args.query {
             Command::Query
+        } else if cli_args.next {
+            Command::Next
         } else if cli_args.search {
             Command::Search
         } else if cli_args.list {

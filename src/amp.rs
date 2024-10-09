@@ -17,6 +17,7 @@ pub struct KeyValue {
 pub struct KVSet {
     pub kvs: collections::BTreeMap<Key, Value>,
 }
+
 impl KVSet {
     pub fn new() -> KVSet {
         KVSet::default()
