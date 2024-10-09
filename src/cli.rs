@@ -1,5 +1,4 @@
 use crate::{amp, answer, config, fail, fs, path, rubr::naft, rubr::naft::ToNaft, tree, util};
-use std::fmt::Write;
 use std::io::Write as IoWrite;
 use tracing::{info, span, trace, Level};
 
@@ -40,7 +39,9 @@ impl App {
                 let needle = self.config.args.get(0).map(|s| s.clone());
                 println!("needle: {:?}", &needle);
 
-                let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+                let _forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+
+                // &todo: Implement text-based search in all Part::Meta
             }
             Command::Query => {
                 let span = span!(Level::TRACE, "query");
@@ -127,8 +128,6 @@ impl App {
                 }
             }
             Command::Debug => {
-                let mut filename = std::path::PathBuf::new();
-
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
 
                 let mut out = naft::Node::new(std::io::stdout());
@@ -209,7 +208,9 @@ impl Config {
             }
         }
 
-        let command = if cli_args.query {
+        let command = if cli_args.config {
+            Command::Config
+        } else if cli_args.query {
             Command::Query
         } else if cli_args.search {
             Command::Search

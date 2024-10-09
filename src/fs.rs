@@ -2,7 +2,7 @@
 
 use crate::{config, fail, ignore, path, util};
 use std::{ffi, fs};
-use tracing::trace;
+use tracing::{info, trace, warn};
 
 pub struct Node {
     path: path::Path,
@@ -20,11 +20,13 @@ impl Node {
 #[derive(Debug)]
 pub struct GroveSpec {
     base: path::Path,
+    // &todo: Enable removal of hidden files/folders
     pub hidden: bool,
+    // &todo: Enable removal of ignored files/folders
     pub ignore: bool,
     // We assume a limited amount of extensions (less than 64): linear search is faster than using a BTreeSet
     pub include: Vec<ffi::OsString>,
-    // &todo: enable this for multi-spec forest
+    // &todo: Enable removal of large files
     pub max_size: Option<usize>,
 }
 
@@ -77,21 +79,24 @@ impl Forest {
     }
 
     pub fn add_grove(&mut self, forest_spec: GroveSpec) {
-        println!("amp.Forest.set_forest({})", &forest_spec.base);
+        info!("amp.Forest.set_forest({})", &forest_spec.base);
         self.specs.push(forest_spec);
     }
 
     pub fn list(&mut self, path: &path::Path) -> util::Result<Vec<path::Path>> {
-        // println!("\namp.Forest.list({})", &path);
+        trace!("amp.Forest.list({})", &path);
 
         let mut paths = Vec::new();
 
         if path.is_folder() {
             self.ignore_tree
                 .with_filter(path, |filter: &ignore::Filter| {
+                    let mut entries =
+                        std::fs::read_dir(&path.path_buf())?.collect::<Result<Vec<_>, _>>()?;
+                    entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
                     // Process each file/folder in path
-                    for entry in std::fs::read_dir(&path.path_buf())? {
-                        let entry = entry?;
+                    for entry in entries {
                         if let Ok(file_type) = entry.file_type() {
                             let new_path;
 
@@ -106,7 +111,7 @@ impl Forest {
                             } else if file_type.is_symlink() {
                                 match fs::metadata(entry.path()) {
                                     Err(err) => {
-                                        println!(
+                                        warn!(
                                             "Warning: Skipping {}, could not read metadata: {}",
                                             entry.path().display(),
                                             &err
@@ -131,6 +136,7 @@ impl Forest {
                                     }
                                 }
                             } else {
+                                warn!("I cannot handle '{}'", entry.file_name().to_string_lossy());
                                 // Something else
                                 new_path = None;
                             }

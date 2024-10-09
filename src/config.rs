@@ -7,31 +7,45 @@ use toml;
 use tracing::{error, info, trace};
 
 #[derive(Parser, Debug)]
+#[command(
+    name = "ch",
+    version,
+    about,
+    long_about = None,
+    after_help = concat!("Developed by ", env!("CARGO_PKG_AUTHORS")),
+)]
 pub struct CliArgs {
     /// Verbosity level: 0: error, 1: warn, 2: info, 3: trace
     #[arg(short, long, default_value_t = 1)]
     pub verbose: u32,
 
-    /// The configuration folder to use
-    #[arg(short, long)]
+    /// The configuration folder to use when looking for `groves.toml`
+    #[arg(long)]
     pub config_root: Option<path::PathBuf>,
 
-    /// Named groves, defined in .config/champ/groves.toml
+    /// Named groves from `$config_root/groves.toml` to use
     #[arg(short, long)]
     pub grove: Vec<String>,
 
+    /// Root of grove to include
     #[arg(short = 'C', long)]
     pub root: Vec<path::PathBuf>,
 
+    /// Include hidden files for grove `$root`
     #[arg(short = 'u', long, default_value_t = false)]
     pub hidden: bool,
 
+    /// Include ignored files for grove `$root`
     #[arg(short = 'U', long, default_value_t = false)]
     pub ignored: bool,
 
     /// Open selected files in editor
     #[arg(short = 'o', long, default_value_t = false)]
     pub open: bool,
+
+    /// Update current configuration
+    #[arg(short = 'c', long, default_value_t = false)]
+    pub config: bool,
 
     /// Query AMP metadata
     #[arg(short = 'q', long, default_value_t = false)]
@@ -41,7 +55,7 @@ pub struct CliArgs {
     #[arg(short = 's', long, default_value_t = false)]
     pub search: bool,
 
-    /// List all files
+    /// List all files in the forest
     #[arg(short = 'l', long, default_value_t = false)]
     pub list: bool,
 
@@ -49,7 +63,10 @@ pub struct CliArgs {
     #[arg(short = 'd', long, default_value_t = false)]
     pub debug: bool,
 
-    #[clap(value_parser)]
+    /// Additional arguments, interpretation depends on provided arguments
+    /// -c: clear | set | print
+    /// -q: org ctx*
+    #[clap(value_parser, verbatim_doc_comment)]
     pub rest: Vec<String>,
 }
 

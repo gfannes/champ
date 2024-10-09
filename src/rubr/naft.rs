@@ -1,7 +1,8 @@
 use crate::util;
-use std::{borrow::BorrowMut, cell, io::Write, ops::Deref, ops::DerefMut, rc};
+use std::{cell, io::Write, rc};
 
 pub struct Node {
+    // &todo Support String iso Stdout, maybe anything that can std::io::Write
     pub out: rc::Rc<cell::RefCell<std::io::Stdout>>,
     pub level: usize,
     pub name: Option<String>,
