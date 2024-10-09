@@ -75,8 +75,10 @@ impl KVSet {
 }
 impl std::fmt::Display for KVSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut prefix = "";
         for (k, v) in &self.kvs {
-            write!(f, " {k}")?;
+            write!(f, "{prefix}{k}")?;
+            prefix = " ";
             if v != &Value::None {
                 write!(f, "={}", v)?;
             }

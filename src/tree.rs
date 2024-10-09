@@ -155,20 +155,26 @@ impl Forest {
         Ok(())
     }
 
-    pub fn dfs(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
+    pub fn dfs(&self, mut cb: impl FnMut(&Tree, &Node) -> util::Result<()>) -> util::Result<()> {
         for &root_ix in &self.roots {
             let root = &self.trees[root_ix];
-            self.dfs_(root, &mut cb);
+            self.dfs_(root, &mut cb)?;
         }
+        Ok(())
     }
-    fn dfs_(&self, tree: &Tree, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
+    fn dfs_(
+        &self,
+        tree: &Tree,
+        cb: &mut impl FnMut(&Tree, &Node) -> util::Result<()>,
+    ) -> util::Result<()> {
         for node in &tree.nodes {
             cb(tree, node);
             for &tree_ix in &node.links {
                 let tree = &self.trees[tree_ix];
-                self.dfs_(tree, cb);
+                self.dfs_(tree, cb)?;
             }
         }
+        Ok(())
     }
 
     pub fn connect(&mut self) -> util::Result<()> {

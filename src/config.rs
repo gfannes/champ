@@ -4,12 +4,13 @@ use dirs;
 use serde;
 use std::path;
 use toml;
+use tracing::{error, info, trace};
 
 #[derive(Parser, Debug)]
 pub struct CliArgs {
-    /// Verbosity level
-    #[arg(short, long, default_value_t = 0)]
-    pub verbose: i32,
+    /// Verbosity level: 0: error, 1: warn, 2: info, 3: trace
+    #[arg(short, long, default_value_t = 1)]
+    pub verbose: u32,
 
     /// Specify the configuration file to load, default is $HOME/.config/champ/config.toml
     #[arg(short, long)]
@@ -114,11 +115,15 @@ impl Global {
             fail!("Could not find config file '{}'", global_fp.display());
         }
 
+        info!("Loading config file '{}'", global_fp.display());
         let content = std::fs::read(&global_fp)?;
         let content = std::str::from_utf8(&content)?;
+        trace!("Configuration content:\n{content}");
+        // &someday: toml::from_str() silently skips unrecognised items. Make this parsing more strict.
         match toml::from_str::<Global>(content) {
             Ok(mut global) => {
                 global.path = Some(global_fp);
+                trace!("{:?}", &global);
                 Ok(global)
             }
             Err(err) => {

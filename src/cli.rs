@@ -1,5 +1,6 @@
-use crate::{amp, config, fail, fs, path, rubr::naft, rubr::naft::ToNaft, tree, util};
-use std::io::Write;
+use crate::{amp, answer, config, fail, fs, path, rubr::naft, rubr::naft::ToNaft, tree, util};
+use std::fmt::Write;
+use std::io::Write as IoWrite;
 use tracing::{info, span, trace, Level};
 
 pub struct App {
@@ -45,7 +46,7 @@ impl App {
                 let span = span!(Level::TRACE, "query");
                 let _g = span.enter();
 
-                let mut filename_lines_s = Vec::<(std::path::PathBuf, Vec<u64>)>::new();
+                let mut answer = answer::Answer::new();
 
                 let needle: Option<amp::KeyValue>;
                 let mut constraints = Vec::<amp::KeyValue>::new();
@@ -79,51 +80,49 @@ impl App {
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 forest.dfs(|tree, node| {
-                    let mut do_print;
+                    let mut is_match;
                     if let Some(needle) = &needle {
-                        do_print = node.org.has(needle);
+                        is_match = node.org.has(needle);
                         for constraint in &constraints {
                             if !node.ctx.has(constraint) {
-                                do_print = false;
+                                is_match = false;
                             }
                         }
                     } else {
-                        do_print = !node.org.is_empty();
+                        is_match = !node.org.is_empty();
                     }
 
-                    if do_print {
-                        if !filename_lines_s
-                            .last()
-                            .is_some_and(|(last_filename, _)| last_filename == &tree.filename)
-                        {
-                            println!("{}", tree.filename.display());
-                            filename_lines_s.push((tree.filename.clone(), Vec::new()));
-                        }
-                        // &todo: replace with function
-                        let line_nr = node.line_ix.unwrap_or(0) + 1;
-                        if let Some((_, lines)) = filename_lines_s.last_mut() {
-                            lines.push(line_nr);
-                        }
-                        print!("{}\t", line_nr);
-                        for part in &node.parts {
-                            if let Some(s) = tree.content.get(part.range.clone()) {
-                                print!("{s}");
-                            }
-                        }
-                        println!("");
+                    if is_match {
+                        let content = node
+                            .parts
+                            .iter()
+                            .filter_map(|part| tree.content.get(part.range.clone()))
+                            .collect();
+                        let ctx = format!("{}", &node.ctx);
+
+                        answer.add(answer::Location {
+                            filename: tree.filename.clone(),
+                            // &todo: replace with function
+                            line_nr: node.line_ix.unwrap_or(0) + 1,
+                            ctx,
+                            content,
+                        });
                     }
-                });
+                    Ok(())
+                })?;
+
+                answer.show();
 
                 if self.config.do_open {
                     let editor = std::env::var("EDITOR").unwrap_or("hx".to_string());
                     let mut cmd = std::process::Command::new(editor);
-                    for (filename, lines) in filename_lines_s {
-                        let mut arg = filename.into_os_string();
-                        if let Some(line_nr) = lines.first() {
-                            arg.push(format!(":{line_nr}"));
+                    answer.each_location(|location, meta| {
+                        if meta.is_first {
+                            let mut arg = location.filename.as_os_str().to_os_string();
+                            arg.push(format!(":{}", location.line_nr));
+                            cmd.arg(arg);
                         }
-                        cmd.arg(arg);
-                    }
+                    });
                     cmd.status().expect("Could not open files");
                 }
             }
@@ -184,7 +183,6 @@ impl Config {
     fn load(cli_args: config::CliArgs) -> util::Result<Config> {
         let span = span!(Level::INFO, "Config.load");
         let _s = span.enter();
-        info!("Some info");
 
         let global = config::Global::load(&cli_args)?;
 

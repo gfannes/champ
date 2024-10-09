@@ -24,12 +24,14 @@ impl Error {
 
 #[macro_export]
 macro_rules! fail {
-    ($fmt:expr) => {
+    ($fmt:expr) => {{
+        tracing::error!($fmt);
         return Err(util::Error::create(&format!($fmt)))
-    };
-    ($fmt:expr, $($arg:expr),*) => {
+    }};
+    ($fmt:expr, $($arg:expr),*) => {{
+        tracing::error!($fmt, $($arg),*);
         return Err(util::Error::create(&format!($fmt, $($arg),*)))
-    };
+    }};
     ($fmt:expr, $($arg:expr),+ ,) => {
         fail!($fmt, $($arg),*)
     };
