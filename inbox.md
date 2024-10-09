@@ -6,3 +6,5 @@
 
 ## Implement Strange as trait
 - Can we provide the same func as a trait on `&str`?
+
+## Detect `[ ]` as `todo`

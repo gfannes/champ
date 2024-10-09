@@ -12,9 +12,9 @@ pub struct CliArgs {
     #[arg(short, long, default_value_t = 1)]
     pub verbose: u32,
 
-    /// Specify the configuration file to load, default is $HOME/.config/champ/config.toml
+    /// The configuration folder to use
     #[arg(short, long)]
-    pub config: Option<path::PathBuf>,
+    pub config_root: Option<path::PathBuf>,
 
     /// Named groves, defined in .config/champ/groves.toml
     #[arg(short, long)]
@@ -61,10 +61,10 @@ impl CliArgs {
 }
 
 // Global configuration, loaded from '$HOME/.config/champ/config.toml'
-#[derive(serde::Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Global {
     pub path: Option<path::PathBuf>,
-    pub grove: Vec<Grove>,
+    pub groves: Vec<Grove>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -84,52 +84,65 @@ fn default_true() -> bool {
     true
 }
 
+#[derive(serde::Deserialize, Debug, Clone)]
+pub struct Groves {
+    pub grove: Vec<Grove>,
+}
+
 impl Global {
     pub fn load(cli_args: &CliArgs) -> util::Result<Global> {
         // &todo &prio=b: load Vec<Grove> from ".config/champ/groves.toml"
 
-        let global_fp;
-        if let Some(fp) = &cli_args.config {
-            global_fp = Some(fp.to_owned());
-        } else {
-            global_fp = dirs::config_dir().map(|d| d.join("champ/config.toml"));
-            if let Some(fp) = &global_fp {
-                if let Some(dir) = fp.parent() {
-                    if !dir.exists() {
-                        std::fs::create_dir_all(dir)?;
-                    } else if !dir.is_dir() {
-                        fail!("Expected '{}' to be absent or a directory", dir.display());
-                    }
-
-                    if !fp.exists() {
-                        std::fs::write(fp, "")?;
-                    } else if !fp.is_file() {
-                        fail!("Expected '{}' to be absent or a file", fp.display());
-                    }
-                }
-            }
+        let config_root = cli_args
+            .config_root
+            .clone()
+            .or_else(|| {
+                dirs::config_dir()
+                    .map(|dir| {
+                        let dir = dir.join("champ");
+                        if !dir.exists() {
+                            if std::fs::create_dir_all(&dir).is_err() {
+                                error!("Could not create configuration folder '{}'", dir.display());
+                                return None;
+                            }
+                        } else if !dir.is_dir() {
+                            error!("Expected '{}' to be absent or a directory", dir.display());
+                            return None;
+                        }
+                        Some(dir)
+                    })
+                    .flatten()
+            })
+            .ok_or_else(|| {
+                error!("Could not derive configuration root");
+                util::Error::create("Could not derive configuration root")
+            })?;
+        if !config_root.exists() {
+            fail!(
+                "Could not find configuration root '{}'",
+                config_root.display()
+            );
         }
-        let global_fp =
-            global_fp.ok_or(util::Error::create("Could not determine config filepath"))?;
-        if !global_fp.is_file() {
-            fail!("Could not find config file '{}'", global_fp.display());
+
+        let groves_fp = config_root.join("groves.toml");
+        if !groves_fp.is_file() {
+            fail!("Could not find groves file '{}'", groves_fp.display());
         }
 
-        info!("Loading config file '{}'", global_fp.display());
-        let content = std::fs::read(&global_fp)?;
+        info!("Loading groves from '{}'", groves_fp.display());
+        let content = std::fs::read(&groves_fp)?;
         let content = std::str::from_utf8(&content)?;
-        trace!("Configuration content:\n{content}");
+        trace!("Groves content :\n{content}");
         // &someday: toml::from_str() silently skips unrecognised items. Make this parsing more strict.
-        match toml::from_str::<Global>(content) {
-            Ok(mut global) => {
-                global.path = Some(global_fp);
-                trace!("{:?}", &global);
-                Ok(global)
-            }
+        match toml::from_str::<Groves>(content) {
+            Ok(groves) => Ok(Global {
+                path: Some(groves_fp),
+                groves: groves.grove,
+            }),
             Err(err) => {
                 fail!(
                     "Could not parse config from '{}': {}",
-                    global_fp.display(),
+                    groves_fp.display(),
                     err
                 );
             }

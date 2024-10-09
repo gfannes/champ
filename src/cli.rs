@@ -189,7 +189,7 @@ impl Config {
         let mut groves = Vec::new();
         {
             for grove_str in &cli_args.grove {
-                if let Some(grove) = global.grove.iter().find(|grove| &grove.name == grove_str) {
+                if let Some(grove) = global.groves.iter().find(|grove| &grove.name == grove_str) {
                     info!("Found grove {:?}", grove);
                     groves.push(grove.clone());
                 } else {
