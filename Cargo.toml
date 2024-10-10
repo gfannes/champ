@@ -20,6 +20,7 @@ path = "src/bin/ch.rs"
 [dependencies]
 anyhow = { version = "1.0.89", features = ["backtrace"] }
 clap = { version = "4.5.4", features = ["derive"] }
+colored = "2.1.0"
 crossterm = "0.25.0"
 dirs = "5.0.1"
 flexi_logger = "0.28.1"

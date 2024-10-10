@@ -40,10 +40,14 @@
 - A Tree that is used by another Node
 	- How to express this Node? Or only allow Tree -> Tree dependencies in this case?
 
-## Support nested projects
-- &proj=amp
-	- &proj=ch => same as `proj=/amp/ch`
-	- &proj=/ch => same as `proj=/ch`
+## Support nested projects &prio=a
+- Support proj statement that does not append to the curret proj path, but resolves into an existing one
+- `&proj=amp`
+	- `&proj=ch` => same as `proj=/amp/ch`
+	- `&proj=/ch` => same as `proj=/ch`
+
+## Support colored output &prio=a1
+- Depending on prio
 
 ## &tbd Discriminate between AMP data and commented-out code
 - Only allow AMP at the start of a comment for SourceCode?

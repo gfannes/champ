@@ -51,9 +51,13 @@ pub struct CliArgs {
     #[arg(short = 'q', long, default_value_t = false)]
     pub query: bool,
 
-    /// Find next task to execute
-    #[arg(short = 'n', long, default_value_t = false)]
-    pub next: bool,
+    /// Show first-n next tasks to execute
+    #[arg(short = 'n', long, action = clap::ArgAction::Count)]
+    pub next: u8,
+
+    /// Show all next tasks to execute
+    #[arg(short = 'N', long, default_value_t = false)]
+    pub next_all: bool,
 
     /// Free-form search in all metadata
     #[arg(short = 's', long, default_value_t = false)]

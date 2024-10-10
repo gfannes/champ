@@ -22,17 +22,20 @@ pub fn search(forest: &tree::Forest, query: &Query) -> util::Result<answer::Answ
         }
 
         if is_match {
-            let mut prio = amp::value::Prio {
-                major: Some(21),
-                minor: 0,
-            };
+            let mut prio = amp::value::Prio::try_from("c0")?;
+            let mut proj: Option<amp::value::Path> = None;
             node.ctx.for_each(|k, v| {
-                if k == "prio" {
-                    match v {
+                match k.as_str() {
+                    "prio" => match v {
                         amp::value::Value::Prio(p) => prio = p.clone(),
                         _ => fail!("Expected 'prio' to be a value.Prio"),
-                    }
-                }
+                    },
+                    "proj" => match v {
+                        amp::value::Value::Path(p) => proj = Some(p.clone()),
+                        _ => fail!("Expected 'proj' to be a value.Path"),
+                    },
+                    _ => {}
+                };
                 Ok(())
             })?;
 
@@ -50,6 +53,7 @@ pub fn search(forest: &tree::Forest, query: &Query) -> util::Result<answer::Answ
                 ctx,
                 content,
                 prio,
+                proj,
             });
         }
         Ok(())
@@ -110,8 +114,6 @@ impl TryFrom<&Vec<String>> for Query {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_api() {}
 }

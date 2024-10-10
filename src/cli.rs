@@ -1,7 +1,10 @@
+pub mod show;
+
 use crate::{
-    amp, answer, config, fail, fs, path, query, rubr::naft, rubr::naft::ToNaft, tree, util,
+    answer, cli::show::Show, config, fail, fs, path, query, rubr::naft, rubr::naft::ToNaft, tree,
+    util,
 };
-use std::io::Write as IoWrite;
+use std::io::Write;
 use tracing::{info, span, trace, Level};
 
 pub struct App {
@@ -51,18 +54,23 @@ impl App {
                 let query = query::Query::try_from(&self.config.args)?;
                 answer = Some(query::search(&forest, &query)?);
 
-                if let Some(answer) = &answer {
-                    answer.show();
+                if let Some(answer) = &mut answer {
+                    answer.order(&answer::By::Name);
+                    answer.show(&show::Display::All);
                 }
             }
-            Command::Next => {
+            Command::Next(cnt) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 let query = query::Query::try_from(&self.config.args)?;
                 answer = Some(query::search(&forest, &query)?);
 
                 if let Some(answer) = &mut answer {
-                    answer.order();
-                    answer.show();
+                    answer.order(&answer::By::Prio);
+                    let display = match cnt {
+                        None => show::Display::All,
+                        Some(cnt) => show::Display::First(cnt as u64 * 5),
+                    };
+                    answer.show(&display);
                 }
             }
             Command::Debug => {
@@ -84,7 +92,12 @@ impl App {
                 let editor = std::env::var("EDITOR").unwrap_or("hx".to_string());
                 let mut cmd = std::process::Command::new(editor);
                 answer.each_location(|location, meta| {
-                    if meta.is_first {
+                    if meta.is_first_for_file {
+                        trace!(
+                            "Opening {}:{}",
+                            &location.filename.display(),
+                            location.line_nr
+                        );
                         let mut arg = location.filename.as_os_str().to_os_string();
                         arg.push(format!(":{}", location.line_nr));
                         cmd.arg(arg);
@@ -117,7 +130,7 @@ enum Command {
     None,
     Config,
     Query,
-    Next,
+    Next(Option<u8>),
     Search,
     List,
     Debug,
@@ -166,8 +179,10 @@ impl Config {
             Command::Config
         } else if cli_args.query {
             Command::Query
-        } else if cli_args.next {
-            Command::Next
+        } else if cli_args.next > 0 {
+            Command::Next(Some(cli_args.next))
+        } else if cli_args.next_all {
+            Command::Next(None)
         } else if cli_args.search {
             Command::Search
         } else if cli_args.list {
