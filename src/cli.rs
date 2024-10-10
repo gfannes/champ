@@ -33,7 +33,7 @@ impl App {
         // Using &self.config.command complicates using &mut self later.
         // Copyng the command once does not impact performance.
         let mut answer: Option<answer::Answer> = None;
-        match self.config.command {
+        match &self.config.command {
             Command::None => {}
             Command::Config => {
                 println!("config: {:?}", self.config);
@@ -49,10 +49,10 @@ impl App {
 
                 // &todo: Implement text-based search in all Part::Meta
             }
-            Command::Query => {
+            Command::Query(from) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 let query = query::Query::try_from(&self.config.args)?;
-                answer = Some(query::search(&forest, &query)?);
+                answer = Some(query::search(&forest, &query, from)?);
 
                 if let Some(answer) = &mut answer {
                     answer.order(&answer::By::Name);
@@ -62,13 +62,13 @@ impl App {
             Command::Next(cnt) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
                 let query = query::Query::try_from(&self.config.args)?;
-                answer = Some(query::search(&forest, &query)?);
+                answer = Some(query::search(&forest, &query, &query::From::Org)?);
 
                 if let Some(answer) = &mut answer {
                     answer.order(&answer::By::Prio);
                     let display = match cnt {
                         None => show::Display::All,
-                        Some(cnt) => show::Display::First(cnt as u64 * 5),
+                        Some(cnt) => show::Display::First(*cnt as u64 * 5),
                     };
                     answer.show(&display);
                 }
@@ -129,7 +129,7 @@ impl App {
 enum Command {
     None,
     Config,
-    Query,
+    Query(query::From),
     Next(Option<u8>),
     Search,
     List,
@@ -177,8 +177,10 @@ impl Config {
 
         let command = if cli_args.config {
             Command::Config
-        } else if cli_args.query {
-            Command::Query
+        } else if cli_args.query_org {
+            Command::Query(query::From::Org)
+        } else if cli_args.query_ctx {
+            Command::Query(query::From::Ctx)
         } else if cli_args.next > 0 {
             Command::Next(Some(cli_args.next))
         } else if cli_args.next_all {

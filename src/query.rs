@@ -7,13 +7,24 @@ pub struct Query {
     pub constraints: Vec<amp::KeyValue>,
 }
 
-pub fn search(forest: &tree::Forest, query: &Query) -> util::Result<answer::Answer> {
+#[derive(Debug, Clone)]
+pub enum From {
+    Org,
+    Ctx,
+}
+
+pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result<answer::Answer> {
     let mut answer = answer::Answer::new();
 
     forest.dfs(|tree, node| {
+        let kvs = match from {
+            From::Org => &node.org,
+            From::Ctx => &node.ctx,
+        };
+
         let mut is_match = match &query.needle {
-            Some(needle) => node.org.has(needle),
-            _ => !node.org.is_empty(),
+            Some(needle) => kvs.has(needle),
+            _ => !kvs.is_empty(),
         };
         for constraint in &query.constraints {
             if !node.ctx.has(constraint) {

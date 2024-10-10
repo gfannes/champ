@@ -47,9 +47,13 @@ pub struct CliArgs {
     #[arg(short = 'c', long, default_value_t = false)]
     pub config: bool,
 
-    /// Query AMP metadata
+    /// Query AMP metadata from Org
     #[arg(short = 'q', long, default_value_t = false)]
-    pub query: bool,
+    pub query_org: bool,
+
+    /// Query AMP metadata from Ctx
+    #[arg(short = 'Q', long, default_value_t = false)]
+    pub query_ctx: bool,
 
     /// Show first-n next tasks to execute
     #[arg(short = 'n', long, action = clap::ArgAction::Count)]

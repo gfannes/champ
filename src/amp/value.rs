@@ -9,6 +9,7 @@ pub enum Value {
     Date(Date),
     Duration(Duration),
     Prio(Prio),
+    Status(Status),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
@@ -35,7 +36,8 @@ pub struct Prio {
     pub minor: u32,
 }
 
-pub enum State {
+#[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
+pub enum Status {
     Todo,
     Wip,
     Done,
@@ -45,34 +47,44 @@ impl Value {
     pub fn is_none(&self) -> bool {
         self == &Value::None
     }
-    pub fn set_ctx(&mut self, rhs: &Value) -> util::Result<()> {
+    pub fn set_ctx(&mut self, ctx: &Value) -> util::Result<()> {
         match self {
-            Value::None => match rhs {
+            Value::None => match ctx {
                 Value::None => {}
-                _ => fail!("Coerce error"),
+                _ => fail!("Coerce error setting ctx for None"),
             },
-            Value::Path(this) => match rhs {
-                Value::Path(rhs) => this.set_ctx(rhs),
-                _ => fail!("Coerce error"),
+            Value::Path(this) => match ctx {
+                Value::Path(ctx) => this.set_ctx(ctx),
+                _ => fail!("Coerce error setting ctx for Path"),
             },
-            Value::Date(this) => match rhs {
-                Value::Date(rhs) => this.set_ctx(rhs),
-                _ => fail!("Coerce error"),
+            Value::Date(this) => match ctx {
+                Value::Date(ctx) => this.set_ctx(ctx),
+                _ => fail!("Coerce error setting ctx for Date"),
             },
-            Value::Duration(this) => match rhs {
-                Value::Duration(rhs) => this.set_ctx(rhs),
-                _ => fail!("Coerce error"),
+            Value::Duration(this) => match ctx {
+                Value::Duration(ctx) => this.set_ctx(ctx),
+                _ => fail!("Coerce error setting ctx for Duration"),
             },
-            _ => fail!("Coerce error"),
+            Value::Prio(this) => match ctx {
+                Value::Prio(ctx) => this.set_ctx(ctx),
+                _ => fail!("Coerce error setting ctx for Prio"),
+            },
+            Value::Status(this) => match ctx {
+                Value::Status(ctx) => this.set_ctx(ctx),
+                _ => fail!("Coerce error setting ctx for Status"),
+            },
+            _ => fail!("Coerce error for unhandled variant"),
         }
         Ok(())
     }
 }
+
 impl Default for Value {
     fn default() -> Value {
         Value::None
     }
 }
+
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -82,6 +94,7 @@ impl std::fmt::Display for Value {
             Value::Date(d) => write!(f, "{d}")?,
             Value::Duration(d) => write!(f, "{d}")?,
             Value::Prio(p) => write!(f, "{p}")?,
+            Value::Status(s) => write!(f, "{s}")?,
             _ => {}
         }
         Ok(())
@@ -102,6 +115,7 @@ impl Path {
         }
     }
 }
+
 impl TryFrom<&str> for Path {
     type Error = util::ErrorType;
     fn try_from(s: &str) -> std::result::Result<Path, Self::Error> {
@@ -126,6 +140,7 @@ impl TryFrom<&str> for Path {
         Ok(Path::new(absolute, &parts))
     }
 }
+
 impl std::fmt::Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut do_add_delim = self.absolute;
@@ -151,8 +166,9 @@ impl Date {
     fn new(year: u16, month: u8, day: u8) -> Date {
         Date { year, month, day }
     }
-    fn set_ctx(&mut self, _rhs: &Self) {}
+    fn set_ctx(&mut self, _ctx: &Self) {}
 }
+
 impl TryFrom<&str> for Date {
     type Error = util::ErrorType;
     fn try_from(s: &str) -> std::result::Result<Date, Self::Error> {
@@ -185,6 +201,7 @@ impl TryFrom<&str> for Date {
         Ok(Date { year, month, day })
     }
 }
+
 impl std::fmt::Display for Date {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:.4}{:02.2}{:02.2}", self.year, self.month, self.day)?;
@@ -197,8 +214,9 @@ impl Duration {
         let minutes = minutes + (hours + (days + weeks * 5) * 8) * 60;
         Duration { minutes }
     }
-    fn set_ctx(&mut self, _rhs: &Self) {}
+    fn set_ctx(&mut self, _ctx: &Self) {}
 }
+
 impl TryFrom<&str> for Duration {
     type Error = util::ErrorType;
     fn try_from(s: &str) -> std::result::Result<Duration, Self::Error> {
@@ -235,6 +253,7 @@ impl TryFrom<&str> for Duration {
         Ok(Duration { minutes })
     }
 }
+
 impl std::fmt::Display for Duration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut m = self.minutes;
@@ -257,7 +276,13 @@ impl Prio {
     fn new(major: Option<u32>, minor: u32) -> Prio {
         Prio { major, minor }
     }
+    fn set_ctx(&mut self, ctx: &Self) {
+        if self.major.is_none() {
+            self.major = ctx.major.clone();
+        }
+    }
 }
+
 impl TryFrom<&str> for Prio {
     type Error = util::ErrorType;
     fn try_from(s: &str) -> std::result::Result<Prio, Self::Error> {
@@ -291,6 +316,7 @@ impl TryFrom<&str> for Prio {
         Ok(Prio::new(major, minor))
     }
 }
+
 impl std::fmt::Display for Prio {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(major) = self.major {
@@ -304,6 +330,41 @@ impl std::fmt::Display for Prio {
         }
         write!(f, "{}", self.minor).unwrap();
         Ok(())
+    }
+}
+
+impl Status {
+    fn set_ctx(&mut self, _ctx: &Status) {}
+}
+
+impl TryFrom<&str> for Status {
+    type Error = util::ErrorType;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let status = match s {
+            "todo" => Status::Todo,
+            "wip" => Status::Wip,
+            "done" => Status::Done,
+            _ => return Err(util::Error::create("Could not create Status from '{s}'")),
+        };
+        Ok(status)
+    }
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status::Todo
+    }
+}
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Status::Todo => "todo",
+            Status::Wip => "wip",
+            Status::Done => "done",
+        };
+        write!(f, "{s}")
     }
 }
 

@@ -54,21 +54,29 @@ impl Builder {
                                 use amp::*;
                                 if let Kind::Amp(kv) = &stmt.kind {
                                     let key = kv.key.clone();
-                                    let value = match &kv.value {
-                                        Value::Tag(tag) => {
-                                            let tag = tag.as_str();
-                                            match key.as_str() {
-                                                "proj" => Value::Path(value::Path::try_from(tag)?),
-                                                "prio" => Value::Prio(value::Prio::try_from(tag)?),
-                                                "deadline" => {
-                                                    Value::Date(value::Date::try_from(tag)?)
+                                    if let Ok(status) = value::Status::try_from(key.as_str()) {
+                                        node.org.insert("status", &Value::Status(status));
+                                    } else {
+                                        let value = match &kv.value {
+                                            Value::Tag(tag) => {
+                                                let tag = tag.as_str();
+                                                match key.as_str() {
+                                                    "proj" => {
+                                                        Value::Path(value::Path::try_from(tag)?)
+                                                    }
+                                                    "prio" => {
+                                                        Value::Prio(value::Prio::try_from(tag)?)
+                                                    }
+                                                    "deadline" => {
+                                                        Value::Date(value::Date::try_from(tag)?)
+                                                    }
+                                                    _ => kv.value.clone(),
                                                 }
-                                                _ => kv.value.clone(),
                                             }
-                                        }
-                                        _ => Value::None,
+                                            _ => Value::None,
+                                        };
+                                        node.org.insert(&key, &value);
                                     };
-                                    node.org.insert(&key, &value);
                                 }
                             }
 

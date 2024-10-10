@@ -48,8 +48,8 @@ impl KVSet {
         }
         Ok(())
     }
-    pub fn insert(&mut self, key: &Key, value: &Value) -> Option<Value> {
-        self.kvs.insert(key.clone(), value.clone())
+    pub fn insert(&mut self, key: &str, value: &Value) -> Option<Value> {
+        self.kvs.insert(key.to_owned(), value.clone())
     }
     pub fn merge(&mut self, ctx: &KVSet) -> util::Result<()> {
         trace!("Merging");
@@ -74,6 +74,7 @@ impl KVSet {
         Ok(())
     }
 }
+
 impl std::fmt::Display for KVSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut prefix = "";
@@ -87,6 +88,7 @@ impl std::fmt::Display for KVSet {
         Ok(())
     }
 }
+
 impl naft::ToNaft for KVSet {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
         if !self.is_empty() {
@@ -146,23 +148,14 @@ impl Stmt {
     pub fn new(range: Range, kind: Kind) -> Stmt {
         Stmt { range, kind }
     }
+}
 
-    pub fn write(&self, s: &mut String) -> util::Result<()> {
+impl std::fmt::Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            Kind::Text(text) => {
-                write!(s, "({text})")?;
-            }
-            Kind::Amp(kv) => {
-                let w = |s: &mut String, kv: &KeyValue| -> util::Result<()> {
-                    write!(s, "{}", kv)?;
-                    Ok(())
-                };
-                write!(s, "[")?;
-                w(s, &kv)?;
-                write!(s, "]")?;
-            }
+            Kind::Text(text) => write!(f, "({text})"),
+            Kind::Amp(kv) => write!(f, "[{}]", kv),
         }
-        Ok(())
     }
 }
 
@@ -423,7 +416,7 @@ mod tests {
             parser.parse(content, m);
             let mut s = String::new();
             for stmt in &parser.stmts {
-                stmt.write(&mut s).unwrap();
+                write!(&mut s, "{stmt}").unwrap();
             }
             assert_eq!(&s, exp)
         }

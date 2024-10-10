@@ -5,10 +5,10 @@
 ## &done Translate md.Tree into tree.Tree
 
 ## &todo Improve Markdown parser
-- Detect `&nbsp;`
+- Detect `&nbsp;` &done
 - Detect normal Markdown links
 
-## &todo Update tree.Tree to represent
+## &done Update tree.Tree to represent
 - AMP
 - Text
 
