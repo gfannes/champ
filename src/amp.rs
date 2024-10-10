@@ -48,8 +48,8 @@ impl KVSet {
         }
         Ok(())
     }
-    pub fn insert(&mut self, key: &str, value: &Value) -> Option<Value> {
-        self.kvs.insert(key.to_owned(), value.clone())
+    pub fn insert(&mut self, kv: KeyValue) -> Option<Value> {
+        self.kvs.insert(kv.key, kv.value)
     }
     pub fn merge(&mut self, ctx: &KVSet) -> util::Result<()> {
         trace!("Merging");
@@ -59,15 +59,6 @@ impl KVSet {
                 value.set_ctx(v)?;
             } else {
                 self.kvs.insert(k.clone(), v.clone());
-            }
-            Ok(())
-        })?;
-        Ok(())
-    }
-    pub fn merge_unless_present(&mut self, rhs: &KVSet) -> util::Result<()> {
-        rhs.for_each(|k, v| {
-            if !self.kvs.contains_key(k) {
-                self.insert(k, v);
             }
             Ok(())
         })?;
@@ -198,21 +189,21 @@ impl Parser {
                         stmt.kind = Kind::Text(s.into());
                     }
                     State::Amp => {
-                        let mut kv: Option<KeyValue> = None;
+                        let mut kv: Option<(String, Option<String>)> = None;
                         for token in group.tokens {
                             match token.kind {
                                 lex::Kind::Ampersand => {
                                     if kv.is_some() {
                                         todo!("Grouper should produce Groups that match with a single KeyValue");
                                     }
-                                    kv = Some(KeyValue::default())
+                                    kv = Some(Default::default())
                                 }
                                 lex::Kind::Equal => {
                                     // &todo &spec: only allow [a-zA-Z_\d] in Key
                                     if let Some(kv) = &mut kv {
-                                        match &mut kv.value{
-                                            Value::None => {kv.value = Value::Tag(String::new());}
-                                            Value::Tag(tag) => {
+                                        match &mut kv.1{
+                                            None => {kv.1 = Some(String::new());}
+                                            Some(tag) => {
                                                 if let Some(s) = content.get(token.range.clone()) {
                                                     tag.push_str(s);
                                                 }
@@ -224,9 +215,9 @@ impl Parser {
                                 _ => {
                                     if let Some(kv) = &mut kv {
                                         if let Some(s) = content.get(token.range.clone()) {
-                                            match &mut kv.value{
-                                                Value::None => {kv.key.push_str(s);}
-                                                Value::Tag(tag) => {
+                                            match &mut kv.1{
+                                                None => {kv.0.push_str(s);}
+                                                Some(tag) => {
                                                     if let Some(s) = content.get(token.range.clone()) {
                                                         tag.push_str(s);
                                                     }
@@ -239,7 +230,7 @@ impl Parser {
                             }
                         }
                         if let Some(kv) = kv {
-                            stmt.kind = Kind::Amp(kv);
+                            stmt.kind = Kind::Amp(KeyValue::from(kv));
                         }
                     }
                 };
@@ -247,6 +238,39 @@ impl Parser {
                 stmt
             })
             .collect();
+    }
+}
+
+impl From<(String, Option<String>)> for KeyValue {
+    fn from(kv: (String, Option<String>)) -> KeyValue {
+        let mut key = kv.0;
+
+        let value = || -> util::Result<value::Value> {
+            let value = match kv.1.as_ref().map(|val| val.as_str()) {
+                None => {
+                    if let Ok(status) = value::Status::try_from(key.as_str()) {
+                        key = "status".into();
+                        value::Value::Status(status)
+                    } else {
+                        value::Value::Tag(key.to_owned())
+                    }
+                }
+                Some(val) => match key.as_str() {
+                    "proj" => value::Value::Path(value::Path::try_from(val)?),
+                    "prio" => value::Value::Prio(value::Prio::try_from(val)?),
+                    "deadline" => value::Value::Date(value::Date::try_from(val)?),
+                    _ => return Err(util::Error::create("")),
+                },
+            };
+
+            Ok(value)
+        }()
+        .unwrap_or_else(|_| match kv.1 {
+            None => value::Value::None,
+            Some(val) => value::Value::Tag(val),
+        });
+
+        KeyValue { key, value }
     }
 }
 
