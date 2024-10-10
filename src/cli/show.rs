@@ -1,4 +1,6 @@
-use crate::{answer, rubr};
+use crate::{amp::value, answer, rubr};
+use colored::Colorize;
+use std::fmt::Write;
 
 pub enum Display {
     All,
@@ -31,16 +33,37 @@ impl Show for answer::Answer {
             self.each_location(|location, meta| {
                 if counter.call() {
                     if meta.is_other_file {
-                        println!("{}", location.filename.display());
+                        let s = format!("{}", location.filename.display()).blue();
+                        println!("{}", s);
                     }
                     let proj = match &location.proj {
                         Some(proj) => proj.to_string(),
                         None => "".to_owned(),
                     };
-                    println!(
+
+                    let mut os = String::new();
+                    write!(
+                        os,
                         "  {}\t{}\t{:ctx_width$}\t{}: {}",
                         &location.prio, proj, &location.ctx, location.line_nr, &location.content
-                    );
+                    )
+                    .unwrap();
+                    let color = match &location.prio {
+                        value::Prio {
+                            major: Some(major),
+                            minor: _,
+                        } => match major {
+                            0..2 => "red",
+                            2..4 => "orange",
+                            4..6 => "yellow",
+                            6..8 => "green",
+                            8..10 => "blue",
+                            _ => "brown",
+                        },
+                        _ => "grey",
+                    };
+                    let os = os.color(colored::Color::from(color));
+                    println!("{}", &os);
                 }
             });
         }
