@@ -11,6 +11,7 @@ mod lex;
 pub mod mero;
 mod path;
 mod query;
+mod rnd;
 mod rubr;
 mod show;
 mod tree;

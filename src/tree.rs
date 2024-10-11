@@ -2,7 +2,7 @@ pub mod builder;
 pub mod md;
 pub mod src;
 
-use crate::{amp, fail, rubr::naft, util};
+use crate::{amp, fail, rnd, rubr::naft, util};
 use std::{collections, path};
 
 // Represents a subset of the filesystem, corresponding with a ignore.Tree
@@ -77,6 +77,9 @@ pub struct Node {
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
     pub links: Vec<usize>,  // Direct links to other Trees
     reachables: Vec<usize>, // All other Trees that are recursively reachable
+
+    pub kvs: Vec<(String, Option<String>)>,
+    pub path: Option<rnd::Key>,
 }
 
 #[derive(Debug, Clone)]
@@ -365,6 +368,23 @@ impl naft::ToNaft for Node {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
         let n = p.node("Node")?;
         n.attr("line_nr", &(self.line_ix.unwrap_or(0) + 1))?;
+        for kv in &self.kvs {
+            // let value= ;
+            n.attr(
+                "kv",
+                &format!(
+                    "{}={}",
+                    kv.0.as_str(),
+                    match &kv.1 {
+                        None => "",
+                        Some(v) => v.as_str(),
+                    }
+                ),
+            )?;
+        }
+        if let Some(path) = &self.path {
+            n.attr("path", path)?;
+        }
         self.org.to_naft(&n.name("org"));
         self.ctx.to_naft(&n.name("ctx"));
         self.agg.to_naft(&n.name("agg"));

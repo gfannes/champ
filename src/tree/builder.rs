@@ -1,4 +1,4 @@
-use crate::{amp, fs, lex, path, tree, tree::md, tree::src, util};
+use crate::{amp, fail, fs, lex, path, rnd, tree, tree::md, tree::src, util};
 use std::collections;
 use tracing::{error, span, trace, warn, Level};
 
@@ -54,6 +54,18 @@ impl Builder {
                                 use amp::*;
                                 if let Kind::Amp(kv) = &stmt.kind {
                                     node.org.insert(kv.to_owned());
+
+                                    // &todo: Rework Kind::Amp to contain (String, Option<String>)
+                                    node.kvs.push((
+                                        kv.key.clone(),
+                                        match &kv.value {
+                                            value::Value::None => None,
+                                            _ => Some(kv.value.to_string()),
+                                        },
+                                    ));
+                                    if rnd::Kind::from(kv.key.as_str()) == rnd::Kind::Absolute {
+                                        node.path = Some(rnd::Key::new(kv.key.as_str()));
+                                    }
                                 }
                             }
 
@@ -85,7 +97,7 @@ impl Builder {
             Ok(())
         })?;
 
-        // Populate tree.org with info from
+        // Populate Tree.org with info from
         // - _amp.md for Folders
         // - tree.filename for Files
         {
@@ -167,9 +179,32 @@ impl Builder {
 
         // Compute context for each Node, starting with Tree.ctx
         forest.each_tree_mut(|tree| {
+            let filename = tree.filename.clone();
             tree.root_to_leaf(|src, dst| {
                 dst.ctx = dst.org.clone();
                 dst.ctx.merge(&src.ctx)?;
+
+                // Join relative path with their absolute parent path
+                if dst.path.is_none() {
+                    let mut path = None;
+                    for kv in &dst.kvs {
+                        let key = rnd::Key::new(kv.0.as_str());
+                        if let Some(parent) = &src.path {
+                            if let Some(p) = parent.join(&key) {
+                                if path.is_some() {
+                                    fail!("Only one path is supported")
+                                }
+                                path = Some(p);
+                            }
+                        } else if key.kind() == rnd::Kind::Relative {
+                            fail!(
+                                "Found Relative Key without an Absolute parent in '{}'",
+                                filename.display()
+                            );
+                        }
+                    }
+                    dst.path = path;
+                }
                 Ok(())
             })?;
             Ok(())
