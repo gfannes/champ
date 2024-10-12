@@ -37,14 +37,14 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
             let mut proj: Option<amp::value::Path> = None;
             node.ctx.for_each(|k, v| {
                 match k.as_str() {
-                    "prio" => match v {
-                        amp::value::Value::Prio(p) => prio = p.clone(),
-                        _ => fail!("Expected 'prio' to be a value.Prio"),
-                    },
-                    "proj" => match v {
-                        amp::value::Value::Path(p) => proj = Some(p.clone()),
-                        _ => fail!("Expected 'proj' to be a value.Path"),
-                    },
+                    // "prio" => match v {
+                    //     amp::value::Value::Prio(p) => prio = p.clone(),
+                    //     _ => fail!("Expected 'prio' to be a value.Prio"),
+                    // },
+                    // "proj" => match v {
+                    //     amp::value::Value::Path(p) => proj = Some(p.clone()),
+                    //     _ => fail!("Expected 'proj' to be a value.Path"),
+                    // },
                     _ => {}
                 };
                 Ok(())

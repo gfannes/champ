@@ -1,21 +1,18 @@
 pub mod value;
 
 use crate::{lex, rubr::naft, util};
-use std::{collections, fmt::Write};
+use std::{collections, fmt::Display, fmt::Write};
 use tracing::{trace, warn};
 
 pub type Key = String;
 pub type Value = value::Value;
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Default, Clone)]
-pub struct KeyValue {
-    pub key: Key,
-    pub value: Value,
-}
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct KeyValue(pub String, pub Option<String>);
 
 #[derive(Default, Debug, Clone)]
 pub struct KVSet {
-    pub kvs: collections::BTreeMap<Key, Value>,
+    pub kvs: collections::BTreeMap<Key, Vec<String>>,
 }
 
 impl KVSet {
@@ -26,68 +23,85 @@ impl KVSet {
         self.kvs.is_empty()
     }
     pub fn has(&self, needle: &KeyValue) -> bool {
-        for (key, value) in &self.kvs {
-            if key == &needle.key {
-                match &needle.value {
-                    // None works like a wildcard
-                    Value::None => return true,
-                    // Tag matches with end of the string representation
-                    Value::Tag(tag) => return value.to_string().ends_with(tag),
-                    _ => return value == &needle.value,
+        let values = self.kvs.get(&needle.0);
+
+        match &needle.1 {
+            // None works like a wildcard
+            None => values.is_some(),
+            Some(nv) => {
+                if let Some(values) = values {
+                    values.iter().any(|value| value.to_string().ends_with(nv))
+                } else {
+                    false
                 }
             }
         }
-        false
     }
     pub fn for_each(
         &self,
-        mut cb: impl FnMut(&Key, &Value) -> util::Result<()>,
+        mut cb: impl FnMut(&Key, Option<String>) -> util::Result<()>,
     ) -> util::Result<()> {
-        for (key, value) in &self.kvs {
-            cb(key, value)?;
+        for (key, values) in &self.kvs {
+            if values.is_empty() {
+                cb(key, None)?;
+            } else {
+                for value in values {
+                    cb(key, Some(value.clone()))?;
+                }
+            }
         }
         Ok(())
     }
-    pub fn insert(&mut self, kv: KeyValue) -> Option<Value> {
-        self.kvs.insert(kv.key, kv.value)
+    pub fn insert(&mut self, kv: &KeyValue) {
+        if !self.kvs.contains_key(&kv.0) {
+            self.kvs.insert(kv.0.clone(), Vec::new());
+        }
+        if let Some(values) = self.kvs.get_mut(&kv.0) {
+            if let Some(value) = &kv.1 {
+                values.push(value.clone());
+            }
+        }
     }
     pub fn merge(&mut self, ctx: &KVSet) -> util::Result<()> {
         trace!("Merging");
-        ctx.for_each(|k, v| {
-            if let Some(value) = self.kvs.get_mut(k) {
-                trace!("Calling set_ctx");
-                value.set_ctx(v)?;
-            } else {
-                self.kvs.insert(k.clone(), v.clone());
+        for (key_ctx, values_ctx) in &ctx.kvs {
+            if !self.kvs.contains_key(key_ctx) {
+                self.kvs.insert(key_ctx.clone(), Vec::new());
             }
-            Ok(())
-        })?;
+            if let Some(values) = self.kvs.get_mut(key_ctx) {
+                for value_ctx in values_ctx {
+                    if !values.contains(value_ctx) {
+                        values.push(value_ctx.clone());
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
 
 impl std::fmt::Display for KVSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut prefix = "";
-        for (k, v) in &self.kvs {
-            write!(f, "{prefix}{k}")?;
-            prefix = " ";
-            if v != &Value::None {
-                write!(f, "={}", v)?;
-            }
-        }
+        // let mut prefix = "";
+        // for (k, v) in &self.kvs {
+        //     write!(f, "{prefix}{k}")?;
+        //     prefix = " ";
+        //     if v != &Value::None {
+        //         write!(f, "={}", v)?;
+        //     }
+        // }
         Ok(())
     }
 }
 
 impl naft::ToNaft for KVSet {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        if !self.is_empty() {
-            let n = p.node("KVSet")?;
-            for (k, v) in &self.kvs {
-                n.attr(k, v)?;
-            }
-        }
+        // if !self.is_empty() {
+        //     let n = p.node("KVSet")?;
+        //     for (k, v) in &self.kvs {
+        //         n.attr(k, v)?;
+        //     }
+        // }
         Ok(())
     }
 }
@@ -126,10 +140,10 @@ impl Default for Kind {
 
 impl std::fmt::Display for KeyValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.value == Value::None {
-            write!(f, "{}", &self.key)?;
+        if let Some(v) = &self.1 {
+            write!(f, "{}={}", &self.0, v)?;
         } else {
-            write!(f, "{}={}", &self.key, &self.value)?;
+            write!(f, "{}", &self.0)?;
         }
         Ok(())
     }
@@ -230,7 +244,7 @@ impl Parser {
                             }
                         }
                         if let Some(kv) = kv {
-                            stmt.kind = Kind::Amp(KeyValue::from(kv));
+                            stmt.kind = Kind::Amp(KeyValue(kv.0, kv.1));
                         }
                     }
                 };
@@ -241,38 +255,38 @@ impl Parser {
     }
 }
 
-impl From<(String, Option<String>)> for KeyValue {
-    fn from(kv: (String, Option<String>)) -> KeyValue {
-        let mut key = kv.0;
+// impl From<(String, Option<String>)> for KeyValue {
+//     fn from(kv: (String, Option<String>)) -> KeyValue {
+//         let mut key = kv.0;
 
-        let value = || -> util::Result<value::Value> {
-            let value = match kv.1.as_ref().map(|val| val.as_str()) {
-                None => {
-                    if let Ok(status) = value::Status::try_from(key.as_str()) {
-                        key = "status".into();
-                        value::Value::Status(status)
-                    } else {
-                        value::Value::Tag(key.to_owned())
-                    }
-                }
-                Some(val) => match key.as_str() {
-                    "proj" => value::Value::Path(value::Path::try_from(val)?),
-                    "prio" => value::Value::Prio(value::Prio::try_from(val)?),
-                    "deadline" => value::Value::Date(value::Date::try_from(val)?),
-                    _ => return Err(util::Error::create("")),
-                },
-            };
+//         let value = || -> util::Result<value::Value> {
+//             let value = match kv.1.as_ref().map(|val| val.as_str()) {
+//                 None => {
+//                     if let Ok(status) = value::Status::try_from(key.as_str()) {
+//                         key = "status".into();
+//                         value::Value::Status(status)
+//                     } else {
+//                         value::Value::Tag(key.to_owned())
+//                     }
+//                 }
+//                 Some(val) => match key.as_str() {
+//                     "proj" => value::Value::Path(value::Path::try_from(val)?),
+//                     "prio" => value::Value::Prio(value::Prio::try_from(val)?),
+//                     "deadline" => value::Value::Date(value::Date::try_from(val)?),
+//                     _ => return Err(util::Error::create("")),
+//                 },
+//             };
 
-            Ok(value)
-        }()
-        .unwrap_or_else(|_| match kv.1 {
-            None => value::Value::None,
-            Some(val) => value::Value::Tag(val),
-        });
+//             Ok(value)
+//         }()
+//         .unwrap_or_else(|_| match kv.1 {
+//             None => value::Value::None,
+//             Some(val) => value::Value::Tag(val),
+//         });
 
-        KeyValue { key, value }
-    }
-}
+//         KeyValue { key, value }
+//     }
+// }
 
 // A sequence of Tokens that can be translated into a Stmt
 #[derive(Debug)]

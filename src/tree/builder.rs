@@ -53,18 +53,12 @@ impl Builder {
                             for stmt in &self.amp_parser.stmts {
                                 use amp::*;
                                 if let Kind::Amp(kv) = &stmt.kind {
-                                    node.org.insert(kv.to_owned());
+                                    node.org.insert(kv);
 
                                     // &todo: Rework Kind::Amp to contain (String, Option<String>)
-                                    node.kvs.push((
-                                        kv.key.clone(),
-                                        match &kv.value {
-                                            value::Value::None => None,
-                                            _ => Some(kv.value.to_string()),
-                                        },
-                                    ));
-                                    if rnd::Kind::from(kv.key.as_str()) == rnd::Kind::Absolute {
-                                        node.path = Some(rnd::Key::new(kv.key.as_str()));
+                                    node.kvs.push((kv.0.clone(), kv.1.clone()));
+                                    if rnd::Kind::from(kv.0.as_str()) == rnd::Kind::Absolute {
+                                        node.path = Some(rnd::Key::new(kv.0.as_str()));
                                     }
                                 }
                             }
