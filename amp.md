@@ -42,6 +42,8 @@
 
 ## Support nested projects &prio=a
 - Support proj statement that does not append to the curret proj path, but resolves into an existing one
+- `&//abs`, `&/rel` and `&tag`
+- Prune context from items with a direct match in org, on a match with org.parent() &todo
 - `&proj=amp`
 	- `&proj=ch` => same as `proj=/amp/ch`
 	- `&proj=/ch` => same as `proj=/ch`
