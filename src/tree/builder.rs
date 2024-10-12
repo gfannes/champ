@@ -210,6 +210,35 @@ impl Builder {
             Ok(())
         })?;
 
+        // Populate ctx2 with resolved Keys
+        {
+            // Collect all absolute Keys
+            let mut keyset = rnd::KeySet::new();
+            forest.each_node(|_tree, node| {
+                if let Some(path) = &node.path {
+                    if path.kind() == rnd::Kind::Absolute {
+                        keyset.insert(path.clone())?;
+                    }
+                }
+                Ok(())
+            })?;
+
+            forest.each_node_mut(
+                |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
+                    let mut ctx2 = rnd::KeyValues::new();
+                    for kv in &node.kvs {
+                        let mut key = rnd::Key::new(&kv.0);
+                        if let Ok(k) = keyset.find(&key) {
+                            key = k;
+                        }
+                        ctx2.insert(&key, &kv.1);
+                    }
+                    node.ctx2 = ctx2;
+                    Ok(())
+                },
+            )?;
+        }
+
         // // Aggregate data over the Forest
         // forest.each_tree_mut(|tree| {
         //     tree.leaf_to_root(|src, dst| {

@@ -84,6 +84,8 @@ impl App {
                     tree.to_naft(&mut out)?;
                     write!(&mut out, "\n")?;
                 }
+
+                println!("keyset: {}", forest.keyset);
             }
         }
 

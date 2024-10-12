@@ -4,7 +4,7 @@ use std::collections;
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct Key(String);
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct KeySet(collections::BTreeSet<Key>);
 
 #[derive(PartialEq, Eq, Debug)]
@@ -12,6 +12,43 @@ pub enum Kind {
     Absolute,
     Relative,
     Tag,
+}
+
+pub type Value = Option<String>;
+
+#[derive(Default, Debug)]
+pub struct KeyValues {
+    data: collections::BTreeMap<Key, Vec<String>>,
+}
+
+impl KeyValues {
+    pub fn new() -> KeyValues {
+        Default::default()
+    }
+
+    pub fn insert(&mut self, key: &Key, value: &Value) {
+        if !self.data.contains_key(key) {
+            self.data.insert(key.clone(), Vec::new());
+        }
+        if let Some(value) = value {
+            if let Some(values) = self.data.get_mut(key) {
+                values.push(value.clone());
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for KeyValues {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (k, vs) in &self.data {
+            write!(f, "{}->[", k)?;
+            for v in vs {
+                write!(f, "{},", v)?;
+            }
+            write!(f, "]")?;
+        }
+        Ok(())
+    }
 }
 
 impl From<&str> for Kind {

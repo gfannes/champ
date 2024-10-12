@@ -16,6 +16,7 @@ pub struct Forest {
     pub trees: Vec<Tree>,
     roots: Vec<usize>,
     names: Vec<String>,
+    pub keyset: rnd::KeySet,
 }
 
 // Represents a single file or folder
@@ -32,6 +33,52 @@ pub struct Tree {
     pub org: amp::KVSet,
     pub ctx: amp::KVSet,
     state: State,
+}
+
+// &next: provide amp items
+#[derive(Default, Debug)]
+pub struct Node {
+    pub parts: Vec<Part>,
+    pub line_ix: Option<u64>,
+    // pub org: Vec<amp::KeyValue>,
+    // pub ctx: Vec<amp::KeyValue>,
+    // pub agg: Vec<amp::KeyValue>,
+    pub org: amp::KVSet,
+    pub ctx: amp::KVSet,
+    pub agg: amp::KVSet,
+    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
+    pub tree_ix: usize,
+    childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
+    pub links: Vec<usize>,  // Direct links to other Trees
+    reachables: Vec<usize>, // All other Trees that are recursively reachable
+
+    pub kvs: Vec<(String, Option<String>)>,
+    pub path: Option<rnd::Key>,
+    pub ctx2: rnd::KeyValues,
+}
+
+#[derive(Debug, Clone)]
+pub struct Part {
+    pub range: Range,
+    pub kind: Kind,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Kind {
+    Meta, // Meta parts are searched for AMP info
+    Data,
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum Format {
+    #[default]
+    Unknown,
+    Folder,
+    Markdown,
+    MindMap,
+    SourceCode {
+        comment: &'static str,
+    },
 }
 
 #[derive(Debug)]
@@ -61,51 +108,6 @@ impl std::fmt::Display for State {
     }
 }
 
-// &next: provide amp items
-#[derive(Default, Debug)]
-pub struct Node {
-    pub parts: Vec<Part>,
-    pub line_ix: Option<u64>,
-    // pub org: Vec<amp::KeyValue>,
-    // pub ctx: Vec<amp::KeyValue>,
-    // pub agg: Vec<amp::KeyValue>,
-    pub org: amp::KVSet,
-    pub ctx: amp::KVSet,
-    pub agg: amp::KVSet,
-    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
-    pub tree_ix: usize,
-    childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
-    pub links: Vec<usize>,  // Direct links to other Trees
-    reachables: Vec<usize>, // All other Trees that are recursively reachable
-
-    pub kvs: Vec<(String, Option<String>)>,
-    pub path: Option<rnd::Key>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Part {
-    pub range: Range,
-    pub kind: Kind,
-}
-
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub enum Kind {
-    Meta, // Meta parts are searched for AMP info
-    Data,
-}
-
-#[derive(Debug, Default, Clone)]
-pub enum Format {
-    #[default]
-    Unknown,
-    Folder,
-    Markdown,
-    MindMap,
-    SourceCode {
-        comment: &'static str,
-    },
-}
-
 impl Forest {
     pub fn new() -> Forest {
         Default::default()
@@ -132,10 +134,14 @@ impl Forest {
         Ok(ix)
     }
 
-    pub fn each_node(&self, mut cb: impl FnMut(&Tree, &Node) -> ()) {
+    pub fn each_node(
+        &self,
+        mut cb: impl FnMut(&Tree, &Node) -> util::Result<()>,
+    ) -> util::Result<()> {
         for tree in &self.trees {
-            tree.each_node(&mut cb);
+            tree.each_node(&mut cb)?;
         }
+        Ok(())
     }
 
     pub fn each_node_mut(
@@ -217,7 +223,10 @@ impl Tree {
         tree
     }
 
-    pub fn each_node(&self, cb: &mut impl FnMut(&Tree, &Node) -> ()) {
+    pub fn each_node(
+        &self,
+        cb: &mut impl FnMut(&Tree, &Node) -> util::Result<()>,
+    ) -> util::Result<()> {
         match self.format {
             Format::Folder => {}
             _ => {
@@ -227,10 +236,11 @@ impl Tree {
                     iter.next();
                 }
                 for node in iter {
-                    cb(self, node);
+                    cb(self, node)?;
                 }
             }
         }
+        Ok(())
     }
 
     pub fn each_node_mut(
@@ -385,6 +395,7 @@ impl naft::ToNaft for Node {
         if let Some(path) = &self.path {
             n.attr("path", path)?;
         }
+        n.attr("ctx2", &self.ctx2);
         self.org.to_naft(&n.name("org"));
         self.ctx.to_naft(&n.name("ctx"));
         self.agg.to_naft(&n.name("agg"));
