@@ -1,5 +1,20 @@
-# Ampersand Metadata Protocol
-- Annotation Metadata Protocol
+# Ampersand Metadata Protocol (AMP) &!/amp
+
+## Specification &!spec
+- AMP data is searched in _metadata_, not in actual data
+	- For source code, these are the comments
+	- For Markdown, there is the text, excluding the code blocks and formulas
+- AMP data consists of Paths
+	- Formalize below definition &todo
+		- What if an item start with a `!` or `:`?
+	- The `&` character starts an AMP Path
+	- If the next character is a `!`, it is a definition Path
+	- The `:` character is the Path separator
+		- A Path starting with a `:` is an absolute Path
+	- When escaping is necessary, the item can be wrapped as
+		- `::(((item)))` if `item` does not start with a `(`, using as many `(((` as necessary to ensure there is no match of `)))` in `item`
+		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
+		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
 
 ## Support pesistent project enumeration
 - Config file

@@ -1,5 +1,62 @@
-use crate::{fail, util};
+use crate::{fail, rubr::strange, util};
 use std::collections;
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub struct Path {
+    pub is_definition: bool,
+    pub is_absolute: bool,
+    parts: Vec<Part>,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Part {
+    Text(String),
+    Date(Date),
+    Duration(Duration),
+    Prio(Prio),
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Date {}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Duration {}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct Prio {}
+
+impl Path {
+    pub fn new(is_definition: bool, is_absolute: bool, parts: Vec<&str>) -> Path {
+        Path {
+            is_definition,
+            is_absolute,
+            parts: parts.iter().map(|s| Part::Text(String::from(*s))).collect(),
+        }
+    }
+}
+
+impl TryFrom<&str> for Path {
+    type Error = util::ErrorType;
+    fn try_from(s: &str) -> util::Result<Path> {
+        let mut strange = strange::Strange::new(s);
+
+        let is_definition = strange.read_char_if('!');
+        let is_absolute = strange.read_char_if(':');
+
+        let mut parts = Vec::<Part>::new();
+        while !strange.is_empty() {
+            if let Some(str) = strange.read(|b| b.exclude().to_end().through(':')) {
+                parts.push(Part::Text(str.into()));
+            }
+        }
+
+        Ok(Path {
+            is_definition,
+            is_absolute,
+            parts,
+        })
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct Key(String);
@@ -7,11 +64,17 @@ pub struct Key(String);
 #[derive(Default, Debug)]
 pub struct KeySet(collections::BTreeSet<Key>);
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Kind {
-    Absolute,
-    Relative,
-    Tag,
+    Normal,
+    Definition,
+    Extension,
+}
+
+impl Default for Kind {
+    fn default() -> Kind {
+        Kind::Normal
+    }
 }
 
 pub type Value = Option<String>;
@@ -54,11 +117,11 @@ impl std::fmt::Display for KeyValues {
 impl From<&str> for Kind {
     fn from(s: &str) -> Self {
         if s.starts_with("//") {
-            Kind::Absolute
+            Kind::Definition
         } else if s.starts_with("/") {
-            Kind::Relative
+            Kind::Extension
         } else {
-            Kind::Tag
+            Kind::Normal
         }
     }
 }
@@ -70,8 +133,8 @@ impl Key {
 
     pub fn join(&self, child: &Key) -> Option<Key> {
         match (self.kind(), child.kind()) {
-            (_, Kind::Absolute) => Some(child.clone()),
-            (Kind::Absolute, Kind::Relative) => Some(Key::new(format!("{}{}", self, child))),
+            (_, Kind::Definition) => Some(child.clone()),
+            (Kind::Definition, Kind::Extension) => Some(Key::new(format!("{}{}", self, child))),
             _ => None,
         }
     }
@@ -87,7 +150,7 @@ impl KeySet {
     }
 
     pub fn insert(&mut self, key: Key) -> util::Result<()> {
-        if key.kind() != Kind::Absolute {
+        if key.kind() != Kind::Definition {
             fail!("Only Absolute key can be added to a KeySet");
         }
         self.0.insert(key);
@@ -100,10 +163,10 @@ impl KeySet {
             let needle_kind = needle.kind();
             for k in &self.0 {
                 match k.kind() {
-                    Kind::Absolute => {
+                    Kind::Definition => {
                         let is_match = match needle_kind {
-                            Kind::Absolute => k.0.as_str() == needle.0.as_str(),
-                            Kind::Tag => k.0.contains(needle.0.as_str()),
+                            Kind::Definition => k.0.as_str() == needle.0.as_str(),
+                            Kind::Normal => k.0.contains(needle.0.as_str()),
                             _ => false,
                         };
 
@@ -143,9 +206,9 @@ impl std::fmt::Display for KeySet {
 impl std::fmt::Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Kind::Absolute => "Absolute",
-            Kind::Relative => "Relative",
-            Kind::Tag => "Tag",
+            Kind::Definition => "Absolute",
+            Kind::Extension => "Relative",
+            Kind::Normal => "Tag",
         };
         write!(f, "{s}")
     }
@@ -201,13 +264,33 @@ mod tests {
     #[test]
     fn test_key_kind() {
         let scns = [
-            ("//abc", &Kind::Absolute),
-            ("/abc", &Kind::Relative),
-            ("abc", &Kind::Tag),
+            ("//abc", &Kind::Definition),
+            ("/abc", &Kind::Extension),
+            ("abc", &Kind::Normal),
         ];
         for (s, kind) in scns {
             let key = Key::new(s);
             assert_eq!(&key.kind(), kind);
+        }
+    }
+
+    #[test]
+    fn test_parse_path() {
+        let scns = [
+            ("!:defabs", Path::new(true, true, vec!["defabs"])),
+            ("!defrel", Path::new(true, false, vec!["defrel"])),
+            (":abs", Path::new(false, true, vec!["abs"])),
+            (":abs:abc", Path::new(false, true, vec!["abs", "abc"])),
+            ("rel", Path::new(false, false, vec!["rel"])),
+            ("rel:abc", Path::new(false, false, vec!["rel", "abc"])),
+        ];
+
+        for (content, exp) in scns {
+            if let Ok(path) = Path::try_from(content) {
+                assert_eq!(&path, &exp);
+            } else {
+                assert!(false)
+            }
         }
     }
 }

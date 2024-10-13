@@ -57,7 +57,7 @@ impl Builder {
 
                                     // &todo: Rework Kind::Amp to contain (String, Option<String>)
                                     node.kvs.push((kv.0.clone(), kv.1.clone()));
-                                    if rnd::Kind::from(kv.0.as_str()) == rnd::Kind::Absolute {
+                                    if rnd::Kind::from(kv.0.as_str()) == rnd::Kind::Definition {
                                         node.path = Some(rnd::Key::new(kv.0.as_str()));
                                     }
                                 }
@@ -190,7 +190,7 @@ impl Builder {
                                 }
                                 path = Some(p);
                             }
-                        } else if key.kind() == rnd::Kind::Relative {
+                        } else if key.kind() == rnd::Kind::Extension {
                             fail!(
                                 "Found Relative Key without an Absolute parent in '{}'",
                                 filename.display()
@@ -210,7 +210,7 @@ impl Builder {
             let mut keyset = rnd::KeySet::new();
             forest.each_node(|_tree, node| {
                 if let Some(path) = &node.path {
-                    if path.kind() == rnd::Kind::Absolute {
+                    if path.kind() == rnd::Kind::Definition {
                         keyset.insert(path.clone())?;
                     }
                 }
