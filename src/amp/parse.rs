@@ -316,6 +316,11 @@ mod tests {
             // Metadata
             (&Match::Everywhere, "&todo", "[todo]"),
             (&Match::Everywhere, "&todo:", "[todo]"),
+            (
+                &Match::Everywhere,
+                "&!:prio:~priority",
+                "[!:prio:~priority]",
+            ),
         ];
 
         let mut parser = Parser::new();

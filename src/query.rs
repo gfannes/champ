@@ -38,7 +38,7 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 .iter()
                 .filter_map(|part| tree.content.get(part.range.clone()))
                 .collect();
-            let ctx = format!("{:?}", &node.ctx);
+            let ctx = node.ctx.to_string();
             // &todo: Take prio from node
             let prio = amp::Prio::new();
 

@@ -15,6 +15,9 @@
 		- `::(((item)))` if `item` does not start with a `(`, using as many `(((` as necessary to ensure there is no match of `)))` in `item`
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
 		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
+	- Template path parts for defs start with `~`
+		- `&!:eta:~date`
+		- Note: `$` cannot be used as it conflicts with Markdown formula
 
 ## Support pesistent project enumeration
 - Config file

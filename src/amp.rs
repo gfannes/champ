@@ -106,6 +106,17 @@ impl naft::ToNaft for Paths {
     }
 }
 
+impl std::fmt::Display for Paths {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut prefix = "";
+        for path in &self.data {
+            write!(f, "{prefix}{path}")?;
+            prefix = " ";
+        }
+        Ok(())
+    }
+}
+
 impl naft::ToNaft for Path {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
         let n = p.node("Path")?;

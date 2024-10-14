@@ -48,6 +48,7 @@ impl std::fmt::Display for Kind {
             Kind::Comma => write!(f, "Comma"),
             Kind::Equal => write!(f, "Equal"),
             Kind::Bang => write!(f, "Bang"),
+            Kind::Tilde => write!(f, "Tilde"),
             Kind::Text => write!(f, "Text"),
             Kind::Newline => write!(f, "Newline"),
         }
@@ -70,6 +71,7 @@ pub enum Kind {
     Comma,
     Equal,
     Bang,
+    Tilde,
     Text,
     Newline,
 }
@@ -89,6 +91,7 @@ impl From<char> for Kind {
             ',' => Kind::Comma,
             '=' => Kind::Equal,
             '!' => Kind::Bang,
+            '~' => Kind::Tilde,
             '\n' | '\r' => Kind::Newline,
             _ => Kind::Text,
         }

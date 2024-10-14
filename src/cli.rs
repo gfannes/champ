@@ -94,12 +94,12 @@ impl App {
                         write!(&mut out, "\n")?;
                     }
                 }
+                println!("");
 
                 println!("Forest:defs");
                 for path in &forest.defs.data {
                     println!("\t{path}");
                 }
-                println!("");
             }
         }
 

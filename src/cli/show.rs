@@ -44,7 +44,7 @@ impl Show for answer::Answer {
                     let mut os = String::new();
                     write!(
                         os,
-                        "  {}\t{:ctx_width$}\t{}: {}",
+                        "  {}\t{:ctx_width$}\t{:>4}: {}",
                         &location.prio, &location.ctx, location.line_nr, &location.content
                     )
                     .unwrap();

@@ -1,5 +1,6 @@
 # Project management
 
+
 ## Status &!:status
 
 ### To be defined &!tbd
@@ -16,3 +17,12 @@ Under development
 
 ### Done &!done
 Fully finished
+
+
+## Prio &!:prio:~priority 
+
+
+## Effort &!:effort:~duration
+
+
+## Deadline &!:deadline:~date
