@@ -1,4 +1,4 @@
-use crate::amp::value;
+use crate::amp;
 use std::{cmp, collections, path};
 
 #[derive(Default)]
@@ -11,8 +11,7 @@ pub struct Location {
     pub line_nr: u64,
     pub content: String,
     pub ctx: String,
-    pub prio: value::Prio,
-    pub proj: Option<value::Path>,
+    pub prio: amp::Prio,
 }
 
 pub struct Meta {
@@ -69,8 +68,8 @@ impl Answer {
     }
 
     fn by_prio(a: &Location, b: &Location) -> cmp::Ordering {
-        let a = (&a.prio, &ReversePath(&a.proj), &a.filename, a.line_nr);
-        let b = (&b.prio, &ReversePath(&b.proj), &b.filename, b.line_nr);
+        let a = (&a.prio, &a.filename, a.line_nr);
+        let b = (&b.prio, &b.filename, b.line_nr);
         a.cmp(&b)
     }
     fn by_name(a: &Location, b: &Location) -> cmp::Ordering {
@@ -79,30 +78,6 @@ impl Answer {
         a.cmp(&b)
     }
 }
-
-// We introduce a newtype to be able to reverse None/Some during Ord.cmp(). When both are Some(), nothing changes.
-struct ReversePath<'a>(&'a Option<value::Path>);
-impl<'a> Ord for ReversePath<'a> {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        match (&self.0, &other.0) {
-            (None, None) => cmp::Ordering::Equal,
-            (None, Some(_)) => cmp::Ordering::Greater,
-            (Some(_), None) => cmp::Ordering::Less,
-            (Some(a), Some(b)) => a.cmp(b),
-        }
-    }
-}
-impl<'a> PartialOrd for ReversePath<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl<'a> PartialEq for ReversePath<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-impl<'a> Eq for ReversePath<'a> {}
 
 #[cfg(test)]
 mod tests {

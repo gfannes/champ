@@ -74,6 +74,8 @@ impl App {
                 }
             }
             Command::Debug => {
+                let needle = self.config.args.get(0);
+
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
 
                 let mut out = naft::Node::new(std::io::stdout());
@@ -81,11 +83,21 @@ impl App {
                 for tree_ix in 0..forest.trees.len() {
                     let tree = &forest.trees[tree_ix];
 
-                    tree.to_naft(&mut out)?;
-                    write!(&mut out, "\n")?;
+                    let do_print = if let Some(needle) = needle {
+                        tree.filename.to_string_lossy().contains(needle)
+                    } else {
+                        true
+                    };
+
+                    if do_print {
+                        tree.to_naft(&mut out)?;
+                        write!(&mut out, "\n")?;
+                    }
                 }
 
-                println!("keyset: {}", forest.keyset);
+                println!("Forest:defs");
+                forest.defs.to_naft(&out)?;
+                println!("");
             }
         }
 

@@ -3,8 +3,8 @@ use tracing::trace;
 
 #[derive(Debug, Default)]
 pub struct Query {
-    pub needle: Option<amp::KeyValue>,
-    pub constraints: Vec<amp::KeyValue>,
+    pub needle: Option<amp::Path>,
+    pub constraints: Vec<amp::Path>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,14 +17,14 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
     let mut answer = answer::Answer::new();
 
     forest.dfs(|tree, node| {
-        let kvs = match from {
+        let paths = match from {
             From::Org => &node.org,
             From::Ctx => &node.ctx,
         };
 
         let mut is_match = match &query.needle {
-            Some(needle) => kvs.has(needle),
-            _ => !kvs.is_empty(),
+            Some(needle) => paths.has(needle),
+            _ => !paths.is_empty(),
         };
         for constraint in &query.constraints {
             if !node.ctx.has(constraint) {
@@ -33,29 +33,14 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
         }
 
         if is_match {
-            let mut prio = amp::value::Prio::try_from("c0")?;
-            let mut proj: Option<amp::value::Path> = None;
-            node.ctx.for_each(|k, v| {
-                match k.as_str() {
-                    // "prio" => match v {
-                    //     amp::value::Value::Prio(p) => prio = p.clone(),
-                    //     _ => fail!("Expected 'prio' to be a value.Prio"),
-                    // },
-                    // "proj" => match v {
-                    //     amp::value::Value::Path(p) => proj = Some(p.clone()),
-                    //     _ => fail!("Expected 'proj' to be a value.Path"),
-                    // },
-                    _ => {}
-                };
-                Ok(())
-            })?;
-
             let content = node
                 .parts
                 .iter()
                 .filter_map(|part| tree.content.get(part.range.clone()))
                 .collect();
-            let ctx = format!("{}", &node.ctx);
+            let ctx = format!("{:?}", &node.ctx);
+            // &todo: Take prio from node
+            let prio = amp::Prio::new();
 
             answer.add(answer::Location {
                 filename: tree.filename.clone(),
@@ -64,7 +49,6 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 ctx,
                 content,
                 prio,
-                proj,
             });
         }
         Ok(())
@@ -76,12 +60,12 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
 impl TryFrom<&Vec<String>> for Query {
     type Error = util::ErrorType;
     fn try_from(args: &Vec<String>) -> util::Result<Query> {
-        let needle: Option<amp::KeyValue>;
-        let mut constraints = Vec::<amp::KeyValue>::new();
+        let needle: Option<amp::Path>;
+        let mut constraints = Vec::<amp::Path>::new();
 
         {
             if let Some((needle_str, constraints_str)) = args.split_first() {
-                let mut amp_parser = amp::Parser::new();
+                let mut amp_parser = amp::parse::Parser::new();
                 match needle_str.as_str() {
                     // &doc: Both an empty argument or '_' will serve as a wildcard
                     "" | "_" => {
@@ -89,10 +73,10 @@ impl TryFrom<&Vec<String>> for Query {
                         needle = None;
                     }
                     _ => {
-                        amp_parser.parse(&format!("&{needle_str}"), &amp::Match::OnlyStart);
+                        amp_parser.parse(&format!("&{needle_str}"), &amp::parse::Match::OnlyStart);
                         if let Some(stmt) = amp_parser.stmts.first() {
                             match &stmt.kind {
-                                amp::Kind::Amp(kv) => needle = Some(kv.clone()),
+                                amp::parse::Kind::Amp(kv) => needle = Some(kv.clone()),
                                 _ => fail!("Expected to find AMP"),
                             }
                         } else {
@@ -101,10 +85,10 @@ impl TryFrom<&Vec<String>> for Query {
                     }
                 }
                 for constraint_str in constraints_str {
-                    amp_parser.parse(&format!("&{constraint_str}"), &amp::Match::OnlyStart);
+                    amp_parser.parse(&format!("&{constraint_str}"), &amp::parse::Match::OnlyStart);
                     if let Some(stmt) = amp_parser.stmts.first() {
                         match &stmt.kind {
-                            amp::Kind::Amp(kv) => constraints.push(kv.clone()),
+                            amp::parse::Kind::Amp(kv) => constraints.push(kv.clone()),
                             _ => fail!("Expected to find AMP"),
                         }
                     }

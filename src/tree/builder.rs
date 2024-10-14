@@ -13,7 +13,7 @@ pub struct Builder {
     lexer: lex::Lexer,
     md_tree: md::Tree,
     src_trees: collections::BTreeMap<String, src::Tree>,
-    amp_parser: amp::Parser,
+    amp_parser: amp::parse::Parser,
 }
 impl Builder {
     pub fn new() -> Builder {
@@ -21,7 +21,7 @@ impl Builder {
             lexer: lex::Lexer::new(),
             md_tree: md::Tree::new(),
             src_trees: Default::default(),
-            amp_parser: amp::Parser::new(),
+            amp_parser: amp::parse::Parser::new(),
         }
     }
 
@@ -35,8 +35,8 @@ impl Builder {
             trace!("{}:{}", filename.display(), node.line_ix.unwrap_or(0) + 1,);
 
             let m = match format {
-                Format::Markdown => Some(amp::Match::Everywhere),
-                Format::SourceCode { comment: _ } => Some(amp::Match::OnlyStart),
+                Format::Markdown => Some(amp::parse::Match::Everywhere),
+                Format::SourceCode { comment: _ } => Some(amp::parse::Match::OnlyStart),
                 _ => None,
             };
 
@@ -48,17 +48,14 @@ impl Builder {
                                 .get(part.range.clone())
                                 .ok_or_else(|| util::Error::create("Failed to get part content"))?;
 
-                            self.amp_parser.parse(part_content, &m);
+                            self.amp_parser.parse(part_content, &m)?;
 
                             for stmt in &self.amp_parser.stmts {
-                                use amp::*;
-                                if let Kind::Amp(kv) = &stmt.kind {
-                                    node.org.insert(kv);
-
-                                    // &todo: Rework Kind::Amp to contain (String, Option<String>)
-                                    node.kvs.push((kv.0.clone(), kv.1.clone()));
-                                    if rnd::Kind::from(kv.0.as_str()) == rnd::Kind::Definition {
-                                        node.path = Some(rnd::Key::new(kv.0.as_str()));
+                                use amp::parse::*;
+                                if let Kind::Amp(path) = &stmt.kind {
+                                    node.org.insert(path);
+                                    if path.is_definition && path.is_absolute {
+                                        node.def = Some(path.clone());
                                     }
                                 }
                             }
@@ -79,7 +76,6 @@ impl Builder {
             }
 
             node.ctx = node.org.clone();
-            node.agg = node.org.clone();
 
             Ok(())
         })?;
@@ -93,7 +89,7 @@ impl Builder {
 
         // Populate Tree.org with info from
         // - _amp.md for Folders
-        // - tree.filename for Files
+        // - tree.filename for Files &todo
         {
             let span = span!(Level::TRACE, "OrgTree");
             let _g = span.enter();
@@ -115,12 +111,12 @@ impl Builder {
                                     .unwrap_or(false)
                                 {
                                     trace!("Found Tree metadata for '{}'", tree.filename.display());
-                                    let mut kvs = amp::KVSet::new();
+                                    let mut paths = amp::Paths::new();
                                     for node_ix in 0..link.nodes.len() {
                                         let node = &link.nodes[node_ix];
-                                        kvs.merge(&node.org)?;
+                                        paths.merge(&node.org)?;
                                     }
-                                    kvs_opt = Some(kvs);
+                                    kvs_opt = Some(paths);
                                 }
                             }
                         }
@@ -179,55 +175,39 @@ impl Builder {
                 dst.ctx.merge(&src.ctx)?;
 
                 // Join relative path with their absolute parent path
-                if dst.path.is_none() {
-                    let mut path = None;
-                    for kv in &dst.kvs {
-                        let key = rnd::Key::new(kv.0.as_str());
-                        if let Some(parent) = &src.path {
-                            if let Some(p) = parent.join(&key) {
-                                if path.is_some() {
-                                    fail!("Only one path is supported")
-                                }
-                                path = Some(p);
+                if dst.def.is_none() {
+                    let mut new_def = None;
+                    for path in &dst.org.data {
+                        if path.is_definition {
+                            if path.is_absolute {
+                                new_def = Some(path.clone());
+                            } else if let Some(parent) = &src.def {
+                                new_def = Some(parent.join(path));
                             }
-                        } else if key.kind() == rnd::Kind::Extension {
-                            fail!(
-                                "Found Relative Key without an Absolute parent in '{}'",
-                                filename.display()
-                            );
                         }
                     }
-                    dst.path = path;
+                    dst.def = new_def;
                 }
                 Ok(())
             })?;
             Ok(())
         })?;
 
-        // Populate ctx2 with resolved Keys
+        // Resolve ctx
         {
-            // Collect all absolute Keys
-            let mut keyset = rnd::KeySet::new();
+            // Collect all defined Keys
+            let mut defs = amp::Paths::new();
             forest.each_node(|_tree, node| {
-                if let Some(path) = &node.path {
-                    if path.kind() == rnd::Kind::Definition {
-                        keyset.insert(path.clone())?;
-                    }
+                if let Some(def) = &node.def {
+                    defs.insert(def);
                 }
                 Ok(())
             })?;
+            forest.defs = defs;
 
             forest.each_node_mut(
                 |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
-                    let mut ctx2 = rnd::KeyValues::new();
-                    for kv in &node.kvs {
-                        let mut key = rnd::Key::new(&kv.0);
-                        if let Ok(k) = keyset.find(&key) {
-                            key = k;
-                        }
-                        ctx2.insert(&key, &kv.1);
-                    }
-                    node.ctx2 = ctx2;
+                    // &todo: Resolve node.ctx
                     Ok(())
                 },
             )?;

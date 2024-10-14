@@ -1,4 +1,4 @@
-use crate::{amp::value, answer, rubr};
+use crate::{amp, answer, rubr};
 use colored::Colorize;
 use std::fmt::Write;
 
@@ -36,20 +36,20 @@ impl Show for answer::Answer {
                         let s = format!("{}", location.filename.display()).blue();
                         println!("{}", s);
                     }
-                    let proj = match &location.proj {
-                        Some(proj) => proj.to_string(),
-                        None => "".to_owned(),
-                    };
+                    // let proj = match &location.proj {
+                    //     Some(proj) => proj.to_string(),
+                    //     None => "".to_owned(),
+                    // };
 
                     let mut os = String::new();
                     write!(
                         os,
-                        "  {}\t{}\t{:ctx_width$}\t{}: {}",
-                        &location.prio, proj, &location.ctx, location.line_nr, &location.content
+                        "  {}\t{:ctx_width$}\t{}: {}",
+                        &location.prio, &location.ctx, location.line_nr, &location.content
                     )
                     .unwrap();
                     let color = match &location.prio {
-                        value::Prio {
+                        amp::Prio {
                             major: Some(major),
                             minor: _,
                         } => match major {

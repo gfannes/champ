@@ -16,7 +16,7 @@ pub struct Forest {
     pub trees: Vec<Tree>,
     roots: Vec<usize>,
     names: Vec<String>,
-    pub keyset: rnd::KeySet,
+    pub defs: amp::Paths,
 }
 
 // Represents a single file or folder
@@ -30,8 +30,8 @@ pub struct Tree {
     pub format: Format,
     pub content: String,
     // &todo: use root() to store this data instead
-    pub org: amp::KVSet,
-    pub ctx: amp::KVSet,
+    pub org: amp::Paths,
+    pub ctx: amp::Paths,
     state: State,
 }
 
@@ -40,21 +40,14 @@ pub struct Tree {
 pub struct Node {
     pub parts: Vec<Part>,
     pub line_ix: Option<u64>,
-    // pub org: Vec<amp::KeyValue>,
-    // pub ctx: Vec<amp::KeyValue>,
-    // pub agg: Vec<amp::KeyValue>,
-    pub org: amp::KVSet,
-    pub ctx: amp::KVSet,
-    pub agg: amp::KVSet,
-    aggregates: collections::BTreeMap<usize, Aggregate>, // usize points into Forest.names
     pub tree_ix: usize,
     childs: Vec<usize>,     // Ancestral links to Nodes within the same Tree
     pub links: Vec<usize>,  // Direct links to other Trees
     reachables: Vec<usize>, // All other Trees that are recursively reachable
 
-    pub kvs: Vec<(String, Option<String>)>,
-    pub path: Option<rnd::Key>,
-    pub ctx2: rnd::KeyValues,
+    pub def: Option<amp::Path>,
+    pub org: amp::Paths,
+    pub ctx: amp::Paths,
 }
 
 #[derive(Debug, Clone)]
@@ -378,27 +371,11 @@ impl naft::ToNaft for Node {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
         let n = p.node("Node")?;
         n.attr("line_nr", &(self.line_ix.unwrap_or(0) + 1))?;
-        for kv in &self.kvs {
-            // let value= ;
-            n.attr(
-                "kv",
-                &format!(
-                    "{}={}",
-                    kv.0.as_str(),
-                    match &kv.1 {
-                        None => "",
-                        Some(v) => v.as_str(),
-                    }
-                ),
-            )?;
+        if let Some(def) = &self.def {
+            n.attr("def", def)?;
         }
-        if let Some(path) = &self.path {
-            n.attr("path", path)?;
-        }
-        n.attr("ctx2", &self.ctx2);
         self.org.to_naft(&n.name("org"));
         self.ctx.to_naft(&n.name("ctx"));
-        self.agg.to_naft(&n.name("agg"));
         Ok(())
     }
 }

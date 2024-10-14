@@ -1,4 +1,5 @@
 use crate::rubr::strange;
+use std::fmt::Write;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Token {
@@ -24,6 +25,35 @@ impl Token {
     }
 }
 
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[Token](kind:{})", self.kind)
+    }
+}
+
+impl std::fmt::Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Kind::Idle => write!(f, "Idle"),
+            Kind::Hash => write!(f, "Hash"),
+            Kind::Space => write!(f, "Space"),
+            Kind::Dash => write!(f, "Dash"),
+            Kind::Star => write!(f, "Star"),
+            Kind::Backtick => write!(f, "Backtick"),
+            Kind::Dollar => write!(f, "Dollar"),
+            Kind::Slash => write!(f, "Slash"),
+            Kind::Ampersand => write!(f, "Ampersand"),
+            Kind::Colon => write!(f, "Colon"),
+            Kind::Semicolon => write!(f, "Semicolon"),
+            Kind::Comma => write!(f, "Comma"),
+            Kind::Equal => write!(f, "Equal"),
+            Kind::Bang => write!(f, "Bang"),
+            Kind::Text => write!(f, "Text"),
+            Kind::Newline => write!(f, "Newline"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Kind {
     Idle,
@@ -39,6 +69,7 @@ pub enum Kind {
     Semicolon,
     Comma,
     Equal,
+    Bang,
     Text,
     Newline,
 }
@@ -57,6 +88,7 @@ impl From<char> for Kind {
             ';' => Kind::Semicolon,
             ',' => Kind::Comma,
             '=' => Kind::Equal,
+            '!' => Kind::Bang,
             '\n' | '\r' => Kind::Newline,
             _ => Kind::Text,
         }

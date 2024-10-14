@@ -1,4 +1,4 @@
-# Ampersand Metadata Protocol (AMP) &!/amp
+# Ampersand Metadata Protocol (AMP) &!:amp
 
 ## Specification &!spec
 - AMP data is searched in _metadata_, not in actual data
@@ -15,6 +15,14 @@
 		- `::(((item)))` if `item` does not start with a `(`, using as many `(((` as necessary to ensure there is no match of `)))` in `item`
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
 		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
+
+## Common Paths
+
+### To be defined &!:tbd
+### To do &!:todo
+### Work in progress &!:wip
+### Done &!:done
+### Closed &!:closed
 
 ## Support pesistent project enumeration
 - Config file

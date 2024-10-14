@@ -1,8 +1,218 @@
+pub mod parse;
 pub mod value;
 
-use crate::{lex, rubr::naft, util};
+use crate::{
+    rubr::{naft, strange},
+    util,
+};
 use std::{collections, fmt::Display, fmt::Write};
 use tracing::{trace, warn};
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub struct Path {
+    pub is_definition: bool,
+    pub is_absolute: bool,
+    parts: Vec<Part>,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub struct Paths {
+    pub data: Vec<Path>,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Part {
+    Text(String),
+    Date(Date),
+    Duration(Duration),
+    Prio(Prio),
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
+pub struct Date {
+    year: u16,
+    month: u8,
+    day: u8,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
+pub struct Duration {
+    minutes: u32,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
+pub struct Prio {
+    pub major: Option<u32>,
+    pub minor: u32,
+}
+
+impl Prio {
+    pub fn new() -> Prio {
+        Default::default()
+    }
+}
+
+impl Paths {
+    pub fn new() -> Paths {
+        Default::default()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+    pub fn insert(&mut self, path: &Path) {
+        if !self.data.iter().any(|p| p == path) {
+            self.data.push(path.clone());
+        }
+    }
+    pub fn merge(&mut self, ctx: &Paths) -> util::Result<()> {
+        for path in &ctx.data {
+            self.insert(path);
+        }
+        Ok(())
+    }
+    pub fn has(&self, needle: &Path) -> bool {
+        true
+    }
+}
+
+impl naft::ToNaft for Paths {
+    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+        let n = p.node("Paths")?;
+        for path in &self.data {
+            path.to_naft(&n)?;
+        }
+        Ok(())
+    }
+}
+
+impl naft::ToNaft for Path {
+    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+        let n = p.node("Path")?;
+        n.attr("def", &self.is_definition);
+        n.attr("abs", &self.is_absolute);
+        for part in &self.parts {
+            match part {
+                Part::Text(part) => n.attr("part", part)?,
+                _ => n.attr("?", &"?")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Path {
+    pub fn new(is_definition: bool, is_absolute: bool, parts: Vec<&str>) -> Path {
+        Path {
+            is_definition,
+            is_absolute,
+            parts: parts.iter().map(|s| Part::Text(String::from(*s))).collect(),
+        }
+    }
+    pub fn join(&self, rhs: &Path) -> Path {
+        let mut res = self.clone();
+        for v in &rhs.parts {
+            res.parts.push(v.clone());
+        }
+        res
+    }
+}
+
+impl std::fmt::Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_definition {
+            write!(f, "!")?;
+        }
+        if self.is_absolute {
+            write!(f, ":")?;
+        }
+
+        let mut first = true;
+        for part in &self.parts {
+            if !first {
+                write!(f, ":")?;
+            }
+            first = false;
+            write!(f, "{part}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Part {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Part::Text(v) => write!(f, "{v}"),
+            Part::Date(v) => write!(f, "{v}"),
+            Part::Duration(v) => write!(f, "{v}"),
+            Part::Prio(v) => write!(f, "{v}"),
+        }
+    }
+}
+
+impl std::fmt::Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.4}{:02.2}{:02.2}", self.year, self.month, self.day)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut m = self.minutes;
+        let mut cb = |div: u32, suffix: char| {
+            let n = m / div;
+            if n > 0 {
+                write!(f, "{n}{suffix}").unwrap();
+                m -= n * div;
+            }
+        };
+        cb(60 * 8 * 5, 'w');
+        cb(60 * 8, 'd');
+        cb(60, 'h');
+        cb(1, 'm');
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Prio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(major) = self.major {
+            let ch: char;
+            if major % 2 == 0 {
+                ch = ('A' as u8 + (major / 2) as u8) as char;
+            } else {
+                ch = ('a' as u8 + (major / 2) as u8) as char;
+            }
+            write!(f, "{ch}").unwrap();
+        }
+        write!(f, "{}", self.minor).unwrap();
+        Ok(())
+    }
+}
+
+impl TryFrom<&str> for Path {
+    type Error = util::ErrorType;
+    fn try_from(s: &str) -> util::Result<Path> {
+        let mut strange = strange::Strange::new(s);
+
+        let is_definition = strange.read_char_if('!');
+        let is_absolute = strange.read_char_if(':');
+
+        let mut parts = Vec::<Part>::new();
+        while !strange.is_empty() {
+            if let Some(str) = strange.read(|b| b.exclude().to_end().through(':')) {
+                parts.push(Part::Text(str.into()));
+            }
+        }
+
+        Ok(Path {
+            is_definition,
+            is_absolute,
+            parts,
+        })
+    }
+}
 
 pub type Key = String;
 pub type Value = value::Value;
@@ -94,166 +304,17 @@ impl std::fmt::Display for KVSet {
     }
 }
 
-impl naft::ToNaft for KVSet {
-    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        // if !self.is_empty() {
-        //     let n = p.node("KVSet")?;
-        //     for (k, v) in &self.kvs {
-        //         n.attr(k, v)?;
-        //     }
-        // }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Default)]
-pub struct Stmt {
-    pub range: Range,
-    pub kind: Kind,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Kind {
-    Text(String),
-    Amp(KeyValue),
-}
-
-#[derive(Default)]
-pub struct Parser {
-    pub stmts: Vec<Stmt>,
-    lexer: lex::Lexer,
-}
-
-#[derive(PartialEq, Eq, Clone)]
-pub enum Match {
-    Everywhere,
-    OnlyStart,
-}
-
-type Range = std::ops::Range<usize>;
-
-impl Default for Kind {
-    fn default() -> Kind {
-        Kind::Text(String::new())
-    }
-}
-
-impl std::fmt::Display for KeyValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(v) = &self.1 {
-            write!(f, "{}={}", &self.0, v)?;
-        } else {
-            write!(f, "{}", &self.0)?;
-        }
-        Ok(())
-    }
-}
-
-impl Stmt {
-    pub fn new(range: Range, kind: Kind) -> Stmt {
-        Stmt { range, kind }
-    }
-}
-
-impl std::fmt::Display for Stmt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            Kind::Text(text) => write!(f, "({text})"),
-            Kind::Amp(kv) => write!(f, "[{}]", kv),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum State {
-    Text,
-    Amp,
-}
-
-impl Parser {
-    pub fn new() -> Parser {
-        Parser::default()
-    }
-
-    pub fn parse(&mut self, content: &str, m: &Match) {
-        self.stmts.clear();
-
-        self.lexer.tokenize(content);
-
-        let mut grouper = Grouper::new();
-        grouper.create_groups(&self.lexer.tokens, m);
-
-        // Translate the Groups into Stmts
-        self.stmts = grouper
-            .groups
-            .iter()
-            .map(|group| {
-                let mut stmt = Stmt::default();
-
-                if let Some(token) = group.tokens.first() {
-                    stmt.range = token.range.clone();
-                }
-                if let Some(token) = group.tokens.last() {
-                    stmt.range.end = token.range.end;
-                }
-
-                match group.state {
-                    State::Text => {
-                        let s = content.get(stmt.range.clone()).unwrap_or_else(|| "");
-                        stmt.kind = Kind::Text(s.into());
-                    }
-                    State::Amp => {
-                        let mut kv: Option<(String, Option<String>)> = None;
-                        for token in group.tokens {
-                            match token.kind {
-                                lex::Kind::Ampersand => {
-                                    if kv.is_some() {
-                                        todo!("Grouper should produce Groups that match with a single KeyValue");
-                                    }
-                                    kv = Some(Default::default())
-                                }
-                                lex::Kind::Equal => {
-                                    // &todo &spec: only allow [a-zA-Z_\d] in Key
-                                    if let Some(kv) = &mut kv {
-                                        match &mut kv.1{
-                                            None => {kv.1 = Some(String::new());}
-                                            Some(tag) => {
-                                                if let Some(s) = content.get(token.range.clone()) {
-                                                    tag.push_str(s);
-                                                }
-                                            }
-                                            _=>unreachable!(),
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    if let Some(kv) = &mut kv {
-                                        if let Some(s) = content.get(token.range.clone()) {
-                                            match &mut kv.1{
-                                                None => {kv.0.push_str(s);}
-                                                Some(tag) => {
-                                                    if let Some(s) = content.get(token.range.clone()) {
-                                                        tag.push_str(s);
-                                                    }
-                                                }
-                                                _=>unreachable!(),
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if let Some(kv) = kv {
-                            stmt.kind = Kind::Amp(KeyValue(kv.0, kv.1));
-                        }
-                    }
-                };
-
-                stmt
-            })
-            .collect();
-    }
-}
+// impl naft::ToNaft for KVSet {
+//     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
+//         // if !self.is_empty() {
+//         //     let n = p.node("KVSet")?;
+//         //     for (k, v) in &self.kvs {
+//         //         n.attr(k, v)?;
+//         //     }
+//         // }
+//         Ok(())
+//     }
+// }
 
 // impl From<(String, Option<String>)> for KeyValue {
 //     fn from(kv: (String, Option<String>)) -> KeyValue {
@@ -287,176 +348,3 @@ impl Parser {
 //         KeyValue { key, value }
 //     }
 // }
-
-// A sequence of Tokens that can be translated into a Stmt
-#[derive(Debug)]
-struct Group<'a> {
-    state: State,
-    tokens: &'a [lex::Token],
-}
-
-// Groups a sequence of Tokens into Groups that can be easily translated into a Stmt
-struct Grouper<'a> {
-    state: State,
-    token_range: Range,
-    groups: Vec<Group<'a>>,
-}
-
-impl<'a> Grouper<'a> {
-    fn new() -> Grouper<'a> {
-        Grouper {
-            state: State::Text,
-            token_range: 0..0,
-            groups: Vec::new(),
-        }
-    }
-    fn reset(&mut self) {
-        self.state = State::Text;
-        self.token_range = 0..0;
-        self.groups.clear();
-    }
-
-    fn create_groups(&mut self, tokens: &'a [lex::Token], m: &Match) {
-        self.reset();
-
-        let mut is_first = true;
-        let mut last_was_space = true;
-        let mut m: Match = m.clone();
-        for token in tokens {
-            match self.state {
-                State::Text => {
-                    if token.kind == lex::Kind::Ampersand
-                        && token.range.len() == 1
-                        && (is_first || m == Match::Everywhere)
-                        // &spec: ampersand can only start Amp at start or after a space
-                        && last_was_space
-                    {
-                        self.start_new_group(State::Amp, tokens);
-                        // &spec: as soon as we found a match, we allow matches everywhere
-                        m = Match::Everywhere;
-                    }
-                    self.token_range.end += 1;
-                }
-                State::Amp => match token.kind {
-                    lex::Kind::Ampersand => {
-                        self.start_new_group(State::Amp, tokens);
-                        self.token_range.end += 1;
-                    }
-                    lex::Kind::Space => {
-                        self.start_new_group(State::Text, tokens);
-                        self.token_range.end += 1;
-                    }
-                    lex::Kind::Semicolon => {
-                        // &spec: a semicolon is cannot occur in Amp.
-                        // &todo: make this more precise: an Amp cannot _end_ with a semicolon
-                        self.state = State::Text;
-                        self.token_range.end += 1;
-                        self.start_new_group(State::Text, tokens);
-                    }
-                    _ => {
-                        self.token_range.end += 1;
-                    }
-                },
-            }
-            last_was_space = token.kind == lex::Kind::Space;
-            is_first = false;
-        }
-        // Might require more than one additional group at the end, eg, if content ends with `@todo:`:
-        // - The `:` is splitted last-minute into a new group
-        while !self.token_range.is_empty() {
-            self.start_new_group(State::Text, tokens);
-        }
-    }
-
-    fn start_new_group(&mut self, state: State, tokens: &'a [lex::Token]) {
-        let end = self.token_range.end;
-
-        while !self.token_range.is_empty() {
-            let tokens = &tokens[self.token_range.clone()];
-
-            let mut push_group = || {
-                self.groups.push(Group::<'a> {
-                    state: self.state.clone(),
-                    tokens,
-                });
-                self.token_range.start = self.token_range.end;
-            };
-
-            match self.state {
-                State::Text => push_group(),
-                State::Amp => match tokens.last().unwrap().kind {
-                    lex::Kind::Colon => {
-                        // &spec: Group ending on `:` is still Amp, but we move the `:` to the next Group
-                        self.token_range.end -= 1;
-                    }
-                    lex::Kind::Ampersand => {
-                        // &spec: Group ending on `&` is still Amp, but we move the `&` to the next Group
-                        self.token_range.end -= 1;
-                    }
-                    lex::Kind::Semicolon | lex::Kind::Comma => {
-                        // &spec: Group ending on `;` or `,` is considered as Text
-                        // - &nbsp; occurs ofter in Markdown and is considered a false positive
-                        // - &param, occurs in commented-out C/C++/Rust source code
-                        self.state = State::Text;
-                    }
-                    _ => push_group(),
-                },
-            }
-        }
-
-        self.state = state;
-        self.token_range.end = end;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse() {
-        let scns = [
-            // String
-            (&Match::Everywhere, "todo", "(todo)"),
-            (&Match::Everywhere, "&&", "(&&)"),
-            (&Match::Everywhere, "a,b", "(a,b)"),
-            (&Match::Everywhere, "&nbsp;", "(&nbsp;)"),
-            (&Match::Everywhere, "&nbsp;abc", "(&nbsp;)(abc)"),
-            (&Match::Everywhere, "&param,", "(&param,)"),
-            (&Match::Everywhere, "r&d", "(r&d)"),
-            // Metadata
-            (&Match::Everywhere, "&todo", "[todo]"),
-            (&Match::Everywhere, "&todo:", "[todo](:)"),
-            (&Match::Everywhere, "&key=value", "[key=value]"),
-            (
-                &Match::Everywhere,
-                "&key=value,param=vilue",
-                "[key=value,param=vilue]",
-            ),
-            (
-                &Match::Everywhere,
-                "&key=value&param=vilue",
-                "[key=value][param=vilue]",
-            ),
-            (
-                &Match::Everywhere,
-                "&key=value &param=vilue",
-                "[key=value]( )[param=vilue]",
-            ),
-            (&Match::Everywhere, "&key=value& abc", "[key=value](& abc)"),
-            // Match::OnlyStart
-            (&Match::OnlyStart, "abc &def", "(abc &def)"),
-            (&Match::OnlyStart, "&abc &def", "[abc]( )[def]"),
-        ];
-
-        let mut parser = Parser::new();
-        for (m, content, exp) in scns {
-            parser.parse(content, m);
-            let mut s = String::new();
-            for stmt in &parser.stmts {
-                write!(&mut s, "{stmt}").unwrap();
-            }
-            assert_eq!(&s, exp)
-        }
-    }
-}
