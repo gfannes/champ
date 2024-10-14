@@ -32,7 +32,7 @@ impl Builder {
         self.init_org_def(&mut forest)?;
         self.join_defs(&mut forest)?;
         self.resolve_org(&mut forest)?;
-        self.init_ctx()?;
+        self.init_ctx(&mut forest)?;
 
         #[cfg(noop)]
         {
@@ -238,8 +238,6 @@ impl Builder {
                 }
             }
 
-            node.ctx = node.org.clone();
-
             Ok(())
         })?;
 
@@ -314,28 +312,38 @@ impl Builder {
 
     fn resolve_org(&mut self, forest: &mut Forest) -> util::Result<()> {
         // Collect all defined Keys
-        {
-            let mut defs = amp::Paths::new();
-            forest.each_node(|_tree, node| {
-                if let Some(def) = &node.def {
-                    defs.insert(def);
-                }
-                Ok(())
-            })?;
-            forest.defs = defs;
-        }
+        let mut defs = amp::Paths::new();
+        forest.each_node(|_tree, node| {
+            if let Some(def) = &node.def {
+                defs.insert(def);
+            }
+            Ok(())
+        })?;
 
         forest.each_node_mut(
             |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
-                // &next: Resolve node.org
+                for path in &mut node.org.data {
+                    if !path.is_absolute {
+                        if let Some(mut gem) = defs.resolve(path) {
+                            gem.is_definition = false;
+                            std::mem::swap(path, &mut gem);
+                        }
+                    }
+                }
                 Ok(())
             },
         )?;
 
+        forest.defs = defs;
+
         Ok(())
     }
 
-    fn init_ctx(&mut self) -> util::Result<()> {
+    fn init_ctx(&mut self, forest: &mut Forest) -> util::Result<()> {
+        forest.each_node_mut(|node, content, format, filename| {
+            node.ctx = node.org.clone();
+            Ok(())
+        })?;
         Ok(())
     }
 

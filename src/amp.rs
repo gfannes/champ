@@ -73,6 +73,27 @@ impl Paths {
     pub fn has(&self, needle: &Path) -> bool {
         true
     }
+    pub fn resolve(&self, rel: &Path) -> Option<Path> {
+        if rel.is_absolute {
+            Some(rel.clone())
+        } else {
+            for path in &self.data {
+                let mut rel_parts = rel.parts.iter();
+                let mut rel_part_opt = rel_parts.next();
+                for part in &path.parts {
+                    if let Some(rel_part) = rel_part_opt {
+                        if part == rel_part {
+                            rel_part_opt = rel_parts.next();
+                        }
+                    }
+                }
+                if rel_part_opt.is_none() {
+                    return Some(path.clone());
+                }
+            }
+            None
+        }
+    }
 }
 
 impl naft::ToNaft for Paths {
