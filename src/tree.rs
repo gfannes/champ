@@ -32,7 +32,6 @@ pub struct Tree {
     // &todo: use root() to store this data instead
     pub org: amp::Paths,
     pub ctx: amp::Paths,
-    state: State,
 }
 
 // &next: provide amp items
@@ -72,33 +71,6 @@ pub enum Format {
     SourceCode {
         comment: &'static str,
     },
-}
-
-#[derive(Debug)]
-enum State {
-    None,
-    OrgNode,
-    OrgTree,
-    CtxTree,
-    CtxNode,
-}
-impl Default for State {
-    fn default() -> State {
-        State::None
-    }
-}
-impl std::fmt::Display for State {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            State::None => "None",
-            State::OrgNode => "OrgNode",
-            State::OrgTree => "OrgTree",
-            State::CtxTree => "CtxTree",
-            State::CtxNode => "CtxNode",
-        };
-        write!(f, "{s}")?;
-        Ok(())
-    }
 }
 
 impl Forest {
@@ -326,7 +298,6 @@ impl naft::ToNaft for Tree {
         let n = p.node("Tree")?;
         n.attr("ix", &self.ix)?;
         n.attr("filename", &self.filename.display())?;
-        n.attr("state", &self.state)?;
         self.org.to_naft(&n.name("org"));
         self.ctx.to_naft(&n.name("ctx"));
         for ix in 0..self.nodes.len() {

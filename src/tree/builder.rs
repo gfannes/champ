@@ -29,6 +29,162 @@ impl Builder {
         let mut forest = tree::Forest::new();
         self.add_to_forest_recursive_(&path::Path::root(), 0, fs_forest, &mut forest)?;
 
+        self.init_org_def(&mut forest)?;
+        self.join_defs(&mut forest)?;
+        self.resolve_org(&mut forest)?;
+        self.init_ctx()?;
+
+        #[cfg(noop)]
+        {
+            // Populate Tree.org with info from
+            // - _amp.md for Folders
+            // - tree.filename for Files &todo
+            {
+                let span = span!(Level::TRACE, "OrgTree");
+                let _g = span.enter();
+                for tree_ix in 0..forest.trees.len() {
+                    {
+                        let mut kvs_opt = None;
+
+                        {
+                            let tree = &forest.trees[tree_ix];
+                            // For a Folder, the Files are indicated by the links on the root Node
+                            for link_ix in &tree.root().links {
+                                if let Some(link) = forest.trees.get(*link_ix) {
+                                    if link
+                                        .filename
+                                        .file_name()
+                                        .and_then(|file_name| {
+                                            Some(file_name.to_string_lossy() == "_amp.md")
+                                        })
+                                        .unwrap_or(false)
+                                    {
+                                        trace!(
+                                            "Found Tree metadata for '{}'",
+                                            tree.filename.display()
+                                        );
+                                        let mut paths = amp::Paths::new();
+                                        for node_ix in 0..link.nodes.len() {
+                                            let node = &link.nodes[node_ix];
+                                            paths.merge(&node.org)?;
+                                        }
+                                        kvs_opt = Some(paths);
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some(kvs) = kvs_opt {
+                            forest.trees[tree_ix].org = kvs;
+                        }
+                    }
+                }
+            }
+
+            // Push parent:Tree.org into child:Tree.ctx, following parent:Tree.links
+            {
+                // Copy org to ctx for each Tree
+                for tree in &mut forest.trees {
+                    tree.ctx = tree.org.clone();
+                }
+
+                // Note that we iterate backwards: forest construction places childs before parent
+                for parent_ix in (0..forest.trees.len()).rev() {
+                    let parent_tree = &forest.trees[parent_ix];
+
+                    if !parent_tree.ctx.is_empty() {
+                        let ctx = parent_tree.ctx.clone();
+                        let childs = parent_tree.root().links.clone();
+
+                        for child_ix in childs {
+                            let dst_tree = forest.trees.get_mut(child_ix).ok_or_else(|| {
+                                util::Error::create(
+                                    "Dangling link {link_ix} for for tree {tree_ix}",
+                                )
+                            })?;
+                            dst_tree.ctx.merge(&ctx)?;
+                        }
+                    }
+                }
+            }
+
+            // Copy Tree.ctx into Root.ctx
+            // &todo: use Root.ctx directly iso below copy
+            forest.each_tree_mut(|tree| {
+                tree.root_mut().ctx = tree.ctx.clone();
+                Ok(())
+            })?;
+
+            // Compute context for each Node, starting with Tree.ctx
+            forest.each_tree_mut(|tree| {
+                let filename = tree.filename.clone();
+                tree.root_to_leaf(|src, dst| {
+                    dst.ctx = dst.org.clone();
+                    dst.ctx.merge(&src.ctx)?;
+
+                    // Join relative path with their absolute parent path
+                    if dst.def.is_none() {
+                        let mut new_def = None;
+                        for path in &dst.org.data {
+                            if path.is_definition {
+                                if path.is_absolute {
+                                    new_def = Some(path.clone());
+                                } else if let Some(parent) = &src.def {
+                                    new_def = Some(parent.join(path));
+                                }
+                            }
+                        }
+                        dst.def = new_def;
+                    }
+                    Ok(())
+                })?;
+                Ok(())
+            })?;
+
+            // Resolve ctx
+            {
+                // Collect all defined Keys
+                let mut defs = amp::Paths::new();
+                forest.each_node(|_tree, node| {
+                    if let Some(def) = &node.def {
+                        defs.insert(def);
+                    }
+                    Ok(())
+                })?;
+                forest.defs = defs;
+
+                forest.each_node_mut(
+                    |node: &mut Node,
+                     content: &str,
+                     format: &Format,
+                     filename: &std::path::PathBuf| {
+                        // &todo: Resolve node.ctx
+                        Ok(())
+                    },
+                )?;
+            }
+
+            // // Aggregate data over the Forest
+            // forest.each_tree_mut(|tree| {
+            //     tree.leaf_to_root(|src, dst| {
+            //         for md in &dst.agg {
+            //             // We collect everything that is different
+            //             if src.agg.iter().all(|m| m != md) {
+            //                 src.agg.push(md.clone());
+            //             }
+            //         }
+            //     });
+            // });
+        }
+
+        Ok(forest)
+    }
+
+    // Inits node.def and node.org from
+    // - Node metadata
+    // - Metadata files (_amp.md)
+    // Does not join node.def or resolve node.org
+    fn init_org_def(&mut self, forest: &mut Forest) -> util::Result<()> {
         forest.each_node_mut(|node, content, format, filename| {
             let span = span!(Level::TRACE, "parse");
             let _g = span.enter();
@@ -53,9 +209,16 @@ impl Builder {
                             for stmt in &self.amp_parser.stmts {
                                 use amp::parse::*;
                                 if let Kind::Amp(path) = &stmt.kind {
-                                    node.org.insert(path);
-                                    if path.is_definition && path.is_absolute {
+                                    if path.is_definition {
+                                        if node.def.is_some() {
+                                            fail!(
+                                                "Found double definition in '{}'",
+                                                filename.display()
+                                            );
+                                        }
                                         node.def = Some(path.clone());
+                                    } else {
+                                        node.org.insert(path);
                                     }
                                 }
                             }
@@ -80,122 +243,78 @@ impl Builder {
             Ok(())
         })?;
 
-        forest.each_tree_mut(|tree| {
-            // Indicate each Tree is in State::OrgNode
-            // - node.org is init
-            tree.state = tree::State::OrgNode;
-            Ok(())
-        })?;
-
-        // Populate Tree.org with info from
+        // Populate Tree.root().org with info from
         // - _amp.md for Folders
         // - tree.filename for Files &todo
-        {
-            let span = span!(Level::TRACE, "OrgTree");
-            let _g = span.enter();
-            for tree_ix in 0..forest.trees.len() {
-                {
-                    let mut kvs_opt = None;
+        for ix in 0..forest.trees.len() {
+            let mut md_paths = None;
+            let mut md_def: Option<amp::Path> = None;
 
-                    {
-                        let tree = &forest.trees[tree_ix];
-                        // For a Folder, the Files are indicated by the links on the root Node
-                        for link_ix in &tree.root().links {
-                            if let Some(link) = forest.trees.get(*link_ix) {
-                                if link
-                                    .filename
-                                    .file_name()
-                                    .and_then(|file_name| {
-                                        Some(file_name.to_string_lossy() == "_amp.md")
-                                    })
-                                    .unwrap_or(false)
-                                {
-                                    trace!("Found Tree metadata for '{}'", tree.filename.display());
-                                    let mut paths = amp::Paths::new();
-                                    for node_ix in 0..link.nodes.len() {
-                                        let node = &link.nodes[node_ix];
-                                        paths.merge(&node.org)?;
+            {
+                let tree = &forest.trees[ix];
+
+                // For a Folder, the Files are indicated by the links on the root Node
+                for ix in &tree.root().links {
+                    if let Some(md_tree) = forest.trees.get(*ix) {
+                        if md_tree
+                            .filename
+                            .file_name()
+                            .and_then(|file_name| Some(file_name.to_string_lossy() == "_amp.md"))
+                            .unwrap_or(false)
+                        {
+                            trace!("Found Tree metadata for '{}'", tree.filename.display());
+                            let mut paths = amp::Paths::new();
+                            for ix in 0..md_tree.nodes.len() {
+                                let node = &md_tree.nodes[ix];
+                                paths.merge(&node.org)?;
+                                if let Some(def) = &node.def {
+                                    if md_def.is_some() {
+                                        fail!("A metadata tree can only contain a single def");
                                     }
-                                    kvs_opt = Some(paths);
+                                    if !def.is_absolute {
+                                        fail!("A metadata tree can only contain an absolute def");
+                                    }
+                                    md_def = Some(def.clone());
                                 }
                             }
+                            md_paths = Some(paths);
                         }
                     }
-
-                    if let Some(kvs) = kvs_opt {
-                        forest.trees[tree_ix].org = kvs;
-                    }
                 }
             }
-            // Update state for each Tree
-            forest.each_tree_mut(|tree| {
-                trace!("{}", tree.filename.display());
-                tree.state = tree::State::OrgTree;
-                Ok(())
-            })?;
+
+            if let Some(kvs) = md_paths {
+                forest.trees[ix].root_mut().org = kvs;
+            }
+            forest.trees[ix].root_mut().def = md_def;
         }
 
-        // Push parent:Tree.org into child:Tree.ctx, following parent:Tree.links
-        {
-            // Copy org to ctx for each Tree
-            for tree in &mut forest.trees {
-                tree.ctx = tree.org.clone();
-            }
+        Ok(())
+    }
 
-            // Note that we iterate backwards: forest construction places childs before parent
-            for parent_ix in (0..forest.trees.len()).rev() {
-                let parent_tree = &forest.trees[parent_ix];
-
-                if !parent_tree.ctx.is_empty() {
-                    let ctx = parent_tree.ctx.clone();
-                    let childs = parent_tree.root().links.clone();
-
-                    for child_ix in childs {
-                        let dst_tree = forest.trees.get_mut(child_ix).ok_or_else(|| {
-                            util::Error::create("Dangling link {link_ix} for for tree {tree_ix}")
-                        })?;
-                        dst_tree.ctx.merge(&ctx)?;
-                    }
-                }
-            }
-        }
-
-        // Copy Tree.ctx into Root.ctx
-        // &todo: use Root.ctx directly iso below copy
+    fn join_defs(&mut self, forest: &mut Forest) -> util::Result<()> {
         forest.each_tree_mut(|tree| {
-            tree.root_mut().ctx = tree.ctx.clone();
-            Ok(())
-        })?;
-
-        // Compute context for each Node, starting with Tree.ctx
-        forest.each_tree_mut(|tree| {
-            let filename = tree.filename.clone();
             tree.root_to_leaf(|src, dst| {
-                dst.ctx = dst.org.clone();
-                dst.ctx.merge(&src.ctx)?;
-
-                // Join relative path with their absolute parent path
-                if dst.def.is_none() {
-                    let mut new_def = None;
-                    for path in &dst.org.data {
-                        if path.is_definition {
-                            if path.is_absolute {
-                                new_def = Some(path.clone());
-                            } else if let Some(parent) = &src.def {
-                                new_def = Some(parent.join(path));
-                            }
+                if let Some(dst_def) = &mut dst.def {
+                    if let Some(src_def) = &src.def {
+                        if !src_def.is_absolute {
+                            fail!("Source def should be absolute");
+                        }
+                        if !dst_def.is_absolute {
+                            dst.def = Some(src_def.join(dst_def));
                         }
                     }
-                    dst.def = new_def;
+                } else {
+                    dst.def = src.def.clone();
                 }
                 Ok(())
-            })?;
-            Ok(())
-        })?;
+            })
+        })
+    }
 
-        // Resolve ctx
+    fn resolve_org(&mut self, forest: &mut Forest) -> util::Result<()> {
+        // Collect all defined Keys
         {
-            // Collect all defined Keys
             let mut defs = amp::Paths::new();
             forest.each_node(|_tree, node| {
                 if let Some(def) = &node.def {
@@ -204,28 +323,20 @@ impl Builder {
                 Ok(())
             })?;
             forest.defs = defs;
-
-            forest.each_node_mut(
-                |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
-                    // &todo: Resolve node.ctx
-                    Ok(())
-                },
-            )?;
         }
 
-        // // Aggregate data over the Forest
-        // forest.each_tree_mut(|tree| {
-        //     tree.leaf_to_root(|src, dst| {
-        //         for md in &dst.agg {
-        //             // We collect everything that is different
-        //             if src.agg.iter().all(|m| m != md) {
-        //                 src.agg.push(md.clone());
-        //             }
-        //         }
-        //     });
-        // });
+        forest.each_node_mut(
+            |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
+                // &next: Resolve node.org
+                Ok(())
+            },
+        )?;
 
-        Ok(forest)
+        Ok(())
+    }
+
+    fn init_ctx(&mut self) -> util::Result<()> {
+        Ok(())
     }
 
     pub fn create_tree_from_path(&mut self, path: &std::path::Path) -> util::Result<Tree> {
@@ -348,7 +459,7 @@ impl Builder {
         parent: &path::Path,
         level: u64,
         fs_forest: &mut fs::Forest,
-        forest: &mut tree::Forest,
+        forest: &mut Forest,
     ) -> util::Result<Option<usize>> {
         let span = span!(Level::TRACE, "forest");
         let _g = span.enter();
