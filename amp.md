@@ -16,14 +16,6 @@
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
 		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
 
-## Common Paths
-
-### To be defined &!:tbd
-### To do &!:todo
-### Work in progress &!:wip
-### Done &!:done
-### Closed &!:closed
-
 ## Support pesistent project enumeration
 - Config file
 - Support excluding files by pattern
@@ -63,15 +55,12 @@
 - A Tree that is used by another Node
 	- How to express this Node? Or only allow Tree -> Tree dependencies in this case?
 
-## Support nested projects &prio=a
+## Support nested projects &a0
 - Support proj statement that does not append to the curret proj path, but resolves into an existing one
-- `&//abs`, `&/rel` and `&tag`
+- `&:abs` and `&rel`
 - Prune context from items with a direct match in org, on a match with org.parent() &todo
-- `&proj=amp`
-	- `&proj=ch` => same as `proj=/amp/ch`
-	- `&proj=/ch` => same as `proj=/ch`
 
-## Support colored output &prio=a1
+## Support colored output &a1
 - Depending on prio
 
 ## &tbd Discriminate between AMP data and commented-out code

@@ -96,7 +96,9 @@ impl App {
                 }
 
                 println!("Forest:defs");
-                forest.defs.to_naft(&out)?;
+                for path in &forest.defs.data {
+                    println!("\t{path}");
+                }
                 println!("");
             }
         }
