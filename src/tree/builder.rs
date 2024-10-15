@@ -307,7 +307,33 @@ impl Builder {
                 }
                 Ok(())
             })
-        })
+        })?;
+        forest.each_node_mut(
+            |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
+                if let Some(def) = node.def.as_mut() {
+                    for path in &mut def.parts {
+                        if let amp::Part::Text(s) = path {
+                            match s.as_str() {
+                                "~priority" => {
+                                    std::mem::swap(path, &mut amp::Part::Prio(amp::Prio::new(0, 0)))
+                                }
+                                "~date" => std::mem::swap(
+                                    path,
+                                    &mut amp::Part::Date(amp::Date::new(0, 0, 0)),
+                                ),
+                                "~duration" => std::mem::swap(
+                                    path,
+                                    &mut amp::Part::Duration(amp::Duration::new(0, 0, 0, 0)),
+                                ),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            },
+        )?;
+        Ok(())
     }
 
     fn resolve_org(&mut self, forest: &mut Forest) -> util::Result<()> {

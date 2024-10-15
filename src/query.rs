@@ -40,7 +40,7 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 .collect();
             let ctx = node.ctx.to_string();
             // &todo: Take prio from node
-            let prio = amp::Prio::new();
+            let prio = amp::Prio::new(0, 0);
 
             answer.add(answer::Location {
                 filename: tree.filename.clone(),

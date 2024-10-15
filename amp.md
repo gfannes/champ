@@ -1,5 +1,8 @@
 # Ampersand Metadata Protocol (AMP) &!:amp
 
+## Set ~date from filename &todo
+- For `daily/YYYY-MM-DD.md` format
+
 ## Specification &!spec
 - AMP data is searched in _metadata_, not in actual data
 	- For source code, these are the comments

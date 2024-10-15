@@ -1,8 +1,11 @@
 pub mod show;
 
 use crate::{
-    answer, cli::show::Show, config, fail, fs, path, query, rubr::naft, rubr::naft::ToNaft, tree,
-    util,
+    answer::{self, Answer},
+    cli::show::Show,
+    config, fail, fs, path, query,
+    rubr::naft::{self, ToNaft},
+    tree, util,
 };
 use std::io::Write;
 use tracing::{info, span, trace, Level};
@@ -86,7 +89,27 @@ impl App {
                     let do_print = if let Some(needle) = needle {
                         tree.filename.to_string_lossy().contains(needle)
                     } else {
-                        true
+                        tree.nodes.iter().any(|node| {
+                            node.org.data.iter().any(|path| {
+                                if !path.is_absolute {
+                                    if answer.is_none() {
+                                        answer = Some(Answer::new());
+                                    }
+                                    let answer = answer.as_mut().unwrap();
+
+                                    if tree.filename.is_file() {
+                                        answer.add(answer::Location {
+                                            filename: tree.filename.clone(),
+                                            line_nr: node.line_ix.unwrap_or(0) + 1,
+                                            ..Default::default()
+                                        });
+                                    }
+                                    true
+                                } else {
+                                    false
+                                }
+                            })
+                        })
                     };
 
                     if do_print {

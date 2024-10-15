@@ -6,6 +6,7 @@ pub struct Answer {
     locations: Vec<Location>,
 }
 
+#[derive(Default)]
 pub struct Location {
     pub filename: path::PathBuf,
     pub line_nr: u64,

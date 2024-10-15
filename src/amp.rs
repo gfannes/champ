@@ -12,7 +12,7 @@ use tracing::{trace, warn};
 pub struct Path {
     pub is_definition: bool,
     pub is_absolute: bool,
-    parts: Vec<Part>,
+    pub parts: Vec<Part>,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
@@ -42,13 +42,26 @@ pub struct Duration {
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
 pub struct Prio {
-    pub major: Option<u32>,
+    pub major: u32,
     pub minor: u32,
 }
 
+impl Duration {
+    pub fn new(weeks: u32, days: u32, hours: u32, minutes: u32) -> Duration {
+        let minutes = minutes + (hours + (days + weeks * 5) * 8) * 60;
+        Duration { minutes }
+    }
+}
+
+impl Date {
+    pub fn new(year: u16, month: u8, day: u8) -> Date {
+        Date { year, month, day }
+    }
+}
+
 impl Prio {
-    pub fn new() -> Prio {
-        Default::default()
+    pub fn new(major: u32, minor: u32) -> Prio {
+        Prio { major, minor }
     }
 }
 
@@ -182,9 +195,46 @@ impl std::fmt::Display for Part {
     }
 }
 
+impl TryFrom<&str> for Date {
+    type Error = util::ErrorType;
+    fn try_from(s: &str) -> std::result::Result<Date, Self::Error> {
+        let year;
+        let month;
+        let day;
+
+        {
+            let mut strange = strange::Strange::new(s);
+
+            if let Some(s) = strange.read_decimals(4) {
+                year = strange::Strange::new(s).read_number::<u16>().unwrap();
+            } else {
+                return Err(util::Error::create("Could not read year for Date"));
+            }
+
+            strange.read_char_if('-');
+
+            if let Some(s) = strange.read_decimals(2) {
+                month = strange::Strange::new(s).read_number::<u8>().unwrap();
+            } else {
+                return Err(util::Error::create("Could not read month for Date"));
+            }
+
+            strange.read_char_if('-');
+
+            if let Some(s) = strange.read_decimals(2) {
+                day = strange::Strange::new(s).read_number::<u8>().unwrap();
+            } else {
+                return Err(util::Error::create("Could not read day for Date"));
+            }
+        }
+
+        Ok(Date { year, month, day })
+    }
+}
+
 impl std::fmt::Display for Date {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:.4}{:02.2}{:02.2}", self.year, self.month, self.day)?;
+        write!(f, "{:04}-{:02}-{:02}", self.year, self.month, self.day)?;
         Ok(())
     }
 }
@@ -192,10 +242,12 @@ impl std::fmt::Display for Date {
 impl std::fmt::Display for Duration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut m = self.minutes;
+        let mut did_write = false;
         let mut cb = |div: u32, suffix: char| {
             let n = m / div;
             if n > 0 {
                 write!(f, "{n}{suffix}").unwrap();
+                did_write = true;
                 m -= n * div;
             }
         };
@@ -203,21 +255,59 @@ impl std::fmt::Display for Duration {
         cb(60 * 8, 'd');
         cb(60, 'h');
         cb(1, 'm');
+        if !did_write {
+            write!(f, "0m").unwrap();
+        }
         Ok(())
+    }
+}
+
+impl TryFrom<&str> for Prio {
+    type Error = util::ErrorType;
+
+    fn try_from(s: &str) -> std::result::Result<Prio, Self::Error> {
+        let major: u32;
+        let minor: u32;
+
+        {
+            let mut strange = strange::Strange::new(s);
+
+            if let Some(ch) = strange.try_read_char_when(|ch| ch.is_ascii_alphabetic()) {
+                if ch.is_uppercase() {
+                    major = (ch as u32 - 'A' as u32) * 2;
+                } else {
+                    major = (ch as u32 - 'a' as u32) * 2 + 1;
+                }
+            } else {
+                return Err(util::Error::create(
+                    "Major for Prio should be [a-z] or [A-Z]",
+                ));
+            }
+
+            if let Some(m) = strange.read_number() {
+                minor = m;
+            } else {
+                return Err(util::Error::create("Minor for Prio should be a number"));
+            }
+
+            if !strange.is_empty() {
+                return Err(util::Error::create("Prio cannot contain additional data"));
+            }
+        }
+
+        Ok(Prio::new(major, minor))
     }
 }
 
 impl std::fmt::Display for Prio {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(major) = self.major {
-            let ch: char;
-            if major % 2 == 0 {
-                ch = ('A' as u8 + (major / 2) as u8) as char;
-            } else {
-                ch = ('a' as u8 + (major / 2) as u8) as char;
-            }
-            write!(f, "{ch}").unwrap();
+        let ch: char;
+        if self.major % 2 == 0 {
+            ch = ('A' as u8 + (self.major / 2) as u8) as char;
+        } else {
+            ch = ('a' as u8 + (self.major / 2) as u8) as char;
         }
+        write!(f, "{ch}").unwrap();
         write!(f, "{}", self.minor).unwrap();
         Ok(())
     }
@@ -335,6 +425,8 @@ impl std::fmt::Display for KVSet {
         Ok(())
     }
 }
+
+// &todo: move amp/value.rs UTs to here
 
 // impl naft::ToNaft for KVSet {
 //     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {

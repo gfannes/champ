@@ -49,10 +49,7 @@ impl Show for answer::Answer {
                     )
                     .unwrap();
                     let color = match &location.prio {
-                        amp::Prio {
-                            major: Some(major),
-                            minor: _,
-                        } => match major {
+                        amp::Prio { major, minor: _ } => match major {
                             0..2 => "red",
                             2..4 => "orange",
                             4..6 => "yellow",
