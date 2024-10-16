@@ -13,6 +13,8 @@ pub enum From {
     Ctx,
 }
 
+// `from` determines where `query.needle` is searched.
+// `query.constraints` are always searched in `Node.ctx`
 pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result<answer::Answer> {
     let mut answer = answer::Answer::new();
 
@@ -23,11 +25,11 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
         };
 
         let mut is_match = match &query.needle {
-            Some(needle) => paths.has(needle),
+            Some(needle) => paths.matches_with(needle),
             _ => !paths.is_empty(),
         };
         for constraint in &query.constraints {
-            if !node.ctx.has(constraint) {
+            if !node.ctx.matches_with(constraint) {
                 is_match = false;
             }
         }
@@ -38,6 +40,7 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 .iter()
                 .filter_map(|part| tree.content.get(part.range.clone()))
                 .collect();
+            let org = node.org.to_string();
             let ctx = node.ctx.to_string();
             // &todo: Take prio from node
             let prio = amp::Prio::new(0, 0);
@@ -46,6 +49,7 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 filename: tree.filename.clone(),
                 // &todo: replace with function
                 line_nr: node.line_ix.unwrap_or(0) + 1,
+                org,
                 ctx,
                 content,
                 prio,

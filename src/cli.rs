@@ -89,28 +89,38 @@ impl App {
                     let do_print = if let Some(needle) = needle {
                         tree.filename.to_string_lossy().contains(needle)
                     } else {
-                        tree.nodes.iter().any(|node| {
-                            node.org.data.iter().any(|path| {
-                                if !path.is_absolute {
-                                    if answer.is_none() {
-                                        answer = Some(Answer::new());
-                                    }
-                                    let answer = answer.as_mut().unwrap();
-
-                                    if tree.filename.is_file() {
-                                        answer.add(answer::Location {
-                                            filename: tree.filename.clone(),
-                                            line_nr: node.line_ix.unwrap_or(0) + 1,
-                                            ..Default::default()
-                                        });
-                                    }
-                                    true
-                                } else {
-                                    false
-                                }
-                            })
-                        })
+                        true
                     };
+
+                    for node in &tree.nodes {
+                        for path in &node.org.data {
+                            if !path.is_absolute {
+                                if answer.is_none() {
+                                    answer = Some(Answer::new());
+                                }
+                                let answer = answer.as_mut().unwrap();
+
+                                if tree.filename.is_file() {
+                                    let content = node
+                                        .parts
+                                        .iter()
+                                        .filter_map(|part| tree.content.get(part.range.clone()))
+                                        .collect();
+                                    let org = node.org.to_string();
+                                    let ctx = node.ctx.to_string();
+
+                                    answer.add(answer::Location {
+                                        filename: tree.filename.clone(),
+                                        line_nr: node.line_ix.unwrap_or(0) + 1,
+                                        content,
+                                        org,
+                                        ctx,
+                                        ..Default::default()
+                                    });
+                                }
+                            }
+                        }
+                    }
 
                     if do_print {
                         tree.to_naft(&mut out)?;
@@ -118,6 +128,12 @@ impl App {
                     }
                 }
                 println!("");
+
+                println!("Could not resolve following Paths");
+                if let Some(answer) = &mut answer {
+                    answer.order(&answer::By::Name);
+                    answer.show(&show::Display::All);
+                }
 
                 println!("Forest:defs");
                 for path in &forest.defs.data {

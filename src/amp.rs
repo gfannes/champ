@@ -69,39 +69,37 @@ impl Paths {
     pub fn new() -> Paths {
         Default::default()
     }
+
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
+
     pub fn insert(&mut self, path: &Path) {
         if !self.data.iter().any(|p| p == path) {
             self.data.push(path.clone());
         }
     }
+
     pub fn merge(&mut self, ctx: &Paths) -> util::Result<()> {
         for path in &ctx.data {
             self.insert(path);
         }
         Ok(())
     }
-    pub fn has(&self, needle: &Path) -> bool {
-        true
+
+    pub fn matches_with(&self, needle: &Path) -> bool {
+        self.data
+            .iter()
+            .any(|path| path.matches_with(needle, false))
     }
+
     pub fn resolve(&self, rel: &Path) -> Option<Path> {
         if rel.is_absolute {
             Some(rel.clone())
         } else {
             for path in &self.data {
-                let mut rel_parts = rel.parts.iter();
-                let mut rel_part_opt = rel_parts.next();
-                for part in &path.parts {
-                    if let Some(rel_part) = rel_part_opt {
-                        if part == rel_part {
-                            rel_part_opt = rel_parts.next();
-                        }
-                    }
-                }
-                if rel_part_opt.is_none() {
-                    return Some(path.clone());
+                if let Some(p) = path.create_from_template(rel) {
+                    return Some(p);
                 }
             }
             None
@@ -153,12 +151,157 @@ impl Path {
             parts: parts.iter().map(|s| Part::Text(String::from(*s))).collect(),
         }
     }
+
     pub fn join(&self, rhs: &Path) -> Path {
         let mut res = self.clone();
         for v in &rhs.parts {
             res.parts.push(v.clone());
         }
         res
+    }
+
+    // `as_template` indicates if `self` is a template. If so, for non-Text Parts, only type compatibility is checked
+    pub fn matches_with(&self, rhs: &Self, as_template: bool) -> bool {
+        // For an absolute Path, we expect a match immediately, hence we act as if we already found a match
+        let mut found_match = rhs.is_absolute;
+
+        let mut lhs = self.parts.iter();
+        let mut rhs = rhs.parts.iter();
+
+        while let Some(rhs) = rhs.next() {
+            println!("rhs {rhs}");
+            while let Some(lhs) = lhs.next() {
+                println!("lhs {lhs}");
+                let is_match = match (lhs, rhs) {
+                    (Part::Text(lhs), Part::Text(rhs)) => lhs == rhs,
+                    (Part::Date(lhs), Part::Date(rhs)) => as_template || lhs == rhs,
+                    (Part::Duration(lhs), Part::Duration(rhs)) => as_template || lhs == rhs,
+                    (Part::Prio(lhs), Part::Prio(rhs)) => as_template || lhs == rhs,
+
+                    (Part::Date(lhs), Part::Text(rhs)) => {
+                        if let Ok(rhs) = &Date::try_from(rhs.as_str()) {
+                            as_template || lhs == rhs
+                        } else {
+                            false
+                        }
+                    }
+                    (Part::Duration(lhs), Part::Text(rhs)) => {
+                        if let Ok(rhs) = &Duration::try_from(rhs.as_str()) {
+                            as_template || lhs == rhs
+                        } else {
+                            false
+                        }
+                    }
+                    (Part::Prio(lhs), Part::Text(rhs)) => {
+                        println!("Prio Text");
+                        if let Ok(rhs) = &Prio::try_from(rhs.as_str()) {
+                            as_template || lhs == rhs
+                        } else {
+                            false
+                        }
+                    }
+
+                    _ => false,
+                };
+
+                if is_match {
+                    // Once we found a match, we expect we keep matching
+                    found_match = true;
+                    break;
+                } else {
+                    if found_match {
+                        // Found a mismatch
+                        return false;
+                    }
+                }
+            }
+
+            if !found_match {
+                return false;
+            }
+        }
+
+        // Could match all parts from rhs: we found a match
+        true
+    }
+
+    fn create_from_template(&self, rhs: &Self) -> Option<Path> {
+        let mut ret = Path::new(rhs.is_definition, true, Vec::new());
+
+        // For an absolute Path, we expect a match immediately, hence we act as if we already found a match
+        let mut found_match_before = rhs.is_absolute;
+
+        let mut lhs = self.parts.iter();
+        let mut rhs = rhs.parts.iter();
+        let mut cur_rhs_opt = rhs.next();
+
+        while let Some(lhs) = lhs.next() {
+            println!("lhs {lhs}");
+            println!("rhs {:?}", cur_rhs_opt);
+            if let Some(cur_rhs) = cur_rhs_opt {
+                println!("rhs {cur_rhs}");
+                let part = match (lhs, cur_rhs) {
+                    (Part::Text(lhs), Part::Text(rhs)) => {
+                        (lhs == rhs).then_some(Part::Text(rhs.to_owned()))
+                    }
+                    (Part::Date(_), Part::Date(rhs)) => Some(Part::Date(rhs.to_owned())),
+                    (Part::Duration(_), Part::Duration(rhs)) => {
+                        Some(Part::Duration(rhs.to_owned()))
+                    }
+                    (Part::Prio(_), Part::Prio(rhs)) => Some(Part::Prio(rhs.to_owned())),
+
+                    (Part::Date(_), Part::Text(rhs)) => {
+                        if let Ok(rhs) = Date::try_from(rhs.as_str()) {
+                            Some(Part::Date(rhs))
+                        } else {
+                            None
+                        }
+                    }
+                    (Part::Duration(_), Part::Text(rhs)) => {
+                        if let Ok(rhs) = Duration::try_from(rhs.as_str()) {
+                            Some(Part::Duration(rhs))
+                        } else {
+                            None
+                        }
+                    }
+                    (Part::Prio(_), Part::Text(rhs)) => {
+                        println!("Prio Text");
+                        if let Ok(rhs) = Prio::try_from(rhs.as_str()) {
+                            Some(Part::Prio(rhs))
+                        } else {
+                            None
+                        }
+                    }
+
+                    _ => None,
+                };
+
+                if let Some(part) = part {
+                    // Once we found a match, we expect we keep matching
+                    found_match_before = true;
+                    ret.parts.push(part);
+                    cur_rhs_opt = rhs.next();
+                } else {
+                    if found_match_before {
+                        // Found a mismatch
+                        return None;
+                    } else {
+                        ret.parts.push(lhs.clone());
+                    }
+                }
+            } else {
+                // rhs should match until the end
+                return None;
+            }
+        }
+
+        if cur_rhs_opt.is_some() {
+            // Could not match all parts from rhs
+            return None;
+        }
+
+        // Could match all parts from rhs: we found a match
+        Some(ret)
     }
 }
 
@@ -229,6 +372,43 @@ impl TryFrom<&str> for Date {
         }
 
         Ok(Date { year, month, day })
+    }
+}
+
+impl TryFrom<&str> for Duration {
+    type Error = util::ErrorType;
+    fn try_from(s: &str) -> std::result::Result<Duration, Self::Error> {
+        let mut minutes = 0 as u32;
+
+        {
+            let mut strange = strange::Strange::new(s);
+            while !strange.is_empty() {
+                if let Some(v) = strange.read_number::<u32>() {
+                    if !strange.read_char_when(|ch| {
+                        match ch {
+                            'w' => minutes += v * 60 * 8 * 5,
+                            'd' => minutes += v * 60 * 8,
+                            'h' => minutes += v * 60,
+                            'm' => minutes += v,
+                            _ => return false,
+                        }
+                        true
+                    }) {
+                        return Err(util::Error::create(format!(
+                            "Unexpected unit found in Duration '{}'",
+                            s
+                        )));
+                    }
+                } else {
+                    return Err(util::Error::create(format!(
+                        "Could not read number from Duration '{}'",
+                        s
+                    )));
+                }
+            }
+        }
+
+        Ok(Duration { minutes })
     }
 }
 
@@ -427,48 +607,103 @@ impl std::fmt::Display for KVSet {
 }
 
 // &todo: move amp/value.rs UTs to here
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// impl naft::ToNaft for KVSet {
-//     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-//         // if !self.is_empty() {
-//         //     let n = p.node("KVSet")?;
-//         //     for (k, v) in &self.kvs {
-//         //         n.attr(k, v)?;
-//         //     }
-//         // }
-//         Ok(())
-//     }
-// }
+    #[test]
+    fn test_paths_matches_with() -> util::Result<()> {
+        let scns = [
+            (vec![":a", ":b"], "a", true),
+            (vec![":a", ":b"], "b", true),
+            (vec![":a", ":b"], "c", false),
+        ];
+        for (paths_str, needle, exp) in scns {
+            let mut paths = Paths::new();
+            for path_str in paths_str {
+                paths.insert(&Path::try_from(path_str)?);
+            }
 
-// impl From<(String, Option<String>)> for KeyValue {
-//     fn from(kv: (String, Option<String>)) -> KeyValue {
-//         let mut key = kv.0;
+            let needle = Path::try_from(needle)?;
+            assert_eq!(paths.matches_with(&needle), exp);
+        }
+        Ok(())
+    }
 
-//         let value = || -> util::Result<value::Value> {
-//             let value = match kv.1.as_ref().map(|val| val.as_str()) {
-//                 None => {
-//                     if let Ok(status) = value::Status::try_from(key.as_str()) {
-//                         key = "status".into();
-//                         value::Value::Status(status)
-//                     } else {
-//                         value::Value::Tag(key.to_owned())
-//                     }
-//                 }
-//                 Some(val) => match key.as_str() {
-//                     "proj" => value::Value::Path(value::Path::try_from(val)?),
-//                     "prio" => value::Value::Prio(value::Prio::try_from(val)?),
-//                     "deadline" => value::Value::Date(value::Date::try_from(val)?),
-//                     _ => return Err(util::Error::create("")),
-//                 },
-//             };
+    #[test]
+    fn test_path_matches_with_text() -> util::Result<()> {
+        let scns = [
+            ("a", "a", true),
+            (":a", "a", true),
+            (":a", ":a", true),
+            ("a:b", "a", true),
+            (":a:b", "a", true),
+            (":a:b", ":a:b", true),
+            ("a:b", "b", true),
+            (":a:b", "b", true),
+            (":a:b", ":b", false),
+            ("ab", "a", false),
+            ("ab", "b", false),
+            (":a:b", "c", false),
+        ];
+        for (path, needle, exp) in scns {
+            let path = Path::try_from(path)?;
+            let needle = Path::try_from(needle)?;
+            assert_eq!(path.matches_with(&needle, true), exp);
+        }
+        Ok(())
+    }
 
-//             Ok(value)
-//         }()
-//         .unwrap_or_else(|_| match kv.1 {
-//             None => value::Value::None,
-//             Some(val) => value::Value::Tag(val),
-//         });
+    #[test]
+    fn test_path_matches_with_prio() -> util::Result<()> {
+        let mut path = Path::new(true, true, vec!["prio"]);
+        path.parts.push(Part::Prio(Prio::new(0, 0)));
 
-//         KeyValue { key, value }
-//     }
-// }
+        let scns = [
+            ("prio", true, true),
+            ("prio:A0", true, true),
+            ("prio:a0", true, true),
+            ("prio:b1", true, true),
+            ("prio:b1", false, false),
+            ("prio:aa0", true, false),
+        ];
+        for (needle, as_template, exp) in scns {
+            println!("----------------- {needle} {exp}");
+            let needle = Path::try_from(needle)?;
+            assert_eq!(path.matches_with(&needle, as_template), exp);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_create_from_template() -> util::Result<()> {
+        let mut abc = Path::new(true, true, vec!["abc"]);
+
+        let mut prio = Path::new(true, true, vec!["prio"]);
+        prio.parts.push(Part::Prio(Prio::new(0, 0)));
+
+        let scns = [
+            (&abc, "abc", Some("abc"), None),
+            (&abc, "abd", None, None),
+            (&prio, "prio", None, None),
+            (&prio, "prio:aa0", None, None),
+            (&prio, "prio:A0", Some("prio"), Some("A0")),
+            (&prio, "prio:a0", Some("prio"), Some("a0")),
+            (&prio, "prio:b1", Some("prio"), Some("b1")),
+        ];
+        for (template, path, base, prio) in scns {
+            println!("----------------- {path} {:?} {:?}", base, prio);
+            let path = Path::try_from(path)?;
+            let new_path = template.create_from_template(&path);
+            let exp = base.map(|base| {
+                let mut p = Path::new(false, true, vec![base]);
+                if let Some(prio) = prio {
+                    p.parts.push(Part::Prio(Prio::try_from(prio).unwrap()));
+                }
+                p
+            });
+            assert_eq!(new_path, exp);
+        }
+        Ok(())
+    }
+}

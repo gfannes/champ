@@ -11,6 +11,7 @@ pub struct Location {
     pub filename: path::PathBuf,
     pub line_nr: u64,
     pub content: String,
+    pub org: String,
     pub ctx: String,
     pub prio: amp::Prio,
 }

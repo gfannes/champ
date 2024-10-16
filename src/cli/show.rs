@@ -18,11 +18,13 @@ impl Show for answer::Answer {
             Display::First(n) => Some(*n),
         };
 
+        let mut org_width = 0;
         let mut ctx_width = 0;
         {
             let mut counter = rubr::counter::Counter::new(count);
             self.each_location(|location, _meta| {
                 if counter.call() {
+                    org_width = std::cmp::max(org_width, location.org.len());
                     ctx_width = std::cmp::max(ctx_width, location.ctx.len());
                 }
             });
@@ -44,8 +46,12 @@ impl Show for answer::Answer {
                     let mut os = String::new();
                     write!(
                         os,
-                        "  {}\t{:ctx_width$}\t{:>4}: {}",
-                        &location.prio, &location.ctx, location.line_nr, &location.content
+                        "  {}\t{:org_width$}\t{:ctx_width$}\t{:>4}: {}",
+                        &location.prio,
+                        &location.org,
+                        &location.ctx,
+                        location.line_nr,
+                        &location.content
                     )
                     .unwrap();
                     let color = match &location.prio {
