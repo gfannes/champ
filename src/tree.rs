@@ -2,7 +2,7 @@ pub mod builder;
 pub mod md;
 pub mod src;
 
-use crate::{amp, fail, rnd, rubr::naft, util};
+use crate::{amp, fail, rubr::naft, util};
 use std::{collections, path};
 
 // Represents a subset of the filesystem, corresponding with a ignore.Tree
@@ -293,16 +293,18 @@ impl Tree {
         }
     }
 }
+
 impl naft::ToNaft for Tree {
-    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        let n = p.node("Tree")?;
-        n.attr("ix", &self.ix)?;
-        n.attr("filename", &self.filename.display())?;
-        self.org.to_naft(&n.name("org"));
-        self.ctx.to_naft(&n.name("ctx"));
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Tree")?;
+        b.attr("ix", &self.ix)?;
+        b.attr("filename", &self.filename.display())?;
+        // &todo &naft: Pass the name to discriminate between them
+        self.org.to_naft(b);
+        self.ctx.to_naft(b);
         for ix in 0..self.nodes.len() {
             let node = &self.nodes[ix];
-            node.to_naft(&n);
+            node.to_naft(b);
         }
         Ok(())
     }
@@ -339,14 +341,15 @@ impl Node {
 }
 
 impl naft::ToNaft for Node {
-    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        let n = p.node("Node")?;
-        n.attr("line_nr", &(self.line_ix.unwrap_or(0) + 1))?;
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Node")?;
+        b.attr("line_nr", &(self.line_ix.unwrap_or(0) + 1))?;
         if let Some(def) = &self.def {
-            n.attr("def", def)?;
+            b.attr("def", def)?;
         }
-        self.org.to_naft(&n.name("org"));
-        self.ctx.to_naft(&n.name("ctx"));
+        // &todo &naft: Add name
+        self.org.to_naft(b);
+        self.ctx.to_naft(b);
         Ok(())
     }
 }

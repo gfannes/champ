@@ -4,7 +4,7 @@ use crate::{
     answer::{self, Answer},
     cli::show::Show,
     config, fail, fs, path, query,
-    rubr::naft::{self, ToNaft},
+    rubr::naft,
     tree, util,
 };
 use std::io::Write;
@@ -81,8 +81,6 @@ impl App {
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
 
-                let mut out = naft::Node::new(std::io::stdout());
-
                 for tree_ix in 0..forest.trees.len() {
                     let tree = &forest.trees[tree_ix];
 
@@ -123,8 +121,7 @@ impl App {
                     }
 
                     if do_print {
-                        tree.to_naft(&mut out)?;
-                        write!(&mut out, "\n")?;
+                        println!("{}", naft::AsNaft::<tree::Tree>::new(tree));
                     }
                 }
                 println!("");

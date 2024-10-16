@@ -105,10 +105,11 @@ impl Paths {
 }
 
 impl naft::ToNaft for Paths {
-    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        let n = p.node("Paths")?;
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Paths")?;
+        let mut b = b.nest();
         for path in &self.data {
-            path.to_naft(&n)?;
+            path.to_naft(&mut b)?;
         }
         Ok(())
     }
@@ -126,14 +127,14 @@ impl std::fmt::Display for Paths {
 }
 
 impl naft::ToNaft for Path {
-    fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
-        let n = p.node("Path")?;
-        n.attr("def", &self.is_definition)?;
-        n.attr("abs", &self.is_absolute)?;
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Path")?;
+        b.attr("def", &self.is_definition)?;
+        b.attr("abs", &self.is_absolute)?;
         for part in &self.parts {
             match part {
-                Part::Text(part) => n.attr("part", part)?,
-                _ => n.attr("?", &"?")?,
+                Part::Text(part) => b.attr("part", part)?,
+                _ => b.attr("?", &"?")?,
             }
         }
         Ok(())
