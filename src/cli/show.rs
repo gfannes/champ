@@ -54,18 +54,67 @@ impl Show for answer::Answer {
                         &location.content
                     )
                     .unwrap();
-                    let color = match &location.prio {
-                        amp::Prio { major, minor: _ } => match major {
+
+                    let color;
+                    if true {
+                        let mut r: u8;
+                        let mut g: u8;
+                        let mut b: u8;
+                        match location.prio.major {
+                            0..2 => {
+                                r = 255;
+                                g = 0;
+                                b = 0;
+                            }
+                            2..4 => {
+                                r = 255;
+                                g = 127;
+                                b = 0;
+                            }
+                            4..6 => {
+                                r = 255;
+                                g = 255;
+                                b = 0;
+                            }
+                            6..8 => {
+                                r = 0;
+                                g = 255;
+                                b = 0;
+                            }
+                            8..10 => {
+                                r = 0;
+                                g = 0;
+                                b = 255;
+                            }
+                            _ => {
+                                r = 255;
+                                g = 255;
+                                b = 255;
+                            }
+                        }
+                        r = ((r as u32 * 10) / (location.prio.minor + 10)) as u8;
+                        g = ((g as u32 * 10) / (location.prio.minor + 10)) as u8;
+                        b = ((b as u32 * 10) / (location.prio.minor + 10)) as u8;
+                        color = colored::Color::TrueColor { r, g, b };
+                    } else {
+                        let mut color_str = String::new();
+                        match location.prio.minor {
+                            0..1 => color_str.push_str("bright "),
+                            _ => {}
+                        }
+                        let s = match location.prio.major {
                             0..2 => "red",
                             2..4 => "orange",
                             4..6 => "yellow",
                             6..8 => "green",
                             8..10 => "blue",
                             _ => "brown",
-                        },
-                        _ => "grey",
-                    };
-                    let os = os.color(colored::Color::from(color));
+                        };
+                        color_str.push_str(s);
+                        color = colored::Color::from(color_str);
+                    }
+
+                    let os = os.color(color);
                     println!("{}", &os);
                 }
             });

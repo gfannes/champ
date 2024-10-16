@@ -124,12 +124,13 @@ impl App {
                         println!("{}", naft::AsNaft::<tree::Tree>::new(tree));
                     }
                 }
-                println!("");
 
-                println!("Could not resolve following Paths");
                 if let Some(answer) = &mut answer {
-                    answer.order(&answer::By::Name);
-                    answer.show(&show::Display::All);
+                    if !answer.is_empty() {
+                        println!("Could not resolve following Paths");
+                        answer.order(&answer::By::Name);
+                        answer.show(&show::Display::All);
+                    }
                 }
 
                 println!("Forest:defs");

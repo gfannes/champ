@@ -1,6 +1,8 @@
 # Ampersand Metadata Protocol (AMP) &!:amp
 
-## Set ~date from filename &todo
+## Interpret AMP on first Node as AMP for Tree &todo &a0
+
+## Set ~date from filename &todo &b3
 - For `daily/YYYY-MM-DD.md` format
 
 ## Specification &!spec
@@ -8,7 +10,7 @@
 	- For source code, these are the comments
 	- For Markdown, there is the text, excluding the code blocks and formulas
 - AMP data consists of Paths
-	- Formalize below definition &todo
+	- Formalize below definition &todo &b4
 		- What if an item start with a `!` or `:`?
 	- The `&` character starts an AMP Path
 	- If the next character is a `!`, it is a definition Path

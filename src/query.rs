@@ -42,8 +42,13 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 .collect();
             let org = node.org.to_string();
             let ctx = node.ctx.to_string();
-            // &todo: Take prio from node
-            let prio = amp::Prio::new(0, 0);
+            let prio = node
+                .ctx
+                .data
+                .iter()
+                .filter_map(|path| path.get_prio().map(Clone::clone))
+                .next()
+                .unwrap_or_else(|| amp::Prio::new(5, 0));
 
             answer.add(answer::Location {
                 filename: tree.filename.clone(),

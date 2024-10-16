@@ -158,6 +158,16 @@ impl Path {
         res
     }
 
+    pub fn get_prio(&self) -> Option<&Prio> {
+        for part in &self.parts {
+            match part {
+                Part::Prio(p) => return Some(p),
+                _ => {}
+            }
+        }
+        None
+    }
+
     // `as_template` indicates if `self` is a template. If so, for non-Text Parts, only type compatibility is checked
     pub fn matches_with(&self, rhs: &Self, as_template: bool) -> bool {
         // For an absolute Path, we expect a match immediately, hence we act as if we already found a match

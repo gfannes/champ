@@ -31,6 +31,10 @@ impl Answer {
         Answer::default()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.locations.is_empty()
+    }
+
     pub fn add(&mut self, location: Location) {
         self.locations.push(location);
     }
