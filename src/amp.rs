@@ -77,6 +77,7 @@ impl Paths {
         }
     }
 
+    // &todo &ut
     pub fn has_variant(&self, rhs: &Path) -> bool {
         // A variant of rhs is a Path that builds on rhs, matches with rhs, or has the same depth and matching parent
         self.data.iter().any(|lhs| {
