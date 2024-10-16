@@ -1,4 +1,4 @@
-// &a1
+// &a1 &todo: MD here should apply to the whole Tree
 
 use crate::{amp, fail, fs, lex, path, rnd, tree, tree::md, tree::src, util};
 use std::collections;
@@ -229,9 +229,16 @@ impl Builder {
     }
 
     fn init_ctx(&mut self, forest: &mut Forest) -> util::Result<()> {
-        forest.each_node_mut(|node, content, format, filename| {
-            node.ctx = node.org.clone();
-            Ok(())
+        forest.each_tree_mut(|tree| {
+            tree.root_to_leaf(|src, dst| {
+                dst.ctx = dst.org.clone();
+                for src in &src.ctx.data {
+                    if !dst.ctx.has_variant(src) {
+                        dst.ctx.insert(src);
+                    }
+                }
+                Ok(())
+            })
         })?;
         Ok(())
     }

@@ -77,6 +77,19 @@ impl Paths {
         }
     }
 
+    pub fn has_variant(&self, rhs: &Path) -> bool {
+        // A variant of rhs is a Path that builds on rhs, matches with rhs, or has the same depth and matching parent
+        self.data.iter().any(|lhs| {
+            let matches = |range: std::ops::Range<usize>| {
+                range
+                    .clone()
+                    .all(|ix| lhs.parts.get(ix) == rhs.parts.get(ix))
+            };
+
+            matches(0..lhs.parts.len()) || (rhs.parts.len() > 0 && matches(0..rhs.parts.len() - 1))
+        })
+    }
+
     pub fn merge(&mut self, ctx: &Paths) -> util::Result<()> {
         for path in &ctx.data {
             self.insert(path);
