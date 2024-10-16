@@ -267,10 +267,14 @@ impl Builder {
                                 paths.merge(&node.org)?;
                                 if let Some(def) = &node.def {
                                     if md_def.is_some() {
-                                        fail!("A metadata tree can only contain a single def");
+                                        fail!(
+                                            "A metadata tree can only contain a single def in '{}'",
+                                            tree.filename.display()
+                                        );
                                     }
                                     if !def.is_absolute {
-                                        fail!("A metadata tree can only contain an absolute def");
+                                        // &improv: Do we want to relax this? &d0
+                                        fail!("A metadata tree can only contain an absolute def in '{}'", tree.filename.display());
                                     }
                                     md_def = Some(def.clone());
                                 }

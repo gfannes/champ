@@ -160,7 +160,7 @@ impl Global {
         let content = std::fs::read(&groves_fp)?;
         let content = std::str::from_utf8(&content)?;
         trace!("Groves content :\n{content}");
-        // &someday: toml::from_str() silently skips unrecognised items. Make this parsing more strict.
+        // &todo &g0: toml::from_str() silently skips unrecognised items. Make this parsing more strict.
         match toml::from_str::<Groves>(content) {
             Ok(groves) => Ok(Global {
                 path: Some(groves_fp),

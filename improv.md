@@ -10,6 +10,6 @@
 - tree.Forest represents the forest
 - maybe speed-up enumeration when Forest is bounded with direct use of gitignore
 
-## Fully parse Markdown
-- &[[parse Markdown into tree.Tree]]
+## Fully parse Markdown &todo &b0
+-  Support links: `&[[parse Markdown into tree.Tree]]`
 - Do not match AMP in code blocks, latex formulas, quoted things or links

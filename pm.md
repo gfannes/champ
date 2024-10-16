@@ -26,3 +26,12 @@ Fully finished
 
 
 ## Deadline &!:deadline:~date
+
+
+## Documentation &!:doc
+
+
+## Performance optimizations &!:perf
+
+
+## Improvements &!:improv

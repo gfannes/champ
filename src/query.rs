@@ -61,8 +61,10 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
     Ok(answer)
 }
 
+// Creates a Query from CLI arguments
 impl TryFrom<&Vec<String>> for Query {
     type Error = util::ErrorType;
+
     fn try_from(args: &Vec<String>) -> util::Result<Query> {
         let needle: Option<amp::Path>;
         let mut constraints = Vec::<amp::Path>::new();
