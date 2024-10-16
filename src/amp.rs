@@ -169,9 +169,7 @@ impl Path {
         let mut rhs = rhs.parts.iter();
 
         while let Some(rhs) = rhs.next() {
-            println!("rhs {rhs}");
             while let Some(lhs) = lhs.next() {
-                println!("lhs {lhs}");
                 let is_match = match (lhs, rhs) {
                     (Part::Text(lhs), Part::Text(rhs)) => lhs == rhs,
                     (Part::Date(lhs), Part::Date(rhs)) => as_template || lhs == rhs,
@@ -193,7 +191,6 @@ impl Path {
                         }
                     }
                     (Part::Prio(lhs), Part::Text(rhs)) => {
-                        println!("Prio Text");
                         if let Ok(rhs) = &Prio::try_from(rhs.as_str()) {
                             as_template || lhs == rhs
                         } else {
@@ -236,10 +233,7 @@ impl Path {
         let mut cur_rhs_opt = rhs.next();
 
         while let Some(lhs) = lhs.next() {
-            println!("lhs {lhs}");
-            println!("rhs {:?}", cur_rhs_opt);
             if let Some(cur_rhs) = cur_rhs_opt {
-                println!("rhs {cur_rhs}");
                 let part = match (lhs, cur_rhs) {
                     (Part::Text(lhs), Part::Text(rhs)) => {
                         (lhs == rhs).then_some(Part::Text(rhs.to_owned()))
@@ -265,7 +259,6 @@ impl Path {
                         }
                     }
                     (Part::Prio(_), Part::Text(rhs)) => {
-                        println!("Prio Text");
                         if let Ok(rhs) = Prio::try_from(rhs.as_str()) {
                             Some(Part::Prio(rhs))
                         } else {
