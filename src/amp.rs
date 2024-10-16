@@ -1,12 +1,9 @@
 pub mod parse;
-pub mod value;
 
 use crate::{
     rubr::{naft, strange},
     util,
 };
-use std::{collections, fmt::Display, fmt::Write};
-use tracing::{trace, warn};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct Path {
@@ -131,8 +128,8 @@ impl std::fmt::Display for Paths {
 impl naft::ToNaft for Path {
     fn to_naft(&self, p: &naft::Node) -> util::Result<()> {
         let n = p.node("Path")?;
-        n.attr("def", &self.is_definition);
-        n.attr("abs", &self.is_absolute);
+        n.attr("def", &self.is_definition)?;
+        n.attr("abs", &self.is_absolute)?;
         for part in &self.parts {
             match part {
                 Part::Text(part) => n.attr("part", part)?,
@@ -144,7 +141,7 @@ impl naft::ToNaft for Path {
 }
 
 impl Path {
-    pub fn new(is_definition: bool, is_absolute: bool, parts: Vec<&str>) -> Path {
+    pub fn new(is_definition: bool, is_absolute: bool, parts: &[&str]) -> Path {
         Path {
             is_definition,
             is_absolute,
@@ -223,7 +220,7 @@ impl Path {
     }
 
     fn create_from_template(&self, rhs: &Self) -> Option<Path> {
-        let mut ret = Path::new(rhs.is_definition, true, Vec::new());
+        let mut ret = Path::new(rhs.is_definition, true, &[]);
 
         // For an absolute Path, we expect a match immediately, hence we act as if we already found a match
         let mut found_match_before = rhs.is_absolute;
@@ -509,97 +506,9 @@ impl TryFrom<&str> for Path {
     }
 }
 
-pub type Key = String;
-pub type Value = value::Value;
-
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct KeyValue(pub String, pub Option<String>);
 
-#[derive(Default, Debug, Clone)]
-pub struct KVSet {
-    pub kvs: collections::BTreeMap<Key, Vec<String>>,
-}
-
-impl KVSet {
-    pub fn new() -> KVSet {
-        KVSet::default()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.kvs.is_empty()
-    }
-    pub fn has(&self, needle: &KeyValue) -> bool {
-        let values = self.kvs.get(&needle.0);
-
-        match &needle.1 {
-            // None works like a wildcard
-            None => values.is_some(),
-            Some(nv) => {
-                if let Some(values) = values {
-                    values.iter().any(|value| value.to_string().ends_with(nv))
-                } else {
-                    false
-                }
-            }
-        }
-    }
-    pub fn for_each(
-        &self,
-        mut cb: impl FnMut(&Key, Option<String>) -> util::Result<()>,
-    ) -> util::Result<()> {
-        for (key, values) in &self.kvs {
-            if values.is_empty() {
-                cb(key, None)?;
-            } else {
-                for value in values {
-                    cb(key, Some(value.clone()))?;
-                }
-            }
-        }
-        Ok(())
-    }
-    pub fn insert(&mut self, kv: &KeyValue) {
-        if !self.kvs.contains_key(&kv.0) {
-            self.kvs.insert(kv.0.clone(), Vec::new());
-        }
-        if let Some(values) = self.kvs.get_mut(&kv.0) {
-            if let Some(value) = &kv.1 {
-                values.push(value.clone());
-            }
-        }
-    }
-    pub fn merge(&mut self, ctx: &KVSet) -> util::Result<()> {
-        trace!("Merging");
-        for (key_ctx, values_ctx) in &ctx.kvs {
-            if !self.kvs.contains_key(key_ctx) {
-                self.kvs.insert(key_ctx.clone(), Vec::new());
-            }
-            if let Some(values) = self.kvs.get_mut(key_ctx) {
-                for value_ctx in values_ctx {
-                    if !values.contains(value_ctx) {
-                        values.push(value_ctx.clone());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for KVSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // let mut prefix = "";
-        // for (k, v) in &self.kvs {
-        //     write!(f, "{prefix}{k}")?;
-        //     prefix = " ";
-        //     if v != &Value::None {
-        //         write!(f, "={}", v)?;
-        //     }
-        // }
-        Ok(())
-    }
-}
-
-// &todo: move amp/value.rs UTs to here
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_path_matches_with_prio() -> util::Result<()> {
-        let mut path = Path::new(true, true, vec!["prio"]);
+        let mut path = Path::new(true, true, &["prio"]);
         path.parts.push(Part::Prio(Prio::new(0, 0)));
 
         let scns = [
@@ -670,9 +579,9 @@ mod tests {
 
     #[test]
     fn test_path_create_from_template() -> util::Result<()> {
-        let mut abc = Path::new(true, true, vec!["abc"]);
+        let abc = Path::new(true, true, &["abc"]);
 
-        let mut prio = Path::new(true, true, vec!["prio"]);
+        let mut prio = Path::new(true, true, &["prio"]);
         prio.parts.push(Part::Prio(Prio::new(0, 0)));
 
         let scns = [
@@ -689,7 +598,7 @@ mod tests {
             let path = Path::try_from(path)?;
             let new_path = template.create_from_template(&path);
             let exp = base.map(|base| {
-                let mut p = Path::new(false, true, vec![base]);
+                let mut p = Path::new(false, true, &[base]);
                 if let Some(prio) = prio {
                     p.parts.push(Part::Prio(Prio::try_from(prio).unwrap()));
                 }
@@ -698,5 +607,65 @@ mod tests {
             assert_eq!(new_path, exp);
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_path_try_from() {
+        let scns = [
+            ("", Some(Path::new(false, false, &[]))),
+            ("a", Some(Path::new(false, false, &["a"]))),
+            ("a:b", Some(Path::new(false, false, &["a", "b"]))),
+            (":", Some(Path::new(false, true, &[]))),
+            (":a:b", Some(Path::new(false, true, &["a", "b"]))),
+        ];
+
+        for (s, exp) in scns {
+            assert_eq!(Path::try_from(s).ok(), exp);
+            if let Some(exp) = &exp {
+                assert_eq!(exp.to_string(), s);
+            }
+        }
+    }
+
+    #[test]
+    fn test_date_try_from() {
+        let scns = [("2024-10-02", Some(Date::new(2024, 10, 2)))];
+
+        for (s, exp) in scns {
+            assert_eq!(Date::try_from(s).ok(), exp);
+            assert_eq!(exp.unwrap().to_string(), s);
+        }
+    }
+
+    #[test]
+    fn test_duration_try_from() {
+        let scns = [
+            ("1w2d3h4m", Some(Duration::new(1, 2, 3, 4)), true),
+            ("2d3h1w4m", Some(Duration::new(1, 2, 3, 4)), false),
+            ("1m2m3m", Some(Duration::new(0, 0, 0, 6)), false),
+        ];
+
+        for (s, exp, check_to_string) in scns {
+            assert_eq!(Duration::try_from(s).ok(), exp);
+            if check_to_string {
+                assert_eq!(exp.unwrap().to_string(), s);
+            }
+        }
+    }
+
+    #[test]
+    fn test_prio_try_from() {
+        let scns = [
+            ("A0", Some(Prio::new(0, 0))),
+            ("A1", Some(Prio::new(0, 1))),
+            ("a1", Some(Prio::new(1, 1))),
+            ("a1", Some(Prio::new(1, 1))),
+            ("b0", Some(Prio::new(3, 0))),
+            ("b1", Some(Prio::new(3, 1))),
+        ];
+
+        for (s, exp) in scns {
+            assert_eq!(Prio::try_from(s).ok(), exp);
+        }
     }
 }

@@ -273,15 +273,6 @@ impl<'a> Grouper<'a> {
             match self.state {
                 State::Text => push_group(),
                 State::Amp => match tokens.last().unwrap().kind {
-                    // &todo: Delete this
-                    // lex::Kind::Colon => {
-                    //     // &spec: Group ending on `:` is still Amp, but we move the `:` to the next Group
-                    //     self.token_range.end -= 1;
-                    // }
-                    // lex::Kind::Ampersand => {
-                    //     // &spec: Group ending on `&` is still Amp, but we move the `&` to the next Group
-                    //     self.token_range.end -= 1;
-                    // }
                     lex::Kind::Semicolon | lex::Kind::Comma => {
                         // &spec: Group ending on `;` or `,` is considered as Text
                         // - &nbsp; occurs ofter in Markdown and is considered a false positive
