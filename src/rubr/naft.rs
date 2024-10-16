@@ -8,6 +8,7 @@ pub struct Body<'a, 'b> {
     fmt: &'a mut std::fmt::Formatter<'b>,
     level: usize,
     do_close: bool,
+    ctx: Option<&'a str>,
 }
 
 // Newtype used to wrap a reference and get into ToNaft.to_naft()
@@ -20,7 +21,15 @@ impl<'a, 'b> Body<'a, 'b> {
             fmt,
             level: 0,
             do_close: false,
+            ctx: None,
         }
+    }
+
+    pub fn set_ctx(&mut self, ctx: &'a str) {
+        self.ctx = Some(ctx);
+    }
+    pub fn reset_ctx(&mut self) {
+        self.ctx = None;
     }
 
     pub fn node<T>(&mut self, v: &T) -> std::fmt::Result
@@ -29,13 +38,19 @@ impl<'a, 'b> Body<'a, 'b> {
     {
         if self.level > 0 {
             if !self.do_close {
-                write!(self.fmt, "{{");
+                write!(self.fmt, "{{")?;
                 self.do_close = true;
             }
-            write!(self.fmt, "\n");
+            write!(self.fmt, "\n")?;
             self.indent()?;
         }
-        write!(self.fmt, "[{v}]")
+        if let Some(ctx) = self.ctx {
+            write!(self.fmt, "[{ctx}:{v}]")?;
+        } else {
+            write!(self.fmt, "[{v}]")?;
+        }
+
+        Ok(())
     }
 
     pub fn attr<T>(&mut self, k: &str, v: &T) -> std::fmt::Result
@@ -54,11 +69,12 @@ impl<'a, 'b> Body<'a, 'b> {
             fmt: self.fmt,
             level: self.level + 1,
             do_close: false,
+            ctx: None,
         }
     }
 
     fn indent(&mut self) -> std::fmt::Result {
-        for i in 0..self.level {
+        for _ in 0..self.level {
             write!(self.fmt, "  ")?;
         }
         Ok(())
@@ -111,26 +127,29 @@ mod tests {
     }
 
     struct A {
-        b: B,
+        b0: B,
+        b1: B,
     }
     impl ToNaft for A {
         fn to_naft(&self, b: &mut Body<'_, '_>) -> std::fmt::Result {
             b.node(&"A")?;
             b.key("k")?;
             b.attr("k", &"v")?;
-            {
-                let mut b = b.nest();
-                self.b.to_naft(&mut b);
-            }
+            let mut b = b.nest();
+            b.set_ctx("b0");
+            self.b0.to_naft(&mut b);
+            b.set_ctx("b1");
+            self.b1.to_naft(&mut b);
+            b.reset_ctx();
             Ok(())
         }
     }
 
     #[test]
     fn test_api() {
-        let a = A { b: B {} };
+        let a = A { b0: B {}, b1: B {} };
         let s = format!("{}", AsNaft::<A>::new(&a));
         println!("{s}rest");
-        assert_eq!(&s, "[A](k)(k:v){\n  [B](a:b)\n}\n");
+        assert_eq!(&s, "[A](k)(k:v){\n  [b0:B](a:b)\n  [b1:B](a:b)\n}\n");
     }
 }

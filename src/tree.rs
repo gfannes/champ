@@ -299,12 +299,15 @@ impl naft::ToNaft for Tree {
         b.node(&"Tree")?;
         b.attr("ix", &self.ix)?;
         b.attr("filename", &self.filename.display())?;
-        // &todo &naft: Pass the name to discriminate between them
-        self.org.to_naft(b);
-        self.ctx.to_naft(b);
+        let mut b = b.nest();
+        b.set_ctx("org");
+        self.org.to_naft(&mut b)?;
+        b.set_ctx("ctx");
+        self.ctx.to_naft(&mut b)?;
+        b.reset_ctx();
         for ix in 0..self.nodes.len() {
             let node = &self.nodes[ix];
-            node.to_naft(b);
+            node.to_naft(&mut b)?;
         }
         Ok(())
     }
@@ -347,9 +350,11 @@ impl naft::ToNaft for Node {
         if let Some(def) = &self.def {
             b.attr("def", def)?;
         }
-        // &todo &naft: Add name
+        b.set_ctx("org");
         self.org.to_naft(b);
+        b.set_ctx("ctx");
         self.ctx.to_naft(b);
+        b.reset_ctx();
         Ok(())
     }
 }
