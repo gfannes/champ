@@ -25,6 +25,7 @@ impl<'a, 'b> Body<'a, 'b> {
         }
     }
 
+    // `ctx` will be used as a prefix before the node tag
     pub fn set_ctx(&mut self, ctx: &'a str) {
         self.ctx = Some(ctx);
     }
