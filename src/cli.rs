@@ -286,6 +286,11 @@ impl Config {
                         std::fs::remove_file(fp)?;
                     }
                 }
+                "~list" | "~ls" => {
+                    for command in &config_global.commands {
+                        println!("{}", naft::AsNaft::<config::Command>::new(command));
+                    }
+                }
                 _ => {
                     if name.starts_with("~") {
                         fail!(

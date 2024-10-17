@@ -1,4 +1,4 @@
-use crate::{fail, util};
+use crate::{fail, rubr::naft, util};
 use clap::Parser;
 use dirs;
 use serde;
@@ -148,6 +148,48 @@ pub struct Command {
     pub search: bool,
     pub list: bool,
     pub debug: bool,
+}
+
+impl naft::ToNaft for Command {
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Command")?;
+        b.attr("name", &self.name)?;
+        b.attr("verbose", &self.verbose)?;
+        b.attr("next", &self.next)?;
+        b.attr("hidden", &self.hidden)?;
+        b.attr("ignored", &self.ignored)?;
+        b.attr("open", &self.open)?;
+        b.attr("query_org", &self.query_org)?;
+        b.attr("query_ctx", &self.query_ctx)?;
+        b.attr("next_all", &self.next_all)?;
+        b.attr("search", &self.search)?;
+        b.attr("list", &self.list)?;
+        b.attr("debug", &self.debug)?;
+
+        let mut b = b.nest();
+        if !self.groves.is_empty() {
+            b.set_ctx("groves");
+            b.node(&"Names")?;
+            for grove in &self.groves {
+                b.key(grove)?;
+            }
+        }
+        if !self.roots.is_empty() {
+            b.set_ctx("roots");
+            b.node(&"Folders")?;
+            for root in &self.roots {
+                b.key(&root.to_string_lossy())?;
+            }
+        }
+        if !self.rest.is_empty() {
+            b.set_ctx("rest");
+            b.node(&"Names")?;
+            for rest in &self.rest {
+                b.key(rest)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Global {
