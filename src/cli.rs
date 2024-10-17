@@ -38,9 +38,6 @@ impl App {
         let mut answer: Option<answer::Answer> = None;
         match &self.config.command {
             Command::None => {}
-            Command::Config => {
-                println!("config: {:?}", self.config);
-            }
             Command::List => {
                 self.list_files_recursive_(&path::Path::root())?;
             }
@@ -85,9 +82,13 @@ impl App {
                     let tree = &forest.trees[tree_ix];
 
                     let do_print = if let Some(needle) = needle {
-                        tree.filename.to_string_lossy().contains(needle)
+                        match needle.as_str() {
+                            // &doc
+                            "~all" => true,
+                            _ => tree.filename.to_string_lossy().contains(needle),
+                        }
                     } else {
-                        true
+                        false
                     };
 
                     for node in &tree.nodes {
@@ -181,7 +182,6 @@ impl App {
 #[derive(Debug, Clone)]
 enum Command {
     None,
-    Config,
     Query(query::From),
     Next(Option<u8>),
     Search,
@@ -199,16 +199,147 @@ struct Config {
 }
 
 impl Config {
-    fn load(cli_args: config::CliArgs) -> util::Result<Config> {
+    fn load(mut cli_args: config::CliArgs) -> util::Result<Config> {
         let span = span!(Level::INFO, "Config.load");
         let _s = span.enter();
 
-        let global = config::Global::load(&cli_args)?;
+        let mut config_global = config::Global::load(&cli_args.config_root)?;
+
+        // Apply arguments from registered command
+        if let Some(name) = cli_args.command {
+            if let Some(command) = config_global
+                .commands
+                .iter()
+                .find(|command| &command.name == &name)
+            {
+                // If cli_args is the default, we overwrite it with data from command
+                if cli_args.verbose == config::default_verbose() {
+                    cli_args.verbose = command.verbose;
+                }
+                if cli_args.next == 0 {
+                    cli_args.next = command.next;
+                }
+                if !cli_args.hidden {
+                    cli_args.hidden = command.hidden;
+                }
+                if !cli_args.ignored {
+                    cli_args.ignored = command.ignored;
+                }
+                if !cli_args.open {
+                    cli_args.open = command.open;
+                }
+                if !cli_args.query_org {
+                    cli_args.query_org = command.query_org;
+                }
+                if !cli_args.query_ctx {
+                    cli_args.query_ctx = command.query_ctx;
+                }
+                if !cli_args.next_all {
+                    cli_args.next_all = command.next_all;
+                }
+                if !cli_args.search {
+                    cli_args.search = command.search;
+                }
+                if !cli_args.list {
+                    cli_args.list = command.list;
+                }
+                if !cli_args.debug {
+                    cli_args.debug = command.debug;
+                }
+                {
+                    // Put items from command first
+                    let mut new_groves = command.groves.clone();
+                    for grove in cli_args.grove {
+                        if !new_groves.contains(&grove) {
+                            new_groves.push(grove);
+                        }
+                    }
+                    cli_args.grove = new_groves;
+                }
+                {
+                    // Put items from command first
+                    let mut new_roots = command.roots.clone();
+                    for root in cli_args.root {
+                        if !new_roots.contains(&root) {
+                            new_roots.push(root);
+                        }
+                    }
+                    cli_args.root = new_roots;
+                }
+                {
+                    // Put items from command first
+                    let mut new_rest = command.rest.clone();
+                    new_rest.append(&mut cli_args.rest);
+                    cli_args.rest = new_rest;
+                }
+            }
+        }
+
+        // Register arguments under new name
+        if let Some(name) = cli_args.register_command {
+            match name.as_str() {
+                // &doc
+                "~remove" | "~rm" => {
+                    if let Some(fp) = config_global.path.clone() {
+                        let fp = fp.join("commands.toml");
+                        info!("Removing commands file '{}'", fp.display());
+                        std::fs::remove_file(fp)?;
+                    }
+                }
+                _ => {
+                    if name.starts_with("~") {
+                        fail!(
+                            "Cannot register command '{}' starting with '~', this is reserved.",
+                            &name
+                        );
+                    }
+
+                    // Remove items with the same name
+                    config_global
+                        .commands
+                        .retain(|command| &command.name != &name);
+
+                    let command = config::Command {
+                        name: name.clone(),
+                        groves: cli_args.grove.clone(),
+                        roots: cli_args.root.clone(),
+                        rest: cli_args.rest.clone(),
+                        next: cli_args.next,
+                        verbose: cli_args.verbose,
+                        hidden: cli_args.hidden,
+                        ignored: cli_args.ignored,
+                        open: cli_args.open,
+                        query_org: cli_args.query_org,
+                        query_ctx: cli_args.query_ctx,
+                        next_all: cli_args.next_all,
+                        search: cli_args.search,
+                        list: cli_args.list,
+                        debug: cli_args.debug,
+                    };
+
+                    config_global.commands.push(command);
+
+                    let commands = config::Commands {
+                        command: config_global.commands.clone(),
+                    };
+                    let str = toml::to_string(&commands)?;
+                    if let Some(fp) = config_global.path.clone() {
+                        let fp = fp.join("commands.toml");
+                        info!("Writing new command '{}' to '{}'", &name, fp.display());
+                        std::fs::write(fp, str)?;
+                    }
+                }
+            }
+        }
 
         let mut groves = Vec::new();
         {
             for grove_str in &cli_args.grove {
-                if let Some(grove) = global.groves.iter().find(|grove| &grove.name == grove_str) {
+                if let Some(grove) = config_global
+                    .groves
+                    .iter()
+                    .find(|grove| &grove.name == grove_str)
+                {
                     info!("Found grove {:?}", grove);
                     groves.push(grove.clone());
                 } else {
@@ -228,9 +359,7 @@ impl Config {
             }
         }
 
-        let command = if cli_args.config {
-            Command::Config
-        } else if cli_args.query_org {
+        let command = if cli_args.query_org {
             Command::Query(query::From::Org)
         } else if cli_args.query_ctx {
             Command::Query(query::From::Ctx)
@@ -249,7 +378,7 @@ impl Config {
         };
 
         let config = Config {
-            global,
+            global: config_global,
             command,
             do_open: cli_args.open,
             args: cli_args.rest.clone(),

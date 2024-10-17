@@ -289,12 +289,12 @@ pub struct Config {
 
 impl Config {
     pub fn load(cli_options: &config::CliArgs) -> util::Result<Config> {
-        let global = config::Global::load(cli_options)?;
+        let config_global = config::Global::load(&cli_options.config_root)?;
 
         let config = Config {
             mainloop_timeout_ms: 100,
             log_level: "info".to_owned(),
-            global,
+            global: config_global,
         };
         Ok(config)
     }
