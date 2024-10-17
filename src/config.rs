@@ -8,7 +8,7 @@ use tracing::{error, info, trace};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "ch",
+    name = "champ",
     version,
     about,
     long_about = None,

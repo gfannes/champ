@@ -1,21 +1,15 @@
 [package]
-name = "champetter"
+name = "champ"
 version = "0.1.0"
 edition = "2021"
 authors = ["Geert Fannes <geert.fannes@gmail.com>"]
-description = "A tool for managing AMP-based annotations"
+description = "Command-line Hero for the Ampersand Metadata Protocol"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-default-run = "ch"
 
 [[bin]]
 name = "champ"
 path = "src/main.rs"
-
-[[bin]]
-name = "ch"
-path = "src/bin/ch.rs"
 
 [dependencies]
 anyhow = { version = "1.0.89", features = ["backtrace"] }
