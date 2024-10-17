@@ -36,6 +36,9 @@ pub struct CliArgs {
     pub command: Option<String>,
 
     /// Register all specified arguments under given name for later use
+    /// Names starting with '~' have a special meaning:
+    /// - '~remove|~rm': Removes the commands file
+    /// - '~list|~ls': Lists all available commands
     #[arg(short = 'C', long, value_name = "NAME", verbatim_doc_comment)]
     pub register_command: Option<String>,
 
