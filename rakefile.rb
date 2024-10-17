@@ -1,6 +1,11 @@
 require('fileutils')
 require('pathname')
 
+desc "Create and publish the release package. Tag the source code manually."
+task :release do
+    sh "cargo package"
+    sh "cargo publish"
+end
 
 my = Class.new() do
     def initialize()
