@@ -10,3 +10,5 @@ This crate contains a command-line utility to work with AMP data. It can:
 In the near future, we plan to:
 - Support working with priorities, dates and durations
 - Support LSP
+
+## explain How to use IvyLee &doc &todo

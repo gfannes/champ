@@ -41,7 +41,7 @@ impl Builder {
 
     // Inits node.def and node.org from
     // - Node metadata
-    // - Metadata files (_amp.md)
+    // - Metadata files (_.amp)
     // Does not join node.def or resolve node.org
     fn init_org_def(&mut self, forest: &mut Forest) -> util::Result<()> {
         forest.each_node_mut(|node, content, format, filename| {
@@ -101,7 +101,7 @@ impl Builder {
         })?;
 
         // Populate Tree.root().org with info from
-        // - _amp.md for Folders
+        // - _.amp for Folders
         // - tree.filename for Files &todo
         for ix in 0..forest.trees.len() {
             let mut md_paths = None;
@@ -116,7 +116,7 @@ impl Builder {
                         if md_tree
                             .filename
                             .file_name()
-                            .and_then(|file_name| Some(file_name.to_string_lossy() == "_amp.md"))
+                            .and_then(|file_name| Some(file_name.to_string_lossy() == "_.amp"))
                             .unwrap_or(false)
                         {
                             trace!("Found Tree metadata for '{}'", tree.filename.display());
@@ -250,7 +250,8 @@ impl Builder {
             .extension()
             .and_then(|ext| {
                 let format = match &ext.to_string_lossy() as &str {
-                    "md" => Format::Markdown,
+                    // &todo: Treat `.amp` as its own file format
+                    "md" | "amp" => Format::Markdown,
                     "mm" => Format::MindMap,
                     "rb" | "py" | "sh" => Format::SourceCode { comment: "#" },
                     "h" | "c" | "hpp" | "cpp" | "rs" | "chai" => {
