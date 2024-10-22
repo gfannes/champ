@@ -1,6 +1,6 @@
 [package]
 name = "champ"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Geert Fannes <geert.fannes@gmail.com>"]
 description = "Command-line Hero for the Ampersand Metadata Protocol"

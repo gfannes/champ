@@ -8,3 +8,7 @@
 - Can we provide the same func as a trait on `&str`?
 
 ## Detect `[ ]` as `todo`
+
+## Support working with versions &todo
+- A version is a collection of other aspects
+- A version should not directly be used as annotation

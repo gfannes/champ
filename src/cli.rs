@@ -278,15 +278,14 @@ impl Config {
         // Register arguments under new name
         if let Some(name) = cli_args.register_command {
             match name.as_str() {
-                // &doc
-                "~remove" | "~rm" => {
+                "~clear" => {
                     if let Some(fp) = config_global.path.clone() {
                         let fp = fp.join("commands.toml");
                         info!("Removing commands file '{}'", fp.display());
                         std::fs::remove_file(fp)?;
                     }
                 }
-                "~list" | "~ls" => {
+                "~list" => {
                     for command in &config_global.commands {
                         println!("{}", naft::AsNaft::<config::Command>::new(command));
                     }

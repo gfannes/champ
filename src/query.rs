@@ -79,7 +79,7 @@ impl TryFrom<&Vec<String>> for Query {
                 let mut amp_parser = amp::parse::Parser::new();
                 match needle_str.as_str() {
                     // &doc: Both an empty argument or '_' will serve as a wildcard
-                    "" | "_" => {
+                    "" | "_" | "~" => {
                         trace!("Found wildcard '{}' for needle", needle_str);
                         needle = None;
                     }
