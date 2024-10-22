@@ -82,11 +82,12 @@ pub struct CliArgs {
     #[arg(short = 'd', long, default_value_t = false)]
     pub debug: bool,
 
-    /// Additional arguments, interpretation depends on provided arguments
-    /// -c: clear | set | print
-    /// -q: org ctx*
-    // #[clap(value_parser, verbatim_doc_comment)]
-    pub rest: Vec<String>,
+    /// Where
+    #[arg(short = 'w', long)]
+    pub wher: Vec<String>,
+
+    /// Item to search
+    pub what: Option<String>,
 }
 pub fn default_verbose() -> u32 {
     1
@@ -139,7 +140,9 @@ pub struct Command {
     pub name: String,
     pub groves: Vec<String>,
     pub roots: Vec<path::PathBuf>,
-    pub rest: Vec<String>,
+    #[serde(rename = "where")]
+    pub wher: Vec<String>,
+    pub what: Option<String>,
     pub verbose: u32,
     pub next: u8,
     pub hidden: bool,
@@ -168,6 +171,9 @@ impl naft::ToNaft for Command {
         b.attr("search", &self.search)?;
         b.attr("list", &self.list)?;
         b.attr("debug", &self.debug)?;
+        if let Some(what) = &self.what {
+            b.attr("what", what)?;
+        }
 
         let mut b = b.nest();
         if !self.groves.is_empty() {
@@ -184,10 +190,10 @@ impl naft::ToNaft for Command {
                 b.key(&root.to_string_lossy())?;
             }
         }
-        if !self.rest.is_empty() {
+        if !self.wher.is_empty() {
             b.set_ctx("rest");
             b.node(&"Names")?;
-            for rest in &self.rest {
+            for rest in &self.wher {
                 b.key(rest)?;
             }
         }
@@ -253,6 +259,14 @@ impl Global {
                     );
                 }
             }
+
+            // Add "amp" extension, if not already done so
+            let amp: String = "amp".into();
+            for grove in global.groves.iter_mut() {
+                if !grove.include.contains(&amp) {
+                    grove.include.push(amp.clone())
+                }
+            }
         }
 
         {
@@ -266,7 +280,7 @@ impl Global {
                 match toml::from_str::<Commands>(content) {
                     Ok(commands) => global.commands = commands.command,
                     Err(err) => {
-                        fail!(
+                        error!(
                             "Could not parse commands from '{}': {}",
                             commands_fp.display(),
                             err

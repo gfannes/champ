@@ -41,7 +41,7 @@ impl GroveSpec {
             return true;
         }
         if let Some(ext) = path.extension() {
-            self.include.iter().position(|e| e == ext).is_some() || ext == ffi::OsStr::new("amp")
+            self.include.iter().position(|e| e == ext).is_some()
         } else {
             // path has no extension: we only continue when it is a folder
             path.is_folder()

@@ -67,15 +67,15 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
 }
 
 // Creates a Query from CLI arguments
-impl TryFrom<&Vec<String>> for Query {
+impl TryFrom<(&Option<String>, &Vec<String>)> for Query {
     type Error = util::ErrorType;
 
-    fn try_from(args: &Vec<String>) -> util::Result<Query> {
+    fn try_from(args: (&Option<String>, &Vec<String>)) -> util::Result<Query> {
         let needle: Option<amp::Path>;
         let mut constraints = Vec::<amp::Path>::new();
 
         {
-            if let Some((needle_str, constraints_str)) = args.split_first() {
+            if let Some(needle_str) = args.0 {
                 let mut amp_parser = amp::parse::Parser::new();
                 match needle_str.as_str() {
                     // &doc: Both an empty argument or '_' will serve as a wildcard
@@ -95,7 +95,7 @@ impl TryFrom<&Vec<String>> for Query {
                         }
                     }
                 }
-                for constraint_str in constraints_str {
+                for constraint_str in args.1 {
                     amp_parser.parse(&format!("&{constraint_str}"), &amp::parse::Match::OnlyStart);
                     if let Some(stmt) = amp_parser.stmts.first() {
                         match &stmt.kind {

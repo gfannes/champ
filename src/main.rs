@@ -1,4 +1,5 @@
 use champ::{cli, config, util};
+use tracing::trace;
 use tracing_subscriber::EnvFilter;
 
 fn main() -> util::Result<()> {
@@ -13,6 +14,8 @@ fn main() -> util::Result<()> {
     let filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_level));
     tracing_subscriber::fmt().with_env_filter(filter).init();
+
+    trace!("cli_args: {:?}", &cli_args);
 
     let mut app = cli::App::try_new(cli_args)?;
 

@@ -42,7 +42,7 @@ impl App {
                 self.list_files_recursive_(&path::Path::root())?;
             }
             Command::Search => {
-                let needle = self.config.args.get(0).map(|s| s.clone());
+                let needle = self.config.what.clone();
                 println!("needle: {:?}", &needle);
 
                 let _forest = self.builder.create_forest_from(&mut self.fs_forest)?;
@@ -51,7 +51,7 @@ impl App {
             }
             Command::Query(from) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
-                let query = query::Query::try_from(&self.config.args)?;
+                let query = query::Query::try_from((&self.config.what, &self.config.args))?;
                 answer = Some(query::search(&forest, &query, from)?);
 
                 if let Some(answer) = &mut answer {
@@ -61,7 +61,7 @@ impl App {
             }
             Command::Next(cnt) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
-                let query = query::Query::try_from(&self.config.args)?;
+                let query = query::Query::try_from((&self.config.what, &self.config.args))?;
                 answer = Some(query::search(&forest, &query, &query::From::Org)?);
 
                 if let Some(answer) = &mut answer {
@@ -74,7 +74,7 @@ impl App {
                 }
             }
             Command::Debug => {
-                let needle = self.config.args.get(0);
+                let needle = &self.config.what;
 
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
 
@@ -194,6 +194,7 @@ struct Config {
     global: config::Global,
     command: Command,
     do_open: bool,
+    what: Option<String>,
     args: Vec<String>,
     groves: Vec<config::Grove>,
 }
@@ -206,7 +207,7 @@ impl Config {
         let mut config_global = config::Global::load(&cli_args.config_root)?;
 
         // Apply arguments from registered command
-        if let Some(name) = cli_args.command {
+        if let Some(name) = cli_args.command.clone() {
             if let Some(command) = config_global
                 .commands
                 .iter()
@@ -246,6 +247,9 @@ impl Config {
                 if !cli_args.debug {
                     cli_args.debug = command.debug;
                 }
+                if cli_args.what.is_none() {
+                    cli_args.what = command.what.clone();
+                }
                 {
                     // Put items from command first
                     let mut new_groves = command.groves.clone();
@@ -268,11 +272,15 @@ impl Config {
                 }
                 {
                     // Put items from command first
-                    let mut new_rest = command.rest.clone();
-                    new_rest.append(&mut cli_args.rest);
-                    cli_args.rest = new_rest;
+                    let mut new_wher = command.wher.clone();
+                    new_wher.append(&mut cli_args.wher);
+                    cli_args.wher = new_wher;
                 }
+            } else {
+                fail!("Could not find command '{}'", &name);
             }
+
+            trace!("Updated cli_args: {:?}", &cli_args);
         }
 
         // Register arguments under new name
@@ -307,7 +315,7 @@ impl Config {
                         name: name.clone(),
                         groves: cli_args.grove.clone(),
                         roots: cli_args.root.clone(),
-                        rest: cli_args.rest.clone(),
+                        wher: cli_args.wher.clone(),
                         next: cli_args.next,
                         verbose: cli_args.verbose,
                         hidden: cli_args.hidden,
@@ -319,6 +327,7 @@ impl Config {
                         search: cli_args.search,
                         list: cli_args.list,
                         debug: cli_args.debug,
+                        what: cli_args.what.clone(),
                     };
 
                     config_global.commands.push(command);
@@ -385,7 +394,8 @@ impl Config {
             global: config_global,
             command,
             do_open: cli_args.open,
-            args: cli_args.rest.clone(),
+            what: cli_args.what.clone(),
+            args: cli_args.wher.clone(),
             groves,
         };
 
