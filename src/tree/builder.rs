@@ -2,7 +2,7 @@
 
 use crate::{amp, fail, fs, lex, path, tree, tree::md, tree::src, util};
 use std::collections;
-use tracing::{error, span, trace, warn, Level};
+use tracing::{error, info, span, trace, warn, Level};
 
 type Forest = tree::Forest;
 type Tree = tree::Tree;
@@ -110,7 +110,7 @@ impl Builder {
             {
                 let tree = &forest.trees[ix];
 
-                // For a Folder, the Files are indicated by the links on the root Node
+                // For a Folder, the Files are indicated by Tree.root().links
                 for ix in &tree.root().links {
                     if let Some(md_tree) = forest.trees.get(*ix) {
                         if md_tree
@@ -119,7 +119,7 @@ impl Builder {
                             .and_then(|file_name| Some(file_name.to_string_lossy() == "_.amp"))
                             .unwrap_or(false)
                         {
-                            trace!("Found Tree metadata for '{}'", tree.filename.display());
+                            info!("Found Tree metadata for '{}'", tree.filename.display());
                             let mut paths = amp::Paths::new();
                             for ix in 0..md_tree.nodes.len() {
                                 let node = &md_tree.nodes[ix];
@@ -144,8 +144,8 @@ impl Builder {
                 }
             }
 
-            if let Some(kvs) = md_paths {
-                forest.trees[ix].root_mut().org = kvs;
+            if let Some(md_paths) = md_paths {
+                forest.trees[ix].root_mut().org = md_paths;
             }
             forest.trees[ix].root_mut().def = md_def;
         }
@@ -229,17 +229,56 @@ impl Builder {
     }
 
     fn init_ctx(&mut self, forest: &mut Forest) -> util::Result<()> {
+        // Setup Tree.root().ctx from Tree.root().org
         forest.each_tree_mut(|tree| {
+            tree.root_mut().ctx = tree.root().org.clone();
+            Ok(())
+        })?;
+
+        // Distribute Tree.root().ctx to all its links
+        // We iterate over the Trees in reverse because child Trees come before a parent Tree
+        for ix in (0..forest.trees.len()).rev() {
+            if !forest.trees[ix].root().ctx.data.is_empty() {
+                if !forest.trees[ix].root().links.is_empty() {
+                    let src_ctx = forest.trees[ix].root().ctx.clone();
+                    let links = forest.trees[ix].root().links.clone();
+
+                    for ix in links {
+                        if let Some(dst_tree) = forest.trees.get_mut(ix) {
+                            let filename = dst_tree.filename.clone();
+                            let dst_ctx = &mut dst_tree.root_mut().ctx;
+                            for src in &src_ctx.data {
+                                if dst_ctx.has_variant(src) {
+                                    info!("Found variant for {src} in root ctx of '{}': not inserting", filename.display());
+                                } else {
+                                    dst_ctx.insert(src);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Distribute the ctx within each Tree
+        forest.each_tree_mut(|tree| {
+            let filename = tree.filename.clone();
             tree.root_to_leaf(|src, dst| {
                 dst.ctx = dst.org.clone();
                 for src in &src.ctx.data {
-                    if !dst.ctx.has_variant(src) {
+                    if dst.ctx.has_variant(src) {
+                        info!(
+                            "Found variant for {src} in ctx of '{}': not inserting",
+                            filename.display()
+                        );
+                    } else {
                         dst.ctx.insert(src);
                     }
                 }
                 Ok(())
             })
         })?;
+
         Ok(())
     }
 

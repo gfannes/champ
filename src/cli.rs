@@ -51,6 +51,8 @@ impl App {
             }
             Command::Query(from) => {
                 let forest = self.builder.create_forest_from(&mut self.fs_forest)?;
+                println!("forest: {}", naft::AsNaft::<tree::Forest>::new(&forest));
+
                 let query = query::Query::try_from((&self.config.what, &self.config.args))?;
                 answer = Some(query::search(&forest, &query, from)?);
 

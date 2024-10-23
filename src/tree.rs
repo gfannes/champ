@@ -29,9 +29,6 @@ pub struct Tree {
     pub filename: path::PathBuf,
     pub format: Format,
     pub content: String,
-    // &todo: use root() to store this data instead
-    pub org: amp::Paths,
-    pub ctx: amp::Paths,
 }
 
 // &next: provide amp items
@@ -244,7 +241,7 @@ impl Tree {
             for &dst_ix in &src.childs {
                 let diff = dst_ix - src_ix - 1;
                 let (_, tail) = rest.split_at_mut(diff);
-                cb(src, &mut tail[0]);
+                cb(src, &mut tail[0])?;
                 Self::root_to_leaf_(dst_ix, tail, cb)?;
             }
         }
@@ -294,17 +291,29 @@ impl Tree {
     }
 }
 
+impl naft::ToNaft for Forest {
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Roots")?;
+        for root_ix in &self.roots {
+            b.attr("ix", root_ix)?;
+        }
+
+        self.defs.to_naft(b)?;
+
+        for tree in &self.trees {
+            tree.to_naft(b)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl naft::ToNaft for Tree {
     fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
         b.node(&"Tree")?;
         b.attr("ix", &self.ix)?;
         b.attr("filename", &self.filename.display())?;
         let mut b = b.nest();
-        b.set_ctx("org");
-        self.org.to_naft(&mut b)?;
-        b.set_ctx("ctx");
-        self.ctx.to_naft(&mut b)?;
-        b.reset_ctx();
         for ix in 0..self.nodes.len() {
             let node = &self.nodes[ix];
             node.to_naft(&mut b)?;

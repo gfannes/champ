@@ -77,7 +77,6 @@ impl Paths {
         }
     }
 
-    // &todo &ut
     pub fn has_variant(&self, rhs: &Path) -> bool {
         // A variant of rhs is a Path that builds on rhs, matches with rhs, or has the same depth and matching parent
         self.data.iter().any(|lhs| {
@@ -87,7 +86,11 @@ impl Paths {
                     .all(|ix| lhs.parts.get(ix) == rhs.parts.get(ix))
             };
 
-            matches(0..lhs.parts.len()) || (rhs.parts.len() > 0 && matches(0..rhs.parts.len() - 1))
+            let rhs_builds_on_lhs_or_is_equal = matches(0..lhs.parts.len());
+            let same_depth = lhs.parts.len() == rhs.parts.len();
+            let matching_parents = rhs.parts.len() > 0 && matches(0..rhs.parts.len() - 1);
+
+            rhs_builds_on_lhs_or_is_equal || (same_depth && matching_parents)
         })
     }
 
@@ -692,5 +695,26 @@ mod tests {
         for (s, exp) in scns {
             assert_eq!(Prio::try_from(s).ok(), exp);
         }
+    }
+
+    #[test]
+    fn test_paths_has_variant() -> util::Result<()> {
+        let mut paths = Paths::new();
+
+        paths.insert(&Path::try_from(":a")?);
+        paths.insert(&Path::try_from(":b:c:d")?);
+
+        assert_eq!(paths.has_variant(&Path::try_from(":a")?), true);
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c:d")?), true);
+
+        assert_eq!(paths.has_variant(&Path::try_from(":d")?), true);
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c:d")?), true);
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c:e")?), true);
+
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c")?), false);
+        assert_eq!(paths.has_variant(&Path::try_from(":b:d")?), false);
+        assert_eq!(paths.has_variant(&Path::try_from(":d:e")?), false);
+
+        Ok(())
     }
 }

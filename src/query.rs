@@ -1,5 +1,5 @@
 use crate::{amp, answer, fail, tree, util};
-use tracing::trace;
+use tracing::{info, trace};
 
 #[derive(Debug, Default)]
 pub struct Query {
@@ -19,15 +19,19 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
     let mut answer = answer::Answer::new();
 
     forest.dfs(|tree, node| {
-        let paths = match from {
-            From::Org => &node.org,
-            From::Ctx => &node.ctx,
-        };
+        let mut is_match;
+        {
+            let paths = match from {
+                From::Org => &node.org,
+                From::Ctx => &node.ctx,
+            };
 
-        let mut is_match = match &query.needle {
-            Some(needle) => paths.matches_with(needle),
-            _ => !paths.is_empty(),
-        };
+            is_match = match &query.needle {
+                Some(needle) => paths.matches_with(needle),
+                _ => !paths.is_empty(),
+            };
+        }
+
         for constraint in &query.constraints {
             if !node.ctx.matches_with(constraint) {
                 is_match = false;
@@ -42,6 +46,7 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
                 .collect();
             let org = node.org.to_string();
             let ctx = node.ctx.to_string();
+            // info!("{} org {} ctx {}", tree.filename.display(), &org, &ctx);
             let prio = node
                 .ctx
                 .data
