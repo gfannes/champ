@@ -1,4 +1,4 @@
-use crate::{amp, answer, fail, tree, util};
+use crate::{amp, answer, fail, rubr::naft, tree, util};
 use tracing::{info, trace};
 
 #[derive(Debug, Default)]
@@ -71,17 +71,31 @@ pub fn search(forest: &tree::Forest, query: &Query, from: &From) -> util::Result
     Ok(answer)
 }
 
+impl naft::ToNaft for Query {
+    fn to_naft(&self, b: &mut naft::Body<'_, '_>) -> std::fmt::Result {
+        b.node(&"Node")?;
+        if let Some(needle) = &self.needle {
+            b.set_ctx("needle");
+            needle.to_naft(b)?;
+        }
+        for constraint in &self.constraints {
+            b.set_ctx("constraint");
+            constraint.to_naft(b)?;
+        }
+        Ok(())
+    }
+}
+
 // Creates a Query from CLI arguments
 impl TryFrom<(&Option<String>, &Vec<String>)> for Query {
     type Error = util::ErrorType;
 
     fn try_from(args: (&Option<String>, &Vec<String>)) -> util::Result<Query> {
-        let needle: Option<amp::Path>;
-        let mut constraints = Vec::<amp::Path>::new();
+        let mut amp_parser = amp::parse::Parser::new();
 
+        let needle: Option<amp::Path>;
         {
             if let Some(needle_str) = args.0 {
-                let mut amp_parser = amp::parse::Parser::new();
                 match needle_str.as_str() {
                     // &doc: Both an empty argument or '_' will serve as a wildcard
                     "" | "_" | "~" => {
@@ -89,7 +103,8 @@ impl TryFrom<(&Option<String>, &Vec<String>)> for Query {
                         needle = None;
                     }
                     _ => {
-                        amp_parser.parse(&format!("&{needle_str}"), &amp::parse::Match::OnlyStart);
+                        amp_parser
+                            .parse(&format!("&{needle_str}"), &amp::parse::Match::OnlyStart)?;
                         if let Some(stmt) = amp_parser.stmts.first() {
                             match &stmt.kind {
                                 amp::parse::Kind::Amp(kv) => needle = Some(kv.clone()),
@@ -100,20 +115,22 @@ impl TryFrom<(&Option<String>, &Vec<String>)> for Query {
                         }
                     }
                 }
-                for constraint_str in args.1 {
-                    amp_parser.parse(&format!("&{constraint_str}"), &amp::parse::Match::OnlyStart);
-                    if let Some(stmt) = amp_parser.stmts.first() {
-                        match &stmt.kind {
-                            amp::parse::Kind::Amp(kv) => constraints.push(kv.clone()),
-                            _ => fail!("Expected to find AMP"),
-                        }
-                    }
-                }
             } else {
                 needle = None;
             }
         }
         trace!("needle: {:?}", needle);
+
+        let mut constraints = Vec::<amp::Path>::new();
+        for constraint_str in args.1 {
+            amp_parser.parse(&format!("&{constraint_str}"), &amp::parse::Match::OnlyStart)?;
+            if let Some(stmt) = amp_parser.stmts.first() {
+                match &stmt.kind {
+                    amp::parse::Kind::Amp(kv) => constraints.push(kv.clone()),
+                    _ => fail!("Expected to find AMP"),
+                }
+            }
+        }
         trace!("constraints: {:?}", constraints);
 
         Ok(Query {

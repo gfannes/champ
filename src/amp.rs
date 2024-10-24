@@ -220,7 +220,7 @@ impl Path {
         while let Some(rhs) = rhs.next() {
             while let Some(lhs) = lhs.next() {
                 let is_match = match (lhs, rhs) {
-                    (Part::Tag(lhs), Part::Tag(rhs)) => lhs == rhs,
+                    (Part::Tag(lhs), Part::Tag(rhs)) => &lhs.text == &rhs.text,
                     (Part::Date(lhs), Part::Date(rhs)) => as_template || lhs == rhs,
                     (Part::Duration(lhs), Part::Duration(rhs)) => as_template || lhs == rhs,
                     (Part::Prio(lhs), Part::Prio(rhs)) => as_template || lhs == rhs,
