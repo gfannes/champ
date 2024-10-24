@@ -44,9 +44,11 @@ impl Builder {
     // - Metadata files (_.amp)
     // Does not join node.def or resolve node.org
     fn init_org_def(&mut self, forest: &mut Forest) -> util::Result<()> {
+        let span = span!(Level::TRACE, "init_org_def");
+        let _g = span.enter();
+
+        // Parse Meta Node Parts and route them to Node.def or Node.org, depending on being a definition or not
         forest.each_node_mut(|node, content, format, filename| {
-            let span = span!(Level::TRACE, "parse");
-            let _g = span.enter();
             trace!("{}:{}", filename.display(), node.line_ix.unwrap_or(0) + 1,);
 
             let m = match format {
@@ -58,7 +60,7 @@ impl Builder {
             if let Some(m) = m {
                 for part in &node.parts {
                     if part.kind == tree::Kind::Meta {
-                        let mut push_kv_lmbd = || -> util::Result<()> {
+                        let mut cb_push_kv = || -> util::Result<()> {
                             let part_content = content
                                 .get(part.range.clone())
                                 .ok_or_else(|| util::Error::create("Failed to get part content"))?;
@@ -77,14 +79,15 @@ impl Builder {
                                         }
                                         node.def = Some(path.clone());
                                     } else {
-                                        node.org.insert(path);
+                                        node.org.insert(path.clone());
                                     }
                                 }
                             }
 
                             Ok(())
                         };
-                        if let Err(err) = push_kv_lmbd() {
+
+                        if let Err(err) = cb_push_kv() {
                             error!(
                                 "Failed to process KV for '{}:{}': {}",
                                 filename.display(),
@@ -154,6 +157,10 @@ impl Builder {
     }
 
     fn join_defs(&mut self, forest: &mut Forest) -> util::Result<()> {
+        let span = span!(Level::TRACE, "join_defs");
+        let _g = span.enter();
+
+        // Join defs
         forest.each_tree_mut(|tree| {
             tree.root_to_leaf(|src, dst| {
                 if let Some(dst_def) = &mut dst.def {
@@ -171,12 +178,14 @@ impl Builder {
                 Ok(())
             })
         })?;
+
+        // Interpret special Tags for defs: ~priority, ~date and ~duration
         forest.each_node_mut(
-            |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
+            |node: &mut Node, _content: &str, _format: &Format, _filename: &std::path::PathBuf| {
                 if let Some(def) = node.def.as_mut() {
                     for path in &mut def.parts {
-                        if let amp::Part::Text(s) = path {
-                            match s.as_str() {
+                        if let amp::Part::Tag(tag) = path {
+                            match tag.text.as_str() {
                                 "~priority" => {
                                     std::mem::swap(path, &mut amp::Part::Prio(amp::Prio::new(0, 0)))
                                 }
@@ -196,28 +205,49 @@ impl Builder {
                 Ok(())
             },
         )?;
+
         Ok(())
     }
 
     fn resolve_org(&mut self, forest: &mut Forest) -> util::Result<()> {
+        let span = span!(Level::INFO, "resolve_org");
+        let _g = span.enter();
+
         // Collect all defined Keys
         let mut defs = amp::Paths::new();
         forest.each_node(|_tree, node| {
             if let Some(def) = &node.def {
-                defs.insert(def);
+                defs.insert(def.clone());
             }
             Ok(())
         })?;
 
         forest.each_node_mut(
-            |node: &mut Node, content: &str, format: &Format, filename: &std::path::PathBuf| {
-                for path in &mut node.org.data {
-                    if !path.is_absolute {
-                        if let Some(mut gem) = defs.resolve(path) {
-                            gem.is_definition = false;
-                            std::mem::swap(path, &mut gem);
+            |node: &mut Node, _content: &str, _format: &Format, filename: &std::path::PathBuf| {
+                if !node.org.is_empty() {
+                    let mut abs_paths = amp::Paths::new();
+
+                    for path in &node.org.data {
+                        // We always resolve to make sure consistent Paths are used with the correct exclusive flag
+                        if let Some(mut abs_path) = defs.resolve(path) {
+                            info!(
+                                "Resolved {} into {} for {}",
+                                path,
+                                &abs_path,
+                                filename.display()
+                            );
+                            if abs_paths.has_variant(&abs_path) {
+                                fail!("Found variant for '{}' in '{}'", &abs_path, &abs_paths);
+                            } else {
+                                abs_path.is_definition = false;
+                                abs_paths.insert(abs_path);
+                            }
+                        } else {
+                            warn!("Could not resolve {} for '{}'", path, filename.display());
                         }
                     }
+
+                    std::mem::swap(&mut node.org, &mut abs_paths);
                 }
                 Ok(())
             },
@@ -229,6 +259,9 @@ impl Builder {
     }
 
     fn init_ctx(&mut self, forest: &mut Forest) -> util::Result<()> {
+        let span = span!(Level::TRACE, "init_ctx");
+        let _g = span.enter();
+
         // Setup Tree.root().ctx from Tree.root().org
         forest.each_tree_mut(|tree| {
             tree.root_mut().ctx = tree.root().org.clone();
@@ -251,7 +284,7 @@ impl Builder {
                                 if dst_ctx.has_variant(src) {
                                     info!("Found variant for {src} in root ctx of '{}': not inserting", filename.display());
                                 } else {
-                                    dst_ctx.insert(src);
+                                    dst_ctx.insert(src.clone());
                                 }
                             }
                         }
@@ -272,7 +305,7 @@ impl Builder {
                             filename.display()
                         );
                     } else {
-                        dst.ctx.insert(src);
+                        dst.ctx.insert(src.clone());
                     }
                 }
                 Ok(())
@@ -405,7 +438,7 @@ impl Builder {
         fs_forest: &mut fs::Forest,
         forest: &mut Forest,
     ) -> util::Result<Option<usize>> {
-        let span = span!(Level::TRACE, "forest");
+        let span = span!(Level::TRACE, "add_to_forest_recursive_");
         let _g = span.enter();
 
         let tree_ix = match parent.fs_path()? {

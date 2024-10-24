@@ -147,7 +147,7 @@ impl Parser {
 
                         let parts = parts
                             .into_iter()
-                            .map(|part| amp::Part::Text(part))
+                            .map(|part| amp::Part::Tag(amp::Tag::from(part.as_str())))
                             .collect();
                         let path = amp::Path {
                             is_definition,

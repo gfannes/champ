@@ -3,20 +3,23 @@
 
 ## Status &!:status
 
-### To be defined &!tbd
+### To be defined &!tbd!
 Unclear what needs to happen
 
-### To do &!todo
+### To do &!todo!
 Requirements are clear, but a stepped approach is still lacking
 
-### Next &!next
+### Next &!next!
 Can be directly executed
 
-### Work in progress &!wip
+### Work in progress &!wip!
 Under development
 
-### Done &!done
+### Done &!done!
 Fully finished
+
+### Blocked &!blocked
+Non-exclusive
 
 
 ## Prio &!:prio:~priority 

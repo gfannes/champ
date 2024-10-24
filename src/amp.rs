@@ -5,6 +5,8 @@ use crate::{
     util,
 };
 
+use tracing::info;
+
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct Path {
     pub is_definition: bool,
@@ -19,10 +21,16 @@ pub struct Paths {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Part {
-    Text(String),
+    Tag(Tag),
     Date(Date),
     Duration(Duration),
     Prio(Prio),
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
+pub struct Tag {
+    pub text: String,
+    pub exclusive: bool,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
@@ -71,32 +79,19 @@ impl Paths {
         self.data.is_empty()
     }
 
-    pub fn insert(&mut self, path: &Path) {
-        if !self.data.iter().any(|p| p == path) {
-            self.data.push(path.clone());
+    pub fn insert(&mut self, path: Path) {
+        if !self.data.iter().any(|p| p == &path) {
+            self.data.push(path);
         }
     }
 
     pub fn has_variant(&self, rhs: &Path) -> bool {
-        // A variant of rhs is a Path that builds on rhs, matches with rhs, or has the same depth and matching parent
-        self.data.iter().any(|lhs| {
-            let matches = |range: std::ops::Range<usize>| {
-                range
-                    .clone()
-                    .all(|ix| lhs.parts.get(ix) == rhs.parts.get(ix))
-            };
-
-            let rhs_builds_on_lhs_or_is_equal = matches(0..lhs.parts.len());
-            let same_depth = lhs.parts.len() == rhs.parts.len();
-            let matching_parents = rhs.parts.len() > 0 && matches(0..rhs.parts.len() - 1);
-
-            rhs_builds_on_lhs_or_is_equal || (same_depth && matching_parents)
-        })
+        self.data.iter().any(|lhs| lhs.is_variant(rhs))
     }
 
     pub fn merge(&mut self, ctx: &Paths) -> util::Result<()> {
         for path in &ctx.data {
-            self.insert(path);
+            self.insert(path.clone());
         }
         Ok(())
     }
@@ -108,16 +103,9 @@ impl Paths {
     }
 
     pub fn resolve(&self, rel: &Path) -> Option<Path> {
-        if rel.is_absolute {
-            Some(rel.clone())
-        } else {
-            for path in &self.data {
-                if let Some(p) = path.create_from_template(rel) {
-                    return Some(p);
-                }
-            }
-            None
-        }
+        self.data
+            .iter()
+            .find_map(|path| path.create_from_template(rel))
     }
 }
 
@@ -150,7 +138,10 @@ impl naft::ToNaft for Path {
         b.attr("abs", &self.is_absolute)?;
         for part in &self.parts {
             match part {
-                Part::Text(part) => b.attr("part", part)?,
+                Part::Tag(tag) => {
+                    b.attr("text", &tag.text)?;
+                    b.attr("exclusive", &tag.exclusive)?;
+                }
                 _ => b.attr("?", &"?")?,
             }
         }
@@ -163,7 +154,7 @@ impl Path {
         Path {
             is_definition,
             is_absolute,
-            parts: parts.iter().map(|s| Part::Text(String::from(*s))).collect(),
+            parts: parts.iter().map(|s| Part::Tag(Tag::from(*s))).collect(),
         }
     }
 
@@ -173,6 +164,39 @@ impl Path {
             res.parts.push(v.clone());
         }
         res
+    }
+
+    // A variant of rhs is a Path that builds on rhs or where the first non-common parts are both exclusive
+    pub fn is_variant(&self, rhs: &Path) -> bool {
+        let mut common = std::ops::Range::<usize>::default();
+        for (ix, lhs_part) in self.parts.iter().enumerate() {
+            if let Some(rhs_part) = rhs.parts.get(ix) {
+                if lhs_part == rhs_part {
+                    common.end = ix + 1;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        let is_exclusive = |part: &Part| match part {
+            Part::Tag(tag) => tag.exclusive,
+            _ => false,
+        };
+
+        if common.len() == rhs.parts.len() {
+            // self builds on rhs and is more specific
+            true
+        } else if common.len() == self.parts.len() {
+            // rhs builds on self, and is not equal but more specific
+            false
+        } else if is_exclusive(&self.parts[common.end]) && is_exclusive(&rhs.parts[common.end]) {
+            true
+        } else {
+            false
+        }
     }
 
     pub fn get_prio(&self) -> Option<&Prio> {
@@ -196,27 +220,27 @@ impl Path {
         while let Some(rhs) = rhs.next() {
             while let Some(lhs) = lhs.next() {
                 let is_match = match (lhs, rhs) {
-                    (Part::Text(lhs), Part::Text(rhs)) => lhs == rhs,
+                    (Part::Tag(lhs), Part::Tag(rhs)) => lhs == rhs,
                     (Part::Date(lhs), Part::Date(rhs)) => as_template || lhs == rhs,
                     (Part::Duration(lhs), Part::Duration(rhs)) => as_template || lhs == rhs,
                     (Part::Prio(lhs), Part::Prio(rhs)) => as_template || lhs == rhs,
 
-                    (Part::Date(lhs), Part::Text(rhs)) => {
-                        if let Ok(rhs) = &Date::try_from(rhs.as_str()) {
+                    (Part::Date(lhs), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = &Date::try_from(rhs.text.as_str()) {
                             as_template || lhs == rhs
                         } else {
                             false
                         }
                     }
-                    (Part::Duration(lhs), Part::Text(rhs)) => {
-                        if let Ok(rhs) = &Duration::try_from(rhs.as_str()) {
+                    (Part::Duration(lhs), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = &Duration::try_from(rhs.text.as_str()) {
                             as_template || lhs == rhs
                         } else {
                             false
                         }
                     }
-                    (Part::Prio(lhs), Part::Text(rhs)) => {
-                        if let Ok(rhs) = &Prio::try_from(rhs.as_str()) {
+                    (Part::Prio(lhs), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = &Prio::try_from(rhs.text.as_str()) {
                             as_template || lhs == rhs
                         } else {
                             false
@@ -260,8 +284,8 @@ impl Path {
         while let Some(lhs) = lhs.next() {
             if let Some(cur_rhs) = cur_rhs_opt {
                 let part = match (lhs, cur_rhs) {
-                    (Part::Text(lhs), Part::Text(rhs)) => {
-                        (lhs == rhs).then_some(Part::Text(rhs.to_owned()))
+                    (Part::Tag(lhs), Part::Tag(rhs)) => {
+                        (&lhs.text == &rhs.text).then_some(Part::Tag(lhs.to_owned()))
                     }
                     (Part::Date(_), Part::Date(rhs)) => Some(Part::Date(rhs.to_owned())),
                     (Part::Duration(_), Part::Duration(rhs)) => {
@@ -269,22 +293,22 @@ impl Path {
                     }
                     (Part::Prio(_), Part::Prio(rhs)) => Some(Part::Prio(rhs.to_owned())),
 
-                    (Part::Date(_), Part::Text(rhs)) => {
-                        if let Ok(rhs) = Date::try_from(rhs.as_str()) {
+                    (Part::Date(_), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = Date::try_from(rhs.text.as_str()) {
                             Some(Part::Date(rhs))
                         } else {
                             None
                         }
                     }
-                    (Part::Duration(_), Part::Text(rhs)) => {
-                        if let Ok(rhs) = Duration::try_from(rhs.as_str()) {
+                    (Part::Duration(_), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = Duration::try_from(rhs.text.as_str()) {
                             Some(Part::Duration(rhs))
                         } else {
                             None
                         }
                     }
-                    (Part::Prio(_), Part::Text(rhs)) => {
-                        if let Ok(rhs) = Prio::try_from(rhs.as_str()) {
+                    (Part::Prio(_), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = Prio::try_from(rhs.text.as_str()) {
                             Some(Part::Prio(rhs))
                         } else {
                             None
@@ -345,10 +369,20 @@ impl std::fmt::Display for Path {
     }
 }
 
+impl std::fmt::Display for Tag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.text)?;
+        if self.exclusive {
+            write!(f, "!")?;
+        }
+        Ok(())
+    }
+}
+
 impl std::fmt::Display for Part {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Part::Text(v) => write!(f, "{v}"),
+            Part::Tag(v) => write!(f, "{v}"),
             Part::Date(v) => write!(f, "{v}"),
             Part::Duration(v) => write!(f, "{v}"),
             Part::Prio(v) => write!(f, "{v}"),
@@ -356,8 +390,26 @@ impl std::fmt::Display for Part {
     }
 }
 
+impl From<&str> for Tag {
+    fn from(value: &str) -> Self {
+        let mut text = value;
+        let exclusive;
+        if text.ends_with("!") {
+            text = &text[0..text.len() - 1];
+            exclusive = true;
+        } else {
+            exclusive = false;
+        }
+        Tag {
+            text: text.into(),
+            exclusive,
+        }
+    }
+}
+
 impl TryFrom<&str> for Date {
     type Error = util::ErrorType;
+
     fn try_from(s: &str) -> std::result::Result<Date, Self::Error> {
         let year;
         let month;
@@ -522,7 +574,7 @@ impl TryFrom<&str> for Path {
         let mut parts = Vec::<Part>::new();
         while !strange.is_empty() {
             if let Some(str) = strange.read(|b| b.exclude().to_end().through(':')) {
-                parts.push(Part::Text(str.into()));
+                parts.push(Part::Tag(Tag::from(str)));
             }
         }
 
@@ -551,7 +603,7 @@ mod tests {
         for (paths_str, needle, exp) in scns {
             let mut paths = Paths::new();
             for path_str in paths_str {
-                paths.insert(&Path::try_from(path_str)?);
+                paths.insert(Path::try_from(path_str)?);
             }
 
             let needle = Path::try_from(needle)?;
@@ -656,6 +708,31 @@ mod tests {
     }
 
     #[test]
+    fn test_tag_try_from() {
+        let scns = [
+            (
+                "abc",
+                Tag {
+                    text: "abc".into(),
+                    exclusive: false,
+                },
+            ),
+            (
+                "abc!",
+                Tag {
+                    text: "abc".into(),
+                    exclusive: true,
+                },
+            ),
+        ];
+
+        for (s, exp) in scns {
+            assert_eq!(Tag::from(s), exp);
+            assert_eq!(exp.to_string(), s);
+        }
+    }
+
+    #[test]
     fn test_date_try_from() {
         let scns = [("2024-10-02", Some(Date::new(2024, 10, 2)))];
 
@@ -701,19 +778,48 @@ mod tests {
     fn test_paths_has_variant() -> util::Result<()> {
         let mut paths = Paths::new();
 
-        paths.insert(&Path::try_from(":a")?);
-        paths.insert(&Path::try_from(":b:c:d")?);
+        paths.insert(Path::try_from(":a")?);
+        paths.insert(Path::try_from(":e!")?);
+        paths.insert(Path::try_from(":b:c:d")?);
 
+        // Same
         assert_eq!(paths.has_variant(&Path::try_from(":a")?), true);
         assert_eq!(paths.has_variant(&Path::try_from(":b:c:d")?), true);
+        assert_eq!(paths.has_variant(&Path::try_from(":e!")?), true);
 
-        assert_eq!(paths.has_variant(&Path::try_from(":d")?), true);
-        assert_eq!(paths.has_variant(&Path::try_from(":b:c:d")?), true);
-        assert_eq!(paths.has_variant(&Path::try_from(":b:c:e")?), true);
+        // Less specific
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c")?), true);
+        assert_eq!(paths.has_variant(&Path::try_from(":b")?), true);
 
-        assert_eq!(paths.has_variant(&Path::try_from(":b:c")?), false);
+        // Exclusive
+        assert_eq!(paths.has_variant(&Path::try_from(":f!")?), true);
+
+        // Different
+        assert_eq!(paths.has_variant(&Path::try_from(":a:b")?), false);
+        assert_eq!(paths.has_variant(&Path::try_from(":d")?), false);
+        assert_eq!(paths.has_variant(&Path::try_from(":b:c:e")?), false);
         assert_eq!(paths.has_variant(&Path::try_from(":b:d")?), false);
         assert_eq!(paths.has_variant(&Path::try_from(":d:e")?), false);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_paths_resolve() -> util::Result<()> {
+        let mut paths = Paths::new();
+
+        paths.insert(Path::try_from("!:todo!")?);
+        // paths.insert(Path::try_from("!:done!")?);
+        // paths.insert(Path::try_from("!:blocked")?);
+
+        assert_eq!(
+            paths.resolve(&Path::try_from("todo!")?),
+            Path::try_from(":todo!").ok()
+        );
+        assert_eq!(
+            paths.resolve(&Path::try_from("todo")?),
+            Path::try_from(":todo!").ok()
+        );
 
         Ok(())
     }

@@ -23,6 +23,7 @@
 	- Template path parts for defs start with `~`
 		- `&!:eta:~date`
 		- Note: `$` cannot be used as it conflicts with Markdown formula
+- A trailing `!` indicates _exclusivity_
 
 ## Support pesistent project enumeration
 - Config file
