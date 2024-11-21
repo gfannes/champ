@@ -22,6 +22,7 @@ pub struct Paths {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Part {
     Tag(Tag),
+    Status(Status),
     Date(Date),
     Duration(Duration),
     Prio(Prio),
@@ -31,6 +32,13 @@ pub enum Part {
 pub struct Tag {
     pub text: String,
     pub exclusive: bool,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
+pub enum Status {
+    Todo,
+    Wip,
+    Done,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Default, PartialOrd, Ord)]
@@ -49,6 +57,18 @@ pub struct Duration {
 pub struct Prio {
     pub major: u32,
     pub minor: u32,
+}
+
+impl Status {
+    pub fn new() -> Status {
+        Default::default()
+    }
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Status::Todo
+    }
 }
 
 impl Duration {
@@ -383,6 +403,7 @@ impl std::fmt::Display for Part {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Part::Tag(v) => write!(f, "{v}"),
+            Part::Status(v) => write!(f, "{v}"),
             Part::Date(v) => write!(f, "{v}"),
             Part::Duration(v) => write!(f, "{v}"),
             Part::Prio(v) => write!(f, "{v}"),
@@ -403,6 +424,19 @@ impl From<&str> for Tag {
         Tag {
             text: text.into(),
             exclusive,
+        }
+    }
+}
+
+impl TryFrom<&str> for Status {
+    type Error = util::ErrorType;
+
+    fn try_from(s: &str) -> std::result::Result<Status, Self::Error> {
+        match s {
+            "todo" => Ok(Status::Todo),
+            "wip" => Ok(Status::Wip),
+            "done" => Ok(Status::Done),
+            _ => Err(util::Error::create("This is not a valid status")),
         }
     }
 }
@@ -479,6 +513,16 @@ impl TryFrom<&str> for Duration {
         }
 
         Ok(Duration { minutes })
+    }
+}
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Todo => write!(f, "Todo"),
+            Status::Wip => write!(f, "Wip"),
+            Status::Done => write!(f, "Done"),
+        }
     }
 }
 
@@ -729,6 +773,16 @@ mod tests {
         for (s, exp) in scns {
             assert_eq!(Tag::from(s), exp);
             assert_eq!(exp.to_string(), s);
+        }
+    }
+
+    #[test]
+    fn test_status_try_from() {
+        let scns = [("todo", Some(Status::Todo))];
+
+        for (s, exp) in scns {
+            assert_eq!(Status::try_from(s).ok(), exp);
+            assert_eq!(exp.unwrap().to_string(), s);
         }
     }
 

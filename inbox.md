@@ -12,3 +12,15 @@
 ## Support working with versions &todo
 - A version is a collection of other aspects
 - A version should not directly be used as annotation
+
+## Bullet Journal and Rapid Logging
+
+https://bulletjournal.com/blogs/faq
+
+## Combine Scrum with GTD
+- inbox
+- todo
+- next
+- wip
+- wait/blocked, maybe with date
+- done

@@ -179,22 +179,25 @@ impl Builder {
             })
         })?;
 
-        // Interpret special Tags for defs: ~priority, ~date and ~duration
+        // Interpret special Tags for defs: ~status, ~priority, ~date and ~duration
         forest.each_node_mut(
             |node: &mut Node, _content: &str, _format: &Format, _filename: &std::path::PathBuf| {
                 if let Some(def) = node.def.as_mut() {
-                    for path in &mut def.parts {
-                        if let amp::Part::Tag(tag) = path {
+                    for part in &mut def.parts {
+                        if let amp::Part::Tag(tag) = part {
                             match tag.text.as_str() {
+                                "~status" => {
+                                    std::mem::swap(part, &mut amp::Part::Status(amp::Status::new()))
+                                }
                                 "~priority" => {
-                                    std::mem::swap(path, &mut amp::Part::Prio(amp::Prio::new(0, 0)))
+                                    std::mem::swap(part, &mut amp::Part::Prio(amp::Prio::new(0, 0)))
                                 }
                                 "~date" => std::mem::swap(
-                                    path,
+                                    part,
                                     &mut amp::Part::Date(amp::Date::new(0, 0, 0)),
                                 ),
                                 "~duration" => std::mem::swap(
-                                    path,
+                                    part,
                                     &mut amp::Part::Duration(amp::Duration::new(0, 0, 0, 0)),
                                 ),
                                 _ => {}

@@ -1,22 +1,12 @@
 # Project management
 
 
-## Status &!:status
+## Status &!:status:~status
 
-### To be defined &!tbd!
-Unclear what needs to happen
-
-### To do &!todo!
-Requirements are clear, but a stepped approach is still lacking
+Most agile projects should use only 3 statuses: `todo`, `wip` and `done`. All other labels should be additional aspects (tbd, dev, test, onhold, ...).
 
 ### Next &!next!
 Can be directly executed
-
-### Work in progress &!wip!
-Under development
-
-### Done &!done!
-Fully finished
 
 ### Blocked &!blocked
 Non-exclusive
@@ -38,3 +28,7 @@ Non-exclusive
 ### Performance optimizations &!perf
 
 ### Improvements &!improv
+
+### Quality control &!qc
+
+### Development &!dev
