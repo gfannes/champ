@@ -246,7 +246,7 @@ impl Builder {
                                 abs_paths.insert(abs_path);
                             }
                         } else {
-                            warn!("Could not resolve {} for '{}'", path, filename.display());
+                            warn!("Could not resolve '{}' for '{}'", path, filename.display());
                         }
                     }
 

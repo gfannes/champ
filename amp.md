@@ -7,23 +7,31 @@
 
 ## Specification &!spec
 - AMP data is searched in _metadata_, not in actual data
-	- For source code, these are the comments
-	- For Markdown, there is the text, excluding the code blocks and formulas
-- AMP data consists of Paths
-	- Formalize below definition &todo &b4
-		- What if an item start with a `!` or `:`?
-	- The `&` character starts an AMP Path
-	- If the next character is a `!`, it is a definition Path
+	- For source code, the metadata are _the comments_
+	- For Markdown, the metadata is _the text, excluding code blocks and formulas_
+- AMP data consists of Paths, sequences of Parts
+	- The `&` character starts an AMP Path. To avoid false positive detection, the `&` should occur at the start of a metadata section or occur after a space/tab character.
+	- If the next character is a `!`, it is a _definition Path_. Definition Paths are used to resolve other Paths. They allow:
+		- Using shorter Paths when there is no ambiguity: `&todo` can be used iso `&status:todo` if there is no other definition Path that matches with `todo` expect `&!:status:todo`
+		- Specify typed data via the use of templates
 	- The `:` character is the Path separator
 		- A Path starting with a `:` is an absolute Path
+		- Note: `:` is preferred over `/` because most Paths will have size 2 and read like a named parameter specification: `&status:done`.
 	- When escaping is necessary, the item can be wrapped as
 		- `::(((item)))` if `item` does not start with a `(`, using as many `(((` as necessary to ensure there is no match of `)))` in `item`
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
 		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
-	- Template path parts for defs start with `~`
-		- `&!:eta:~date`
+	- Template Path Parts for defs start with `~`
+		- Eg: the `&!:eta:~date` definition allows you to specify ETA metadata as `&eta:2024-11-06`
 		- Note: `$` cannot be used as it conflicts with Markdown formula
-- A trailing `!` indicates _exclusivity_
+- A trailing `!` indicates _exclusivity_. This is typically used for status information: something is either _todo_ or _done_, but not both.
+- [?] Maybe reverse a path to improve free search?
+	-  `&todo` matches with both `&todo` and `&todo:status`
+	- How can we represent an absolute path? #todo/status/!
+	- Less intuitive
+- [ ] Test use of `#` iso `&`
+	- Has some support in Obsidian, but this means we can only use `/` or `-` as Path separator
+	- Better to develop a custom Obsidion plugin?
 
 ## Support pesistent project enumeration
 - Config file

@@ -241,10 +241,18 @@ impl Path {
             while let Some(lhs) = lhs.next() {
                 let is_match = match (lhs, rhs) {
                     (Part::Tag(lhs), Part::Tag(rhs)) => &lhs.text == &rhs.text,
+                    (Part::Status(lhs), Part::Status(rhs)) => as_template || lhs == rhs,
                     (Part::Date(lhs), Part::Date(rhs)) => as_template || lhs == rhs,
                     (Part::Duration(lhs), Part::Duration(rhs)) => as_template || lhs == rhs,
                     (Part::Prio(lhs), Part::Prio(rhs)) => as_template || lhs == rhs,
 
+                    (Part::Status(lhs), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = &Status::try_from(rhs.text.as_str()) {
+                            as_template || lhs == rhs
+                        } else {
+                            false
+                        }
+                    }
                     (Part::Date(lhs), Part::Tag(rhs)) => {
                         if let Ok(rhs) = &Date::try_from(rhs.text.as_str()) {
                             as_template || lhs == rhs
@@ -307,12 +315,20 @@ impl Path {
                     (Part::Tag(lhs), Part::Tag(rhs)) => {
                         (&lhs.text == &rhs.text).then_some(Part::Tag(lhs.to_owned()))
                     }
+                    (Part::Status(_), Part::Status(rhs)) => Some(Part::Status(rhs.to_owned())),
                     (Part::Date(_), Part::Date(rhs)) => Some(Part::Date(rhs.to_owned())),
                     (Part::Duration(_), Part::Duration(rhs)) => {
                         Some(Part::Duration(rhs.to_owned()))
                     }
                     (Part::Prio(_), Part::Prio(rhs)) => Some(Part::Prio(rhs.to_owned())),
 
+                    (Part::Status(_), Part::Tag(rhs)) => {
+                        if let Ok(rhs) = Status::try_from(rhs.text.as_str()) {
+                            Some(Part::Status(rhs))
+                        } else {
+                            None
+                        }
+                    }
                     (Part::Date(_), Part::Tag(rhs)) => {
                         if let Ok(rhs) = Date::try_from(rhs.text.as_str()) {
                             Some(Part::Date(rhs))

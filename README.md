@@ -11,4 +11,8 @@ In the near future, we plan to:
 - Support working with priorities, dates and durations
 - Support LSP
 
+## Syntax
+
+An AMP metadata item is essentially a _path_, a sequence of _parts_. This sequence starts with a `&` and ends at the first space, newline or end-of-file. In the future, support for parts with
+
 ## explain How to use IvyLee &doc &todo
