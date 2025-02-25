@@ -41,6 +41,9 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(exe);
 
+    const rubr_mod = b.addModule("rubr", .{ .root_source_file = b.path("ext/rubr/src/root.zig") });
+    exe.root_module.addImport("rubr", rubr_mod);
+
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.

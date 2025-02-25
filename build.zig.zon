@@ -23,6 +23,10 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .rubr = .{
+            .url = "https://github.com/gfannes/rubr/archive/56aeb5f2e4d25c6a110217e48a0c2f717aec2406.tar.gz",
+            .hash = "1220cf293f49066cdd92bb5a4b43f8c7007936923a8878e380a0f1155b8d3100ee94",
+        },
         // See `zig fetch --save <url>` for a command-line interface for adding dependencies.
         //.example = .{
         //    // When updating this field to a new URL, be sure to delete the corresponding

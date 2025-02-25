@@ -1,6 +1,8 @@
 const std = @import("std");
 const os = std.os;
 
+const Strange = @import("rubr").strange.Strange;
+
 const CliError = error{
     CouldNotFindExeName,
     UnknownArgument,
