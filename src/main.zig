@@ -1,12 +1,13 @@
 const std = @import("std");
-const cli = @import("cli.zig");
-const app = @import("app.zig");
+
+const Options = @import("cli.zig").Options;
+const App = @import("app.zig").App;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ma = gpa.allocator();
 
-    var options = cli.Options.init(ma);
+    var options = Options.init(ma);
     defer options.deinit();
 
     options.parse() catch {
@@ -16,7 +17,9 @@ pub fn main() !void {
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        const a = app.App{};
-        _ = a;
+        var app = App.init(&options, ma);
+        defer app.deinit();
+
+        try app.run();
     }
 }

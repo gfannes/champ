@@ -1,19 +1,18 @@
 const std = @import("std");
 const os = std.os;
 
-const Strange = @import("rubr").strange.Strange;
-
 const CliError = error{
     CouldNotFindExeName,
     UnknownArgument,
 };
 
 pub const Options = struct {
+    exe_name: []const u8 = &.{},
+    print_help: bool = false,
+    folder: []const u8 = &.{},
+
     _aa: std.heap.ArenaAllocator,
     _args: [][*:0]u8,
-
-    exe_name: []const u8 = &[_]u8{},
-    print_help: bool = false,
 
     pub fn init(ma: std.mem.Allocator) Options {
         return Options{ ._aa = std.heap.ArenaAllocator.init(ma), ._args = os.argv };
@@ -28,6 +27,10 @@ pub const Options = struct {
         while (self._pop()) |arg| {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
+            } else if (arg.is("-f", "--folder")) {
+                if (self._pop()) |x| {
+                    self.folder = x.arg;
+                }
             } else {
                 std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
                 return error.UnknownArgument;
@@ -39,6 +42,7 @@ pub const Options = struct {
         const msg = "" ++
             "chimp <options>\n" ++
             "    -h  --help       Print this help\n" ++
+            "    -f  --folder     Folder\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }
