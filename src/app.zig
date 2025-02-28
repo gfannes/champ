@@ -1,8 +1,10 @@
 const std = @import("std");
 
-const Options = @import("cli.zig").Options;
 const Strange = @import("rubr").strange.Strange;
 const walker = @import("rubr").walker;
+
+const Options = @import("cli.zig").Options;
+const tkn = @import("amp/tkn.zig");
 
 pub const App = struct {
     options: *const Options,
@@ -31,15 +33,15 @@ pub const App = struct {
                 const Buffer = std.ArrayList(u8);
 
                 out: std.fs.File.Writer,
-                buffer: Buffer = undefined,
-                total: usize = 0,
-                adler: std.hash.Adler32,
+                file_count: usize = 0,
+                byte_count: usize = 0,
+                tokens: tkn.Tokens,
 
                 pub fn init(ma: std.mem.Allocator) @This() {
-                    return .{ .out = std.io.getStdOut().writer(), .buffer = Buffer.init(ma), .adler = std.hash.Adler32.init() };
+                    return .{ .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.init(ma) };
                 }
                 pub fn deinit(my: *@This()) void {
-                    my.buffer.deinit();
+                    my.tokens.deinit();
                 }
 
                 pub fn call(my: *@This(), dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
@@ -58,9 +60,12 @@ pub const App = struct {
                             const stat = try file.stat();
 
                             if (false or stat.size <= 256000) {
-                                try my.buffer.resize(stat.size);
-                                my.total += try file.readAll(my.buffer.items);
-                                my.adler.update(my.buffer.items);
+                                {
+                                    const buf = try my.tokens.alloc_content(stat.size);
+                                    my.byte_count += try file.readAll(buf);
+                                }
+                                try my.tokens.scan();
+                                my.file_count += 1;
                             }
                         }
                     }
@@ -72,7 +77,7 @@ pub const App = struct {
             std.debug.print("folder: {s} {}\n", .{ self.options.folder, dir });
 
             try w.walk(dir, &cb);
-            std.debug.print("Read {}MB adler {}\n", .{cb.total / 1000000, cb.adler.final()});
+            std.debug.print("file_count: {}, byte_count {}MB\n", .{ cb.file_count, cb.byte_count / 1000000 });
         }
     }
 };
