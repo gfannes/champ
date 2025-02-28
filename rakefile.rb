@@ -87,7 +87,8 @@ namespace :rust do
     end
 
     task :install do
-        sh 'cargo install --path . --profile release-with-debug'
+        # sh 'cargo install --path . --profile release-with-debug'
+        sh 'cargo install --path . --profile release'
     end
 
     task :clean => :prepare do

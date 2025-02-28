@@ -20,13 +20,13 @@
 	- When escaping is necessary, the item can be wrapped as
 		- `::(((item)))` if `item` does not start with a `(`, using as many `(((` as necessary to ensure there is no match of `)))` in `item`
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
-		- Note that we do not allow empty items in Path, avoiding a conflict with `::`
+		- Note that we do not allow empty items in Path, avoiding a conflict with `::` and allowing one to trim trailing `:` as is `&todo: Finish this`
 	- Template Path Parts for defs start with `~`
 		- Eg: the `&!:eta:~date` definition allows you to specify ETA metadata as `&eta:2024-11-06`
 		- Note: `$` cannot be used as it conflicts with Markdown formula
 - A trailing `!` indicates _exclusivity_. This is typically used for status information: something is either _todo_ or _done_, but not both.
 - [?] Maybe reverse a path to improve free search?
-	-  `&todo` matches with both `&todo` and `&todo:status`
+	- `&todo` matches with both `&todo` and `&todo:status`
 	- How can we represent an absolute path? #todo/status/!
 	- Less intuitive
 - [ ] Test use of `#` iso `&`

@@ -5,3 +5,5 @@
 - This occurs in am
 
 ## Support square-bracket status &todo
+
+## Describe 'bullet journal' best practices
