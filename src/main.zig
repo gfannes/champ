@@ -17,7 +17,7 @@ pub fn main() !void {
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        var app = App.init(&options, ma);
+        var app = try App.init(&options, ma);
         defer app.deinit();
 
         try app.run();
