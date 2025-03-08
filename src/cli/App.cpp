@@ -43,11 +43,11 @@ namespace cli {
         MSS(walker([&](const auto &fp) {
             MSS_BEGIN(bool);
             ++file_count;
-            // std::cout << fp.native() << std::endl;
-            // MSS(rubr::fs::read(content, fp));
-            // byte_count += content.size();
+            std::cout << fp.native() << std::endl;
+            MSS(rubr::fs::read(content, fp));
+            byte_count += content.size();
 
-            // MSS(scanner(content));
+            MSS(scanner(content));
 
             MSS_END();
         }));

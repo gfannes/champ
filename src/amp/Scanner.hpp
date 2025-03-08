@@ -5,14 +5,13 @@
 
 #include <cstdint>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 namespace amp {
 
-    enum class Kind : std::uint8_t
+    enum class Symbol : std::uint8_t
     {
-        None,
+        Word,
 
         Space,
         Exclamation,
@@ -51,14 +50,15 @@ namespace amp {
         CarriageReturn,
     };
 
-    Kind parse_symbol(char ch);
+    Symbol parse_symbol(char ch);
 
-    struct Symbol
+    // Smaller data goes faster
+    struct Token
     {
-        Kind kind;
-        std::uint16_t count = 0;
+        const char *begin;
+        std::uint16_t size;
+        Symbol symbol;
     };
-    using Token = std::variant<Symbol, std::string>;
 
     class Scanner
     {

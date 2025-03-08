@@ -56,7 +56,7 @@ pub const App = struct {
                 pub fn call(my: *@This(), dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
                     if (true) {
                         if (true or my.include.match(path[offsets.name..])) {
-                            if (false) {
+                            if (true) {
                                 try my.out.print("{s}\n", .{path});
                                 if (false) {
                                     try my.out.print("  base {s}\n", .{path[offsets.base..]});
@@ -76,7 +76,7 @@ pub const App = struct {
                                         const buf = try my.tokens.alloc_content(stat.size);
                                         my.byte_count += try file.readAll(buf);
                                     }
-                                    if (false)
+                                    if (true)
                                         try my.tokens.scan();
                                     my.file_count += 1;
                                 }

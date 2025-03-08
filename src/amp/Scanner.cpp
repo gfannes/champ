@@ -3,61 +3,85 @@
 #include <rubr/mss.hpp>
 
 #include <array>
+#include <utility>
 
 namespace amp {
 
     ReturnCode Scanner::operator()(std::string_view sv)
     {
         MSS_BEGIN(ReturnCode);
+
+        tokens_.resize(0);
+
+        if (sv.empty())
+            MSS_RETURN_OK();
+
+        Token token{.begin = sv.data(), .size = 1, .symbol = parse_symbol(sv[0])};
+
+        for (const auto ch : sv.substr(1))
+        {
+            const auto my_symbol = parse_symbol(token.begin[token.size]);
+
+            if (my_symbol != token.symbol)
+                tokens_.push_back(std::exchange(token, Token{.begin = token.begin + token.size, .size = 0, .symbol = my_symbol}));
+
+            ++token.size;
+        }
+
+        tokens_.push_back(token);
+
         MSS_END();
     }
 
-    Kind parse_symbol(char ch)
+    struct Table
     {
-        static std::array<Kind, 256> s_ch__kind;
-        static bool s_do_init = true;
-        if (s_do_init)
+        std::array<Symbol, 256> table;
+        Table()
         {
-            s_do_init = false;
-            for (auto &kind : s_ch__kind)
-                kind = Kind::None;
-            s_ch__kind[' '] = Kind::Space;
-            s_ch__kind['!'] = Kind::Exclamation;
-            s_ch__kind['?'] = Kind::Questionmark;
-            s_ch__kind['|'] = Kind::Pipe;
-            s_ch__kind['@'] = Kind::At;
-            s_ch__kind['#'] = Kind::Hashtag;
-            s_ch__kind['$'] = Kind::Dollar;
-            s_ch__kind['%'] = Kind::Percent;
-            s_ch__kind['^'] = Kind::Hat;
-            s_ch__kind['&'] = Kind::Ampersand;
-            s_ch__kind['*'] = Kind::Star;
-            s_ch__kind['('] = Kind::OpenParens;
-            s_ch__kind[')'] = Kind::CloseParens;
-            s_ch__kind['['] = Kind::OpenSquare;
-            s_ch__kind[']'] = Kind::CloseSquare;
-            s_ch__kind['{'] = Kind::OpenCurly;
-            s_ch__kind['}'] = Kind::CloseCurly;
-            s_ch__kind['<'] = Kind::OpenAngle;
-            s_ch__kind['>'] = Kind::CloseAngle;
-            s_ch__kind['~'] = Kind::Tilde;
-            s_ch__kind['+'] = Kind::Plus;
-            s_ch__kind['-'] = Kind::Minus;
-            s_ch__kind['='] = Kind::Equal;
-            s_ch__kind[':'] = Kind::Colon;
-            s_ch__kind['_'] = Kind::Underscore;
-            s_ch__kind['.'] = Kind::Dot;
-            s_ch__kind[','] = Kind::Comma;
-            s_ch__kind[';'] = Kind::Semicolon;
-            s_ch__kind['\''] = Kind::SingleQuote;
-            s_ch__kind['"'] = Kind::DoubleQuote;
-            s_ch__kind['`'] = Kind::Backtick;
-            s_ch__kind['/'] = Kind::Slash;
-            s_ch__kind['\\'] = Kind::BackSlash;
-            s_ch__kind['\n'] = Kind::Newline;
-            s_ch__kind['\r'] = Kind::CarriageReturn;
+            for (auto &symbol : table)
+                symbol = Symbol::Word;
+            table[' '] = Symbol::Space;
+            table['!'] = Symbol::Exclamation;
+            table['?'] = Symbol::Questionmark;
+            table['|'] = Symbol::Pipe;
+            table['@'] = Symbol::At;
+            table['#'] = Symbol::Hashtag;
+            table['$'] = Symbol::Dollar;
+            table['%'] = Symbol::Percent;
+            table['^'] = Symbol::Hat;
+            table['&'] = Symbol::Ampersand;
+            table['*'] = Symbol::Star;
+            table['('] = Symbol::OpenParens;
+            table[')'] = Symbol::CloseParens;
+            table['['] = Symbol::OpenSquare;
+            table[']'] = Symbol::CloseSquare;
+            table['{'] = Symbol::OpenCurly;
+            table['}'] = Symbol::CloseCurly;
+            table['<'] = Symbol::OpenAngle;
+            table['>'] = Symbol::CloseAngle;
+            table['~'] = Symbol::Tilde;
+            table['+'] = Symbol::Plus;
+            table['-'] = Symbol::Minus;
+            table['='] = Symbol::Equal;
+            table[':'] = Symbol::Colon;
+            table['_'] = Symbol::Underscore;
+            table['.'] = Symbol::Dot;
+            table[','] = Symbol::Comma;
+            table[';'] = Symbol::Semicolon;
+            table['\''] = Symbol::SingleQuote;
+            table['"'] = Symbol::DoubleQuote;
+            table['`'] = Symbol::Backtick;
+            table['/'] = Symbol::Slash;
+            table['\\'] = Symbol::BackSlash;
+            table['\n'] = Symbol::Newline;
+            table['\r'] = Symbol::CarriageReturn;
         }
-        return s_ch__kind[ch];
+    };
+    static Table s_table;
+
+    Symbol parse_symbol(char ch)
+    {
+        return s_table.table[ch];
     }
 
 } // namespace amp
