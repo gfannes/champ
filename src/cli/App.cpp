@@ -1,10 +1,14 @@
 #include <cli/App.hpp>
 
-#include <rubr/fs/Walker.hpp>
-#include <rubr/mss.hpp>
+#include <amp/Scanner.hpp>
 
-#include <iostream>
+#include <rubr/fs/Walker.hpp>
+#include <rubr/macro/capture.hpp>
+#include <rubr/mss.hpp>
+#include <rubr/profile/Stopwatch.hpp>
+
 #include <chrono>
+#include <iostream>
 
 namespace cli {
 
@@ -12,14 +16,12 @@ namespace cli {
     {
         MSS_BEGIN(ReturnCode);
 
-        using Clock = std::chrono::system_clock;
-        const auto start_ts = Clock::now();
+        const rubr::profile::Stopwatch sw;
 
         if (options_.folder)
             MSS(list_files_());
 
-        const auto elapse = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now()-start_ts);
-        std::cout << "Elapse: " << elapse << std::endl;
+        std::cout << "Elapse: " << sw.elapse<std::chrono::milliseconds>() << std::endl;
 
         MSS_END();
     }
@@ -32,16 +34,25 @@ namespace cli {
         MSS(!!options_.folder, std::cerr << "Expected folder to be set" << std::endl);
         Walker walker{Walker::Config{.basedir = *options_.folder}};
 
-        std::size_t count = 0;
+        std::size_t file_count = 0;
+        std::size_t byte_count = 0;
+
+        std::string content;
+        amp::Scanner scanner;
 
         MSS(walker([&](const auto &fp) {
             MSS_BEGIN(bool);
-            ++count;
-            // std::cout << fp << std::endl;
+            ++file_count;
+            // std::cout << fp.native() << std::endl;
+            // MSS(rubr::fs::read(content, fp));
+            // byte_count += content.size();
+
+            // MSS(scanner(content));
+
             MSS_END();
         }));
 
-        std::cout << "Filecount: " << count << std::endl;
+        std::cout << C(file_count) C(byte_count / 1024 / 1024) << std::endl;
 
         MSS_END();
     }

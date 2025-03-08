@@ -1,7 +1,7 @@
 #ifndef HEADER_cli_Options_hpp_ALREADY_INCLUDED
 #define HEADER_cli_Options_hpp_ALREADY_INCLUDED
 
-#include <cli/ReturnCode.hpp>
+#include <ReturnCode.hpp>
 
 #include <string>
 #include <optional>

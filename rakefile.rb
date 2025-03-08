@@ -8,11 +8,25 @@ end
 
 desc 'Run'
 task :run do
+    mode = :release
+    # mode = :debug
+    sh("xmake f -m #{mode}")
     sh("xmake build -v ampp")
 
     ix = (ARGV.index('--') || -1) +1
     args = ARGV[ix...]
     sh("xmake run ampp #{args*' '}")
+end
+
+desc 'Run all UTs'
+task :ut, %i[filter] do |task, args|
+    sh "zig build test"
+
+    mode = :release
+    # mode = :debug
+    sh("xmake f -m #{mode}")
+    sh("xmake build -v amplib_ut")
+    sh("xmake run amplib_ut")
 end
 
 desc("Clean")
@@ -24,7 +38,8 @@ desc("Generate .clangd file")
 task :clangd do
     File.open('.clangd', 'w') do |fo|
         fo.puts("CompileFlags:")
-        include_dirs = %w[src ext/rubr/src].map{|dir|"-I#{File.join(here_dir, dir)}"}
-        fo.puts("    Add: [-std=c++20, #{include_dirs*', '}]")
+        # &shortcut: How can I get the include path for catch2 from xmake?
+        include_dirs = %w[src ext/rubr/src /home/geertf/.xmake/packages/c/catch2/v3.8.0/39d7db50b8e54e09ac555b3ca94b3a17/include].map{|dir|"-I#{dir[0] == '/' ? dir : File.join(here_dir, dir)}"}
+        fo.puts("    Add: [-std=c++23, #{include_dirs*', '}]")
     end
 end

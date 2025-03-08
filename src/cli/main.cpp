@@ -29,7 +29,7 @@ namespace cli {
 int main(int argc, const char **argv)
 {
     const auto rc = cli::main(argc, argv);
-    if (rc != cli::ReturnCode::Ok)
+    if (rc != ReturnCode::Ok)
     {
         std::cerr << "Something went wrong" << std::endl;
         return -1;
