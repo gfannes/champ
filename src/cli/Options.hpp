@@ -5,21 +5,30 @@
 
 #include <string>
 #include <optional>
+#include <vector>
 
 namespace cli {
+
+    enum class Command{
+        ListFiles,
+    };
+
     class Options
     {
     public:
         std::string exe_name;
 
         bool print_help = false;
-        std::optional<std::string> folder;
+        std::vector<std::string> groves;
+        std::optional<Command> command;
+        bool do_scan = false;
 
         ReturnCode parse(int argc, const char **argv);
 
         std::string help() const;
     private:
     };
+
 } // namespace app
 
 #endif

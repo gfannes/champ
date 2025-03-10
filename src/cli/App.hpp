@@ -1,4 +1,5 @@
 #include <cli/Options.hpp>
+#include <cli/Config.hpp>
 
 namespace cli {
 
@@ -14,6 +15,7 @@ namespace cli {
         ReturnCode list_files_() const;
 
         const Options &options_;
+        Config config_;
     };
 
 } // namespace cli

@@ -25,8 +25,12 @@ namespace cli {
             if (false) {}
             else if (is("-h", "--help"))
                 print_help = true;
-            else if (is("-f", "--folder"))
-                MSS(r.pop(folder.emplace()));
+            else if (is("-g", "--grove"))
+                MSS(r.pop(groves.emplace_back()));
+            else if (is("-s", "--scan"))
+                do_scan = true;
+            else if (is("ls", "list_files"))
+                command = Command::ListFiles;
             else
                 MSS(false, std::cerr << "Unknown CLI argument '" << arg << "'" << std::endl);
         }
@@ -38,8 +42,13 @@ namespace cli {
     {
         std::ostringstream oss;
         oss << "Help for '" << exe_name << "'" << std::endl;
-        oss << "    -h  --help    Print this help" << std::endl;
-        oss << "    -f  --folder  Folder" << std::endl;
+        oss << exe_name << " Command Options" << std::endl;
+        oss << "Command" << std::endl;
+        oss << "    ls  list_files" << std::endl;
+        oss << "Options" << std::endl;
+        oss << "    -h  --help         Print this help" << std::endl;
+        oss << "    -g  --grove NAME   Grove name" << std::endl;
+        oss << "    -s  --scan         Scan tokens" << std::endl;
         oss << "Developed by Geert Fannes" << std::endl;
         return oss.str();
     }
