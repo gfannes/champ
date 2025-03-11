@@ -3,9 +3,12 @@
 
 #include <ReturnCode.hpp>
 
+#include <rubr/mss.hpp>
+
 #include <cstdint>
-#include <string_view>
+#include <string>
 #include <vector>
+#include <ostream>
 
 namespace amp {
 
@@ -49,6 +52,7 @@ namespace amp {
         Newline,
         CarriageReturn,
     };
+    std::ostream &operator<<(std::ostream &os, Symbol symbol);
 
     Symbol parse_symbol(char ch);
 
@@ -59,14 +63,27 @@ namespace amp {
         std::uint16_t size;
         Symbol symbol;
     };
+    std::ostream &operator<<(std::ostream &os, const Token &token);
+    using Tokens = std::vector<Token>;
 
     class Scanner
     {
     public:
-        ReturnCode operator()(std::string_view sv);
+        template <typename Builder>
+        ReturnCode init(Builder builder)
+        {
+            MSS_BEGIN(ReturnCode);
+            MSS(builder(content_));
+            MSS_END();
+        }
+
+        ReturnCode scan();
+
+        const Tokens &tokens() const { return tokens_; }
 
     private:
-        std::vector<Token> tokens_;
+        std::string content_;
+        Tokens tokens_;
     };
 
 } // namespace amp

@@ -22,6 +22,7 @@ namespace cli {
         std::vector<std::string> groves;
         std::optional<Command> command;
         bool do_scan = false;
+        bool do_parse = false;
 
         ReturnCode parse(int argc, const char **argv);
 

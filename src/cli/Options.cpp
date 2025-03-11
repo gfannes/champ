@@ -29,6 +29,8 @@ namespace cli {
                 MSS(r.pop(groves.emplace_back()));
             else if (is("-s", "--scan"))
                 do_scan = true;
+            else if (is("-p", "--parse"))
+                do_parse = true;
             else if (is("ls", "list_files"))
                 command = Command::ListFiles;
             else
@@ -49,6 +51,7 @@ namespace cli {
         oss << "    -h  --help         Print this help" << std::endl;
         oss << "    -g  --grove NAME   Grove name" << std::endl;
         oss << "    -s  --scan         Scan tokens" << std::endl;
+        oss << "    -p  --parse        Parse tokens" << std::endl;
         oss << "Developed by Geert Fannes" << std::endl;
         return oss.str();
     }

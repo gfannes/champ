@@ -13,7 +13,8 @@ namespace cli {
             grove.name = "am";
             grove.root = rubr::fs::expand_path("~/am");
             grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
-            // grove.max_size = 256000;
+            grove.max_size = 256000;
+            // grove.count = 1;
         }
 
         // Prepend a '.' for the extensions where necessary

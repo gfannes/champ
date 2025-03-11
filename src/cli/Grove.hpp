@@ -14,6 +14,7 @@ namespace cli {
         std::filesystem::path root;
         std::vector<std::string> extensions;
         std::optional<std::size_t> max_size;
+        std::optional<std::size_t> count;
     };
 
 } // namespace cli

@@ -1,5 +1,6 @@
 #include <cli/App.hpp>
 
+#include <amp/Parser.hpp>
 #include <amp/Scanner.hpp>
 
 #include <rubr/fs/Walker.hpp>
@@ -47,8 +48,13 @@ namespace cli {
             using Walker = rubr::fs::Walker;
             Walker walker{Walker::Config{.basedir = grove.root}};
 
-            std::string content;
-            amp::Scanner scanner;
+            std::optional<amp::Parser> parser;
+            if (options_.do_parse)
+                parser.emplace();
+
+            std::optional<amp::Scanner> scanner;
+            if (parser || options_.do_scan)
+                scanner.emplace();
 
             MSS(walker([&](const std::filesystem::path &fp) {
                 MSS_BEGIN(bool);
@@ -57,6 +63,8 @@ namespace cli {
 
                 if (do_process && grove.max_size)
                     do_process = std::filesystem::file_size(fp) <= *grove.max_size;
+                if (do_process && grove.count)
+                    do_process = file_count < *grove.count;
                 if (do_process && !grove.extensions.empty())
                     do_process = std::any_of(grove.extensions.begin(), grove.extensions.end(), [&](const auto &ext) { return fp.native().ends_with(ext); });
 
@@ -64,11 +72,23 @@ namespace cli {
                 {
                     ++file_count;
                     std::cout << fp.native() << std::endl;
-                    MSS(rubr::fs::read(content, fp));
-                    byte_count += content.size();
 
-                    if (options_.do_scan)
-                        MSS(scanner(content));
+                    if (scanner)
+                    {
+                        MSS(scanner->init([&](std::string &content) {
+                            MSS_BEGIN(ReturnCode);
+                            MSS(rubr::fs::read(content, fp));
+                            byte_count += content.size();
+                            MSS_END();
+                        }));
+
+                        MSS(scanner->scan());
+                        if (parser)
+                        {
+                            parser->init(*scanner);
+                            MSS(parser->parse());
+                        }
+                    }
                 }
 
                 MSS_END();
