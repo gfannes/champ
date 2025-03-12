@@ -1,16 +1,13 @@
-#ifndef HEADER_apm_Scanner_hpp_ALREADY_INCLUDED
-#define HEADER_apm_Scanner_hpp_ALREADY_INCLUDED
+#ifndef HEADER_tkn_Token_hpp_ALREADY_INCLUDED
+#define HEADER_tkn_Token_hpp_ALREADY_INCLUDED
 
-#include <ReturnCode.hpp>
-
-#include <rubr/mss.hpp>
+#include <str/Range.hpp>
 
 #include <cstdint>
-#include <string>
-#include <vector>
 #include <ostream>
+#include <vector>
 
-namespace amp {
+namespace tkn {
 
     enum class Symbol : std::uint8_t
     {
@@ -54,38 +51,15 @@ namespace amp {
     };
     std::ostream &operator<<(std::ostream &os, Symbol symbol);
 
-    Symbol parse_symbol(char ch);
-
-    // Smaller data goes faster
     struct Token
     {
-        const char *begin;
-        std::uint16_t size;
+        str::Range range;
         Symbol symbol;
     };
     std::ostream &operator<<(std::ostream &os, const Token &token);
+
     using Tokens = std::vector<Token>;
 
-    class Scanner
-    {
-    public:
-        template <typename Builder>
-        ReturnCode init(Builder builder)
-        {
-            MSS_BEGIN(ReturnCode);
-            MSS(builder(content_));
-            MSS_END();
-        }
-
-        ReturnCode scan();
-
-        const Tokens &tokens() const { return tokens_; }
-
-    private:
-        std::string content_;
-        Tokens tokens_;
-    };
-
-} // namespace amp
+} // namespace tkn
 
 #endif

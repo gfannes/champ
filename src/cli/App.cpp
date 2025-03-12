@@ -1,7 +1,7 @@
 #include <cli/App.hpp>
 
-#include <amp/Parser.hpp>
-#include <amp/Scanner.hpp>
+#include <mero/Parser.hpp>
+#include <tkn/Scanner.hpp>
 
 #include <rubr/fs/Walker.hpp>
 #include <rubr/macro/capture.hpp>
@@ -48,11 +48,11 @@ namespace cli {
             using Walker = rubr::fs::Walker;
             Walker walker{Walker::Config{.basedir = grove.root}};
 
-            std::optional<amp::Parser> parser;
+            std::optional<mero::Parser> parser;
             if (options_.do_parse)
                 parser.emplace();
 
-            std::optional<amp::Scanner> scanner;
+            std::optional<tkn::Scanner> scanner;
             if (parser || options_.do_scan)
                 scanner.emplace();
 
@@ -85,8 +85,16 @@ namespace cli {
                         MSS(scanner->scan());
                         if (parser)
                         {
-                            parser->init(*scanner);
-                            MSS(parser->parse());
+                            const auto language = mero::language(fp.extension().native());
+                            MSS(!!language);
+
+                            parser->init(*scanner, *language);
+
+                            mero::File file;
+                            MSS(parser->parse(file));
+
+                            file.write(std::cout);
+                            std::cout << std::endl;
                         }
                     }
                 }

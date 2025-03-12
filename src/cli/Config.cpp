@@ -8,13 +8,31 @@ namespace cli {
     {
         MSS_BEGIN(ReturnCode);
 
+        auto use_grove = [&](const std::string_view &name) {
+            auto it = std::find_if(options.groves.begin(), options.groves.end(), [&](const auto &str) {return name == str;});
+            return it != options.groves.end();
+        };
+
         {
-            auto &grove = groves.emplace_back();
+            Grove grove;
             grove.name = "am";
             grove.root = rubr::fs::expand_path("~/am");
             grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
             grove.max_size = 256000;
+            grove.count = 1;
+            if (use_grove(grove.name))
+                groves.push_back(grove);
+        }
+
+        {
+            Grove grove;
+            grove.name = "amall";
+            grove.root = rubr::fs::expand_path("~/am");
+            // grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
+            // grove.max_size = 256000;
             // grove.count = 1;
+            if (use_grove(grove.name))
+                groves.push_back(grove);
         }
 
         // Prepend a '.' for the extensions where necessary
@@ -26,7 +44,7 @@ namespace cli {
                 if (ext.empty())
                     continue;
                 if (ext[0] != '.')
-                    ext = "."+ext;
+                    ext = "." + ext;
                 if (std::find(exts.begin(), exts.end(), ext) == exts.end())
                     exts.push_back(ext);
             }

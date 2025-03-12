@@ -9,7 +9,7 @@ end
 desc 'Run'
 task :run do
     mode = :release
-    # mode = :debug
+    mode = :debug
     sh("xmake f -m #{mode}")
     sh("xmake build -v ampp")
 
