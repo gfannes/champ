@@ -8,6 +8,7 @@
 #include <rubr/mss.hpp>
 #include <rubr/profile/Stopwatch.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 
