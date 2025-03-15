@@ -1,5 +1,6 @@
 #include <mero/Parser.hpp>
 
+#include <rubr/ix/Range.hpp>
 #include <rubr/macro/capture.hpp>
 
 namespace mero {
@@ -29,8 +30,10 @@ namespace mero {
             switch (token.symbol)
             {
                 case tkn::Symbol::Newline:
-                    if (!line->tokens().empty())
+                    for (auto _ : rubr::ix::make_range(token.range.size))
                         line = &file.root().emplace_child();
+                    break;
+                case tkn::Symbol::CarriageReturn:
                     break;
                 default:
                     line->push_token(token);
