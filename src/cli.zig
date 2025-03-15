@@ -1,5 +1,4 @@
 const std = @import("std");
-const os = std.os;
 
 const CliError = error{
     CouldNotFindExeName,
@@ -7,15 +6,22 @@ const CliError = error{
 };
 
 pub const Options = struct {
+    const Strings = std.ArrayList([]const u8);
+
     exe_name: []const u8 = &.{},
     print_help: bool = false,
-    folder: []const u8 = &.{},
+    groves: Strings = undefined,
+    do_print: bool = false,
+    do_scan: bool = false,
+    do_parse: bool = false,
 
-    _aa: std.heap.ArenaAllocator,
-    _args: [][*:0]u8,
+    _args: [][*:0]u8 = &.{},
+    _aa: std.heap.ArenaAllocator = undefined,
 
-    pub fn init(ma: std.mem.Allocator) Options {
-        return Options{ ._aa = std.heap.ArenaAllocator.init(ma), ._args = os.argv };
+    pub fn init(self: *Options, ma: std.mem.Allocator) void {
+        self._args = std.os.argv;
+        self._aa = std.heap.ArenaAllocator.init(ma);
+        self.groves = Strings.init(self._aa.allocator());
     }
     pub fn deinit(self: Options) void {
         self._aa.deinit();
@@ -27,10 +33,15 @@ pub const Options = struct {
         while (self._pop()) |arg| {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
-            } else if (arg.is("-f", "--folder")) {
-                if (self._pop()) |x| {
-                    self.folder = x.arg;
-                }
+            } else if (arg.is("-g", "--grove")) {
+                if (self._pop()) |x|
+                    try self.groves.append(x.arg);
+            } else if (arg.is("-s", "--scan")) {
+                self.do_scan = true;
+            } else if (arg.is("-p", "--parse")) {
+                self.do_parse = true;
+            } else if (arg.is("-P", "--print")) {
+                self.do_print = true;
             } else {
                 std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
                 return error.UnknownArgument;
@@ -42,7 +53,10 @@ pub const Options = struct {
         const msg = "" ++
             "chimp <options>\n" ++
             "    -h  --help       Print this help\n" ++
-            "    -f  --folder     Folder\n" ++
+            "    -g  --grove      Grove\n" ++
+            "    -s  --scan       Scan\n" ++
+            "    -p  --parse      Parse\n" ++
+            "    -P  --print      Print\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }

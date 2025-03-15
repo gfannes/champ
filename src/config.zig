@@ -1,12 +1,60 @@
 const std = @import("std");
 const ut = std.testing;
 
+pub const Config = struct {
+    const Groves = std.ArrayList(Grove);
+
+    groves: Groves,
+    ma: std.mem.Allocator,
+
+    pub fn init(ma: std.mem.Allocator) Config {
+        return Config{ .groves = Groves.init(ma), .ma = ma };
+    }
+    pub fn deinit(self: *Config) void {
+        for (self.groves.items) |*grove| {
+            grove.deinit();
+        }
+        self.groves.deinit();
+    }
+
+    pub fn loadDefault(self: *Config) !void {
+        {
+            var grove = try Grove.init("am", "/home/geertf/am", self.ma);
+            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
+                try grove.addInclude(ext);
+            }
+            try self.groves.append(grove);
+        }
+        {
+            const grove = try Grove.init("amall", "/home/geertf/am", self.ma);
+            try self.groves.append(grove);
+        }
+    }
+
+    pub fn format(self: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+        try writer.print("[Config]{{\n", .{});
+        for (self.groves.items) |grove| {
+            try writer.print("{any}", .{grove});
+        }
+        try writer.print("}}\n", .{});
+    }
+};
+
+test "config.Config" {
+    var config = Config.init(ut.allocator);
+    defer config.deinit();
+
+    try config.loadDefault();
+    std.debug.print("{any}\n", .{config});
+}
+
 pub const Grove = struct {
     const Strings = std.ArrayList([]const u8);
 
     name: []const u8,
     path: []const u8,
     include: Strings,
+    max_size: ?usize = null,
 
     ma: std.mem.Allocator,
 
@@ -34,44 +82,3 @@ pub const Grove = struct {
         try writer.print("\n", .{});
     }
 };
-
-pub const Config = struct {
-    const Groves = std.ArrayList(Grove);
-
-    groves: Groves,
-    ma: std.mem.Allocator,
-
-    pub fn init(ma: std.mem.Allocator) Config {
-        return Config{ .groves = Groves.init(ma), .ma = ma };
-    }
-    pub fn deinit(self: *Config) void {
-        for (self.groves.items) |*grove| {
-            grove.deinit();
-        }
-        self.groves.deinit();
-    }
-
-    pub fn loadDefault(self: *Config) !void {
-        var grove = try Grove.init("am", "/home/geertf/ma", self.ma);
-        for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
-            try grove.addInclude(ext);
-        }
-        try self.groves.append(grove);
-    }
-
-    pub fn format(self: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print("[Config]{{\n", .{});
-        for (self.groves.items) |grove| {
-            try writer.print("{any}", .{grove});
-        }
-        try writer.print("}}\n", .{});
-    }
-};
-
-test "config.Config" {
-    var config = Config.init(ut.allocator);
-    defer config.deinit();
-
-    try config.loadDefault();
-    std.debug.print("{any}\n", .{config});
-}
