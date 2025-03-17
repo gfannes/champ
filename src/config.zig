@@ -7,7 +7,7 @@ pub const Config = struct {
     groves: Groves,
     ma: std.mem.Allocator,
 
-    pub fn init(ma: std.mem.Allocator) Config {
+    pub fn make(ma: std.mem.Allocator) Config {
         return Config{ .groves = Groves.init(ma), .ma = ma };
     }
     pub fn deinit(self: *Config) void {
@@ -17,7 +17,7 @@ pub const Config = struct {
         self.groves.deinit();
     }
 
-    pub fn loadDefault(self: *Config) !void {
+    pub fn initDefault(self: *Config) !void {
         {
             var grove = try Grove.init("am", "/home/geertf/am", self.ma);
             for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
@@ -41,10 +41,10 @@ pub const Config = struct {
 };
 
 test "config.Config" {
-    var config = Config.init(ut.allocator);
+    var config = Config.make(ut.allocator);
     defer config.deinit();
 
-    try config.loadDefault();
+    try config.initDefault();
     std.debug.print("{any}\n", .{config});
 }
 

@@ -3,4 +3,3 @@ zig-out/
 .clangd
 build/
 .xmake/
-ext/

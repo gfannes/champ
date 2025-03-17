@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Strange = @import("rubr").strange.Strange;
+const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const ignore = @import("rubr").ignore;
 
@@ -14,9 +15,9 @@ pub const App = struct {
 
     ma: std.mem.Allocator,
 
-    pub fn init(options: *const Options, ma: std.mem.Allocator) !App {
-        var cfg = config.Config.init(ma);
-        try cfg.loadDefault();
+    pub fn make(options: *const Options, ma: std.mem.Allocator) !App {
+        var cfg = config.Config.make(ma);
+        try cfg.initDefault();
         return App{ .options = options, .config = cfg, .ma = ma };
     }
 
@@ -33,17 +34,12 @@ pub const App = struct {
 
     fn _run(self: App) !void {
         for (self.config.groves.items) |grove| {
-            var found: bool = false;
-            for (self.options.groves.items) |wanted_grove_name| {
-                if (std.mem.eql(u8, grove.name, wanted_grove_name))
-                    found = true;
-            }
-            if (!found)
+            if (!strings.contains(u8, self.options.groves.items, grove.name))
                 continue;
 
             std.debug.print("Processing {s}\n", .{grove.name});
 
-            var w = try walker.Walker.init(self.ma);
+            var w = try walker.Walker.make(self.ma);
             defer w.deinit();
 
             var cb = struct {
@@ -56,8 +52,8 @@ pub const App = struct {
                 byte_count: usize = 0,
                 tokens: tkn.Tokens,
 
-                pub fn init(outer: *const App, grv: *const config.Grove) @This() {
-                    return .{ .outer = outer, .grove = grv, .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.init(outer.ma) };
+                pub fn make(outer: *const App, grv: *const config.Grove) @This() {
+                    return .{ .outer = outer, .grove = grv, .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.make(outer.ma) };
                 }
                 pub fn deinit(my: *@This()) void {
                     my.tokens.deinit();
@@ -95,7 +91,7 @@ pub const App = struct {
                         }
                     }
                 }
-            }.init(&self, &grove);
+            }.make(&self, &grove);
             defer cb.deinit();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});
