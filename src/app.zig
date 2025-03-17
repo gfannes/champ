@@ -7,6 +7,7 @@ const ignore = @import("rubr").ignore;
 
 const Options = @import("cli.zig").Options;
 const tkn = @import("tkn.zig");
+const mero = @import("mero.zig");
 const config = @import("config.zig");
 
 pub const App = struct {
@@ -43,24 +44,30 @@ pub const App = struct {
             var w = try walker.Walker.init(self.ma);
             defer w.deinit();
 
+            var tokens = tkn.Tokenizer.init(self.ma);
+            defer tokens.deinit();
+
+            var parser = mero.Parser.init(&tokens, self.ma);
+            defer parser.deinit();
+
             var cb = struct {
+                const Self = @This();
                 const Buffer = std.ArrayList(u8);
 
                 outer: *const App,
                 grove: *const config.Grove,
-                out: std.fs.File.Writer,
+                tokens: *tkn.Tokenizer,
+                parser: *mero.Parser,
+
                 file_count: usize = 0,
                 byte_count: usize = 0,
-                tokens: tkn.Tokens,
+                out: std.fs.File.Writer = undefined,
 
-                pub fn init(outer: *const App, grv: *const config.Grove) @This() {
-                    return .{ .outer = outer, .grove = grv, .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.init(outer.ma) };
-                }
-                pub fn deinit(my: *@This()) void {
-                    my.tokens.deinit();
+                pub fn init(slf: *Self) void {
+                    slf.out = std.io.getStdOut().writer();
                 }
 
-                pub fn call(my: *@This(), dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
+                pub fn call(my: *Self, dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
                     const name = path[offsets.name..];
 
                     if (my.grove.include) |include| {
@@ -79,6 +86,10 @@ pub const App = struct {
                     if (!size_is_ok)
                         return;
 
+                    if (my.grove.max_count) |max_count|
+                        if (my.file_count >= max_count)
+                            return;
+
                     if (my.outer.options.do_print) {
                         try my.out.print("{s}\n", .{path});
                         if (false) {
@@ -96,9 +107,12 @@ pub const App = struct {
 
                     if (my.outer.options.do_scan)
                         try my.tokens.scan();
+
+                    if (my.outer.options.do_parse)
+                        try my.parser.parse();
                 }
-            }.init(&self, &grove);
-            defer cb.deinit();
+            }{ .outer = &self, .grove = &grove, .tokens = &tokens, .parser = &parser };
+            cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});
             const dir = try std.fs.openDirAbsolute(grove.path, .{});

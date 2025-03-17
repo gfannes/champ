@@ -72,7 +72,9 @@ namespace cli {
                 if (do_process)
                 {
                     ++file_count;
-                    std::cout << fp.native() << std::endl;
+
+                    if (options_.print_filename)
+                        std::cout << fp.native() << std::endl;
 
                     if (scanner)
                     {

@@ -23,6 +23,15 @@ pub const Config = struct {
             for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
                 try grove.addInclude(ext);
             }
+            grove.max_size = 256000;
+            try self.groves.append(grove);
+        }
+        {
+            var grove = try Grove.init("amdebug", "/home/geertf/am", self.ma);
+            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
+                try grove.addInclude(ext);
+            }
+            grove.max_count = 1;
             try self.groves.append(grove);
         }
         {
@@ -55,6 +64,7 @@ pub const Grove = struct {
     path: []const u8,
     include: ?Strings = null,
     max_size: ?usize = null,
+    max_count: ?usize = null,
 
     ma: std.mem.Allocator,
 

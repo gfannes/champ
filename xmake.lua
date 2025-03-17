@@ -6,13 +6,13 @@ add_rules("mode.release") -- Enable with `xmake f -m release`
 add_rules("mode.debug")   -- Enable with `xmake f -m debug`
 add_requires("catch2")
 
--- -- Ensure debugging symbols exist even in release mode
--- if is_mode("release") then
---     set_symbols("debug")  -- Keeps debug info
---     set_optimize("fast")  -- Keeps optimizations (-O2)
---     add_cxflags("-fno-omit-frame-pointer", {force = true})  -- Required for perf
---     add_ldflags("-fno-omit-frame-pointer", {force = true})  -- Required for perf
--- end
+-- Ensure debugging symbols exist even in release mode
+if is_mode("release") then
+    set_symbols("debug")  -- Keeps debug info
+    set_optimize("fast")  -- Keeps optimizations (-O2)
+    add_cxflags("-fno-omit-frame-pointer", {force = true})  -- Required for perf
+    add_ldflags("-fno-omit-frame-pointer", {force = true})  -- Required for perf
+end
 
 target("amplib")
     set_kind("static")

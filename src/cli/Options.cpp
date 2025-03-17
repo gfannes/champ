@@ -31,6 +31,8 @@ namespace cli {
                 do_scan = true;
             else if (is("-p", "--parse"))
                 do_parse = true;
+            else if (is("-P", "--print-filename"))
+                print_filename = true;
             else if (is("ls", "list_files"))
                 command = Command::ListFiles;
             else
@@ -48,10 +50,11 @@ namespace cli {
         oss << "Command" << std::endl;
         oss << "    ls  list_files" << std::endl;
         oss << "Options" << std::endl;
-        oss << "    -h  --help         Print this help" << std::endl;
-        oss << "    -g  --grove NAME   Grove name" << std::endl;
-        oss << "    -s  --scan         Scan tokens" << std::endl;
-        oss << "    -p  --parse        Parse tokens" << std::endl;
+        oss << "    -h  --help             Print this help" << std::endl;
+        oss << "    -g  --grove NAME       Grove name" << std::endl;
+        oss << "    -s  --scan             Scan tokens" << std::endl;
+        oss << "    -p  --parse            Parse tokens" << std::endl;
+        oss << "    -P  --print-filename   Print filename" << std::endl;
         oss << "Developed by Geert Fannes" << std::endl;
         return oss.str();
     }

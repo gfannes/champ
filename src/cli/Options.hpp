@@ -21,6 +21,7 @@ namespace cli {
         bool print_help = false;
         std::vector<std::string> groves;
         std::optional<Command> command;
+        bool print_filename = false;
         bool do_scan = false;
         bool do_parse = false;
 

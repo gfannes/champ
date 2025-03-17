@@ -16,7 +16,17 @@ namespace cli {
         {
             Grove grove;
             grove.name = "am";
-            grove.root = rubr::fs::expand_path("~/am");
+            grove.root = rubr::fs::expand_path("~/auro/master");
+            grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
+            grove.max_size = 256000;
+            if (use_grove(grove.name))
+                groves.push_back(grove);
+        }
+
+        {
+            Grove grove;
+            grove.name = "amdebug";
+            grove.root = rubr::fs::expand_path("~/auro/master");
             grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
             grove.max_size = 256000;
             grove.count = 1;
@@ -27,7 +37,7 @@ namespace cli {
         {
             Grove grove;
             grove.name = "amall";
-            grove.root = rubr::fs::expand_path("~/am");
+            grove.root = rubr::fs::expand_path("~/auro/master");
             // grove.extensions = {"md", "txt", "rb", "hpp", "cpp", "h", "c", "chai"};
             // grove.max_size = 256000;
             // grove.count = 1;

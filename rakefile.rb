@@ -7,15 +7,13 @@ task :default do
 end
 
 desc 'Run'
-task :run do
-    mode = :release
-    mode = :debug
+task :run, %i[extra mode] do |task, args|
+    mode = args[:mode]&.to_sym || :release
     sh("xmake f -m #{mode}")
     sh("xmake build -v ampp")
 
-    ix = (ARGV.index('--') || -1) +1
-    args = ARGV[ix...]
-    sh("xmake run ampp #{args*' '}")
+    exe = {release: "#{here_dir}/build/linux/x86_64/release/ampp", debug: "#{here_dir}/build/linux/x86_64/release/ampp"}[mode]
+    sh("#{exe} #{args[:extra]}")
 end
 
 desc 'Run all UTs'
