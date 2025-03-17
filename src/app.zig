@@ -6,7 +6,7 @@ const walker = @import("rubr").walker;
 const ignore = @import("rubr").ignore;
 
 const Options = @import("cli.zig").Options;
-const tkn = @import("amp/tkn.zig");
+const tkn = @import("tkn.zig");
 const config = @import("config.zig");
 
 pub const App = struct {
@@ -35,6 +35,7 @@ pub const App = struct {
     fn _run(self: App) !void {
         for (self.config.groves.items) |grove| {
             if (!strings.contains(u8, self.options.groves.items, grove.name))
+                // Skip this grove
                 continue;
 
             std.debug.print("Processing {s}\n", .{grove.name});
@@ -60,6 +61,24 @@ pub const App = struct {
                 }
 
                 pub fn call(my: *@This(), dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
+                    const name = path[offsets.name..];
+
+                    if (my.grove.include) |include| {
+                        const ext = std.fs.path.extension(name);
+                        if (!strings.contains(u8, include.items, ext))
+                            // Skip this extension
+                            return;
+                    }
+
+                    const file = try dir.openFile(name, .{});
+                    defer file.close();
+
+                    const stat = try file.stat();
+
+                    const size_is_ok = if (my.grove.max_size) |max_size| stat.size < max_size else true;
+                    if (!size_is_ok)
+                        return;
+
                     if (my.outer.options.do_print) {
                         try my.out.print("{s}\n", .{path});
                         if (false) {
@@ -68,28 +87,15 @@ pub const App = struct {
                         }
                     }
 
+                    // Read data
                     {
-                        const name = path[offsets.name..];
-
-                        const file = try dir.openFile(name, .{});
-                        defer file.close();
-
-                        const stat = try file.stat();
-
-                        const do_process = if (my.grove.max_size) |max_size| stat.size < max_size else true;
-                        if (do_process) {
-                            // Read data
-                            {
-                                const buf = try my.tokens.alloc_content(stat.size);
-                                my.byte_count += try file.readAll(buf);
-                            }
-
-                            if (my.outer.options.do_scan)
-                                try my.tokens.scan();
-
-                            my.file_count += 1;
-                        }
+                        const buf = try my.tokens.alloc_content(stat.size);
+                        my.byte_count += try file.readAll(buf);
                     }
+                    my.file_count += 1;
+
+                    if (my.outer.options.do_scan)
+                        try my.tokens.scan();
                 }
             }.init(&self, &grove);
             defer cb.deinit();

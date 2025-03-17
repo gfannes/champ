@@ -53,31 +53,43 @@ pub const Grove = struct {
 
     name: []const u8,
     path: []const u8,
-    include: Strings,
+    include: ?Strings = null,
     max_size: ?usize = null,
 
     ma: std.mem.Allocator,
 
     pub fn init(name: []const u8, path: []const u8, ma: std.mem.Allocator) !Grove {
-        return Grove{ .name = try ma.dupe(u8, name), .path = try ma.dupe(u8, path), .include = Strings.init(ma), .ma = ma };
+        return Grove{ .name = try ma.dupe(u8, name), .path = try ma.dupe(u8, path), .ma = ma };
     }
     pub fn deinit(self: *Grove) void {
         self.ma.free(self.name);
         self.ma.free(self.path);
-        for (self.include.items) |el| {
-            self.ma.free(el);
+        if (self.include) |include| {
+            for (include.items) |el| {
+                include.allocator.free(el);
+            }
+            include.deinit();
         }
-        self.include.deinit();
     }
 
     pub fn addInclude(self: *Grove, ext: []const u8) !void {
-        try self.include.append(try self.ma.dupe(u8, ext));
+        if (self.include == null)
+            self.include = Strings.init(self.ma);
+
+        if (self.include) |*include| {
+            var buffer: [128]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buffer);
+            const ext_with_dot = if (ext.len == 0 or ext[0] == '.') ext else try std.mem.concat(fba.allocator(), u8, &[_][]const u8{ ".", ext });
+            try include.append(try self.ma.dupe(u8, ext_with_dot));
+        }
     }
 
     pub fn format(self: @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print("[Grove](name:{s})(path:{s})", .{ self.name, self.path });
-        for (self.include.items) |ext| {
-            try writer.print("(ext:{s})", .{ext});
+        if (self.include) |include| {
+            for (include.items) |ext| {
+                try writer.print("(ext:{s})", .{ext});
+            }
         }
         try writer.print("\n", .{});
     }
