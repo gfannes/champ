@@ -15,9 +15,9 @@ pub const App = struct {
 
     ma: std.mem.Allocator,
 
-    pub fn make(options: *const Options, ma: std.mem.Allocator) !App {
-        var cfg = config.Config.make(ma);
-        try cfg.initDefault();
+    pub fn init(options: *const Options, ma: std.mem.Allocator) !App {
+        var cfg = config.Config.init(ma);
+        try cfg.loadTestDefaults();
         return App{ .options = options, .config = cfg, .ma = ma };
     }
 
@@ -39,7 +39,7 @@ pub const App = struct {
 
             std.debug.print("Processing {s}\n", .{grove.name});
 
-            var w = try walker.Walker.make(self.ma);
+            var w = try walker.Walker.init(self.ma);
             defer w.deinit();
 
             var cb = struct {
@@ -52,8 +52,8 @@ pub const App = struct {
                 byte_count: usize = 0,
                 tokens: tkn.Tokens,
 
-                pub fn make(outer: *const App, grv: *const config.Grove) @This() {
-                    return .{ .outer = outer, .grove = grv, .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.make(outer.ma) };
+                pub fn init(outer: *const App, grv: *const config.Grove) @This() {
+                    return .{ .outer = outer, .grove = grv, .out = std.io.getStdOut().writer(), .tokens = tkn.Tokens.init(outer.ma) };
                 }
                 pub fn deinit(my: *@This()) void {
                     my.tokens.deinit();
@@ -91,7 +91,7 @@ pub const App = struct {
                         }
                     }
                 }
-            }.make(&self, &grove);
+            }.init(&self, &grove);
             defer cb.deinit();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});

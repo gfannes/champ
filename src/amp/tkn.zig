@@ -106,7 +106,7 @@ pub const Tokens = struct {
 
     _ma: std.mem.Allocator,
 
-    pub fn make(ma: std.mem.Allocator) Tokens {
+    pub fn init(ma: std.mem.Allocator) Tokens {
         return Tokens{ ._content = _Content.init(ma), ._tokens = _Tokens.init(ma), ._ma = ma };
     }
     pub fn deinit(self: *Tokens) void {
@@ -174,7 +174,7 @@ pub const Tokens = struct {
 test {
     const ma = ut.allocator;
 
-    var tokens = Tokens.make(ma);
+    var tokens = Tokens.init(ma);
     defer tokens.deinit();
 
     const content = "# Title\n\n## Subtitle\n\nText\n\n- Bullet1\n- Bullet2\n  - Bullet2";
