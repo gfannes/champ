@@ -39,7 +39,7 @@ pub const App = struct {
                 // Skip this grove
                 continue;
 
-            std.debug.print("Processing {s}\n", .{grove.name});
+            std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.path });
 
             var w = try walker.Walker.init(self.ma);
             defer w.deinit();

@@ -18,8 +18,20 @@ pub const Config = struct {
     }
 
     pub fn loadTestDefaults(self: *Config) !void {
+        var envmap = try std.process.getEnvMap(self.ma);
+        defer envmap.deinit();
+
+        var home_dir: []const u8 = "/home/geertf";
+        if (envmap.get("HOME")) |dir| {
+            home_dir = dir;
+        }
+
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        const am_dir = try std.mem.concat(fba.allocator(), u8, &[_][]const u8{ home_dir, "/auro/master" });
+
         {
-            var grove = try Grove.init("am", "/home/geertf/am", self.ma);
+            var grove = try Grove.init("am", am_dir, self.ma);
             for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
                 try grove.addInclude(ext);
             }
@@ -27,7 +39,7 @@ pub const Config = struct {
             try self.groves.append(grove);
         }
         {
-            var grove = try Grove.init("amdebug", "/home/geertf/am", self.ma);
+            var grove = try Grove.init("amdebug", am_dir, self.ma);
             for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
                 try grove.addInclude(ext);
             }
@@ -35,7 +47,7 @@ pub const Config = struct {
             try self.groves.append(grove);
         }
         {
-            const grove = try Grove.init("amall", "/home/geertf/am", self.ma);
+            const grove = try Grove.init("amall", am_dir, self.ma);
             try self.groves.append(grove);
         }
     }

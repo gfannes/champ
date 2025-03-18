@@ -12,8 +12,7 @@ task :run, %i[extra mode] do |task, args|
     sh("xmake f -m #{mode}")
     sh("xmake build -v ampp")
 
-    exe = {release: "#{here_dir}/build/linux/x86_64/release/ampp", debug: "#{here_dir}/build/linux/x86_64/release/ampp"}[mode]
-    sh("#{exe} #{args[:extra]}")
+    sh("xmake run ampp #{args[:extra]}")
 end
 
 desc 'Run all UTs'
