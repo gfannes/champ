@@ -44,11 +44,15 @@ pub const App = struct {
             var w = try walker.Walker.init(self.ma);
             defer w.deinit();
 
-            var tokenizer = tkn.Tokenizer.init(self.ma);
-            defer tokenizer.deinit();
+            const String = std.ArrayList(u8);
+            var content = String.init(self.ma);
+            defer content.deinit();
 
-            var parser = mero.Parser.init(&tokenizer, self.ma);
-            defer parser.deinit();
+            var tokens = tkn.Tokenizer.Tokens.init(self.ma);
+            defer tokens.deinit();
+
+            // var parser = mero.Parser.init(&tokenizer, self.ma);
+            // defer parser.deinit();
 
             var cb = struct {
                 const Self = @This();
@@ -56,8 +60,9 @@ pub const App = struct {
 
                 outer: *const App,
                 grove: *const config.Grove,
-                tokenizer: *tkn.Tokenizer,
-                parser: *mero.Parser,
+                content: *String,
+                tokens: *tkn.Tokenizer.Tokens,
+                // parser: *mero.Parser,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
@@ -99,32 +104,34 @@ pub const App = struct {
                         }
                     }
 
-                    // Read data
+                    // Read data: 160ms
                     {
-                        const buf = try my.tokenizer.alloc_content(stat.size);
-                        my.byte_count += try file.readAll(buf);
+                        try my.content.resize(stat.size);
+                        my.byte_count += try file.readAll(my.content.items);
                     }
                     my.file_count += 1;
 
+                    var tokenizer = tkn.Tokenizer.init(my.content.items);
+
                     if (my.outer.options.do_scan) {
                         if (false) {
-                            // 490ms
-                            const tokens = try my.tokenizer.scan();
-                            for (tokens) |_| {
+                            // Parse into array: 460ms-160ms
+                            try tokenizer.scan(my.tokens);
+                            for (my.tokens.items) |_| {
                                 my.token_count += 1;
                             }
                         } else {
-                            // 405ms
-                            while (my.tokenizer.next()) |_| {
+                            // Iterate over tokens: 355ms-160ms
+                            while (tokenizer.next()) |_| {
                                 my.token_count += 1;
                             }
                         }
                     }
 
-                    if (my.outer.options.do_parse)
-                        try my.parser.parse();
+                    // if (my.outer.options.do_parse)
+                    //     try my.parser.parse();
                 }
-            }{ .outer = &self, .grove = &grove, .tokenizer = &tokenizer, .parser = &parser };
+            }{ .outer = &self, .grove = &grove, .content = &content, .tokens = &tokens };
             cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});

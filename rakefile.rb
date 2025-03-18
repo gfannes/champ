@@ -22,6 +22,7 @@ task :ut, %i[filter] do |task, args|
 
     mode = :release
     # mode = :debug
+    # sh("xmake f -c") # This was needed once to make xmake detect the local toolchains
     sh("xmake f -m #{mode}")
     sh("xmake build -v amplib_ut")
     sh("xmake run amplib_ut")

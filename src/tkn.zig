@@ -8,84 +8,69 @@ pub const Token = struct {
 };
 
 pub const Tokenizer = struct {
+    pub const Tokens = std.ArrayList(Token);
     const Self = @This();
-    const Tokens = std.ArrayList(Token);
-    const String = std.ArrayList(u8);
 
-    tokens: Tokens,
-    content: String,
-    ix: usize = 0,
+    content: []const u8,
 
-    pub fn init(ma: std.mem.Allocator) Self {
-        return Self{ .content = String.init(ma), .tokens = Tokens.init(ma) };
-    }
-    pub fn deinit(self: *Self) void {
-        self.content.deinit();
-        self.tokens.deinit();
+    pub fn init(content: []const u8) Self {
+        return Self{ .content = content };
     }
 
-    // Resizes internal buffer to requested size and provides read access to it
-    pub fn alloc_content(self: *Self, size: usize) ![]u8 {
-        try self.tokens.resize(0);
-        try self.content.resize(size);
-        self.ix = 0;
-        return self.content.items;
-    }
+    // 460ms
+    pub fn scan(self: *Self, tokens: *Tokens) !void {
+        try tokens.resize(0);
 
-    // 490ms
-    pub fn scan(self: *Self) ![]const Token {
-        const content: []const u8 = self.content.items;
-
-        if (content.len == 0)
+        if (self.content.len == 0)
             // Nothing to do
-            return &.{};
+            return;
 
         // Setup current_token to ensure it matches with the first characeter in below's loop
-        var current_token = Token{ .word = content[0..0], .symbol = Symbol.from(content[0]) };
+        var current_token = Token{ .word = self.content[0..0], .symbol = Symbol.from(self.content[0]) };
 
-        for (content, 0..) |ch, ix| {
+        for (self.content, 0..) |ch, ix| {
             const symbol = Symbol.from(ch);
 
             if (current_token.symbol != symbol) {
-                try self.tokens.append(current_token);
-                current_token = Token{ .word = content[ix..ix], .symbol = symbol };
+                try tokens.append(current_token);
+                current_token = Token{ .word = self.content[ix..ix], .symbol = symbol };
             }
 
             current_token.word.len += 1;
         }
 
         // Push last 'current_token'
-        try self.tokens.append(current_token);
+        try tokens.append(current_token);
 
-        return self.tokens.items;
-    }
-    pub fn count(self: Self) usize {
-        return self.tokens.items.len;
+        // Consume all content
+        self.content.ptr += self.content.len;
+        self.content.len = 0;
     }
 
     // &perf: It might be faster to prepare a few tokens and cache them
-    // 405ms
+    // 355ms
     pub fn next(self: *Self) ?Token {
+        // Note: storing a local Token and returning ?*Token is slower
         var maybe_token: ?Token = null;
 
-        const content = self.content.items[self.ix..];
-
-        for (content, 0..) |ch, ix| {
+        for (self.content, 0..) |ch, ix| {
             const symbol = Symbol.from(ch);
             if (maybe_token) |*token| {
                 if (symbol != token.symbol) {
                     token.word.len = ix;
-                    self.ix += token.word.len;
+                    self.content.ptr += token.word.len;
+                    self.content.len -= token.word.len;
                     return maybe_token;
                 }
             } else {
                 // Init maybe_token to contain all remaining content
-                maybe_token = Token{ .word = content[0..], .symbol = symbol };
+                maybe_token = Token{ .word = self.content, .symbol = symbol };
             }
         }
 
         // We found a match until the end: consume all content
-        self.ix = self.content.items.len;
+        self.content.ptr += self.content.len;
+        self.content.len = 0;
 
         return maybe_token;
     }
@@ -178,16 +163,27 @@ const ch__symbol: [256]Symbol = blk: {
     break :blk t;
 };
 
-test {
-    var tokens = Tokenizer.init(ut.allocator);
+test "Tokenizer.scan()" {
+    const content = "# Title\n\n## Subtitle\n\nText\n\n- Bullet1\n- Bullet2\n  - Bullet2";
+
+    var tokenizer = Tokenizer.init(content);
+
+    var tokens = Tokenizer.Tokens.init(ut.allocator);
     defer tokens.deinit();
 
+    try tokenizer.scan(&tokens);
+
+    for (tokens.items) |token| {
+        std.debug.print("Token: symbol {} word {s}\n", .{ token.symbol, token.word });
+    }
+}
+
+test "Tokenizer.next()" {
     const content = "# Title\n\n## Subtitle\n\nText\n\n- Bullet1\n- Bullet2\n  - Bullet2";
-    std.mem.copyForwards(u8, try tokens.alloc_content(content.len), content);
 
-    try tokens.scan();
+    var tokenizer = Tokenizer.init(content);
 
-    for (tokens.tokens.items) |token| {
+    while (tokenizer.next()) |token| {
         std.debug.print("Token: symbol {} word {s}\n", .{ token.symbol, token.word });
     }
 }
