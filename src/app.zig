@@ -44,10 +44,10 @@ pub const App = struct {
             var w = try walker.Walker.init(self.ma);
             defer w.deinit();
 
-            var tokens = tkn.Tokenizer.init(self.ma);
-            defer tokens.deinit();
+            var tokenizer = tkn.Tokenizer.init(self.ma);
+            defer tokenizer.deinit();
 
-            var parser = mero.Parser.init(&tokens, self.ma);
+            var parser = mero.Parser.init(&tokenizer, self.ma);
             defer parser.deinit();
 
             var cb = struct {
@@ -56,11 +56,12 @@ pub const App = struct {
 
                 outer: *const App,
                 grove: *const config.Grove,
-                tokens: *tkn.Tokenizer,
+                tokenizer: *tkn.Tokenizer,
                 parser: *mero.Parser,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
+                token_count: usize = 0,
                 out: std.fs.File.Writer = undefined,
 
                 pub fn init(slf: *Self) void {
@@ -100,18 +101,30 @@ pub const App = struct {
 
                     // Read data
                     {
-                        const buf = try my.tokens.alloc_content(stat.size);
+                        const buf = try my.tokenizer.alloc_content(stat.size);
                         my.byte_count += try file.readAll(buf);
                     }
                     my.file_count += 1;
 
-                    if (my.outer.options.do_scan)
-                        try my.tokens.scan();
+                    if (my.outer.options.do_scan) {
+                        if (false) {
+                            // 490ms
+                            const tokens = try my.tokenizer.scan();
+                            for (tokens) |_| {
+                                my.token_count += 1;
+                            }
+                        } else {
+                            // 405ms
+                            while (my.tokenizer.next()) |_| {
+                                my.token_count += 1;
+                            }
+                        }
+                    }
 
                     if (my.outer.options.do_parse)
                         try my.parser.parse();
                 }
-            }{ .outer = &self, .grove = &grove, .tokens = &tokens, .parser = &parser };
+            }{ .outer = &self, .grove = &grove, .tokenizer = &tokenizer, .parser = &parser };
             cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});
@@ -119,7 +132,7 @@ pub const App = struct {
             std.debug.print("folder: {s} {}\n", .{ grove.path, dir });
 
             try w.walk(dir, &cb);
-            std.debug.print("file_count: {}, byte_count {}MB\n", .{ cb.file_count, cb.byte_count / 1000000 });
+            std.debug.print("file_count: {}, byte_count {}MB, token_count {}\n", .{ cb.file_count, cb.byte_count / 1000000, cb.token_count });
         }
     }
 };
