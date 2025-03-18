@@ -48,11 +48,8 @@ pub const App = struct {
             var content = String.init(self.ma);
             defer content.deinit();
 
-            var tokens = tkn.Tokenizer.Tokens.init(self.ma);
-            defer tokens.deinit();
-
-            // var parser = mero.Parser.init(&tokenizer, self.ma);
-            // defer parser.deinit();
+            var parser = mero.Parser.init(self.ma);
+            defer parser.deinit();
 
             var cb = struct {
                 const Self = @This();
@@ -61,8 +58,7 @@ pub const App = struct {
                 outer: *const App,
                 grove: *const config.Grove,
                 content: *String,
-                tokens: *tkn.Tokenizer.Tokens,
-                // parser: *mero.Parser,
+                parser: *mero.Parser,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
@@ -111,27 +107,22 @@ pub const App = struct {
                     }
                     my.file_count += 1;
 
-                    var tokenizer = tkn.Tokenizer.init(my.content.items);
-
                     if (my.outer.options.do_scan) {
-                        if (false) {
-                            // Parse into array: 460ms-160ms
-                            try tokenizer.scan(my.tokens);
-                            for (my.tokens.items) |_| {
-                                my.token_count += 1;
-                            }
-                        } else {
-                            // Iterate over tokens: 355ms-160ms
-                            while (tokenizer.next()) |_| {
-                                my.token_count += 1;
-                            }
+                        var tokenizer = tkn.Tokenizer.init(my.content.items);
+                        // Iterate over tokens: 355ms-160ms
+                        while (tokenizer.next()) |_| {
+                            my.token_count += 1;
                         }
                     }
 
-                    // if (my.outer.options.do_parse)
-                    //     try my.parser.parse();
+                    if (my.outer.options.do_parse) {
+                        try my.parser.parse(my.content.items);
+                        for (my.parser.lines.items) |line| {
+                            std.debug.print("Line: {s}\n", .{line});
+                        }
+                    }
                 }
-            }{ .outer = &self, .grove = &grove, .content = &content, .tokens = &tokens };
+            }{ .outer = &self, .grove = &grove, .content = &content, .parser = &parser };
             cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});
