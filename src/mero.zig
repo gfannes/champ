@@ -5,13 +5,12 @@ const naft = @import("rubr").naft;
 
 const tkn = @import("tkn.zig");
 
-pub const Kind = enum {
-    Text,
-    Amp,
-};
-
 pub const Token = struct {
     const Self = @This();
+    pub const Kind = enum {
+        Text,
+        Amp,
+    };
 
     word: []const u8,
     kind: Kind,
@@ -40,7 +39,7 @@ pub const Line = struct {
         self.tokens.deinit();
     }
 
-    pub fn append(self: *Self, word: []const u8, kind: Kind) !void {
+    pub fn append(self: *Self, word: []const u8, kind: Token.Kind) !void {
         try self.tokens.append(Token{ .word = word, .kind = kind });
     }
 
@@ -81,6 +80,10 @@ pub const Node = struct {
         return &self.childs.items[ix];
     }
 
+    pub fn push_child(self: *Self, n: Node) !void {
+        return self.childs.append(n);
+    }
+
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Node");
         defer n.deinit();
@@ -113,12 +116,12 @@ pub const Parser = struct {
         self.tokenizer = tkn.Tokenizer.init(content);
         while (true) {
             std.debug.print("parse()\n", .{});
-            if (try self.section()) |el| {
-                try root.childs.append(el);
-            } else if (try self.paragraph()) |el| {
-                try root.childs.append(el);
-            } else if (try self.bullets()) |el| {
-                try root.childs.append(el);
+            if (try self.pop_section()) |el| {
+                try root.push_child(el);
+            } else if (try self.pop_paragraph()) |el| {
+                try root.push_child(el);
+            } else if (try self.pop_bullets()) |el| {
+                try root.push_child(el);
             } else {
                 break;
             }
@@ -127,37 +130,37 @@ pub const Parser = struct {
         return root;
     }
 
-    fn line(self: *Self) !?Node {
+    fn pop_line(self: *Self) !?Node {
         var maybe_n: ?Node = null;
         while (self.next()) |token| {
             std.debug.print("Token {s}\n", .{token.word});
             if (maybe_n == null)
                 maybe_n = Node.init(self.ma);
             if (maybe_n) |*n| {
-                try n.line.append(token.word, Kind.Text);
-                if (token.symbol == tkn.Symbol.Newline)
+                try n.line.append(token.word, Token.Kind.Text);
+                if (is_newline(token))
                     break;
             } else unreachable;
         }
         return maybe_n;
     }
 
-    fn section(self: *Self) !?Node {
+    fn pop_section(self: *Self) !?Node {
         if (self.peek()) |first_token| {
-            if (first_token.symbol == tkn.Symbol.Hashtag) {
-                var n = try self.line() orelse unreachable;
+            if (is_title(first_token)) |my_depth| {
+                var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Section;
 
                 while (self.peek()) |token| {
-                    if (token.symbol == tkn.Symbol.Hashtag) {
-                        if (token.word.len <= first_token.word.len)
-                            // This is the start of a section we cannot nest
+                    if (is_title(token)) |depth| {
+                        if (depth <= my_depth)
+                            // This is the start of a section with a depth too low: we cannot nest
                             break;
-                        try n.childs.append(try self.section() orelse unreachable);
-                    } else if (try self.paragraph()) |p| {
-                        try n.childs.append(p);
-                    } else if (try self.bullets()) |p| {
-                        try n.childs.append(p);
+                        try n.push_child(try self.pop_section() orelse unreachable);
+                    } else if (try self.pop_paragraph()) |p| {
+                        try n.push_child(p);
+                    } else if (try self.pop_bullets()) |p| {
+                        try n.push_child(p);
                     } else break;
                 }
 
@@ -167,14 +170,14 @@ pub const Parser = struct {
         return null;
     }
 
-    fn paragraph(self: *Self) !?Node {
+    fn pop_paragraph(self: *Self) !?Node {
         if (self.peek()) |first_token| {
-            if (first_token.symbol != tkn.Symbol.Hashtag and first_token.symbol != tkn.Symbol.Space and first_token.symbol != tkn.Symbol.Minus and first_token.symbol != tkn.Symbol.Star) {
-                var n = try self.line() orelse unreachable;
+            if (is_line(first_token)) {
+                var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Paragraph;
 
-                while (try self.bullets()) |p| {
-                    try n.childs.append(p);
+                while (try self.pop_bullets()) |p| {
+                    try n.push_child(p);
                 }
                 return n;
             }
@@ -182,19 +185,42 @@ pub const Parser = struct {
         return null;
     }
 
-    fn bullets(self: *Self) !?Node {
+    fn pop_bullets(self: *Self) !?Node {
         if (self.peek()) |first_token| {
-            if (first_token.symbol != tkn.Symbol.Hashtag) {
-                var n = try self.line() orelse unreachable;
+            if (is_bullet(first_token)) |my_depth| {
+                var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Bullets;
 
-                while (try self.bullets()) |p| {
-                    try n.childs.append(p);
+                while (self.peek()) |token| {
+                    if (is_bullet(token)) |depth| {
+                        if (depth <= my_depth)
+                            // This is the start of a section with a depth too low: we cannot nest
+                            break;
+                        try n.push_child(try self.pop_bullets() orelse unreachable);
+                    } else break;
                 }
                 return n;
             }
         }
         return null;
+    }
+
+    fn is_title(t: tkn.Token) ?usize {
+        return if (t.symbol == tkn.Symbol.Hashtag) t.word.len else null;
+    }
+    fn is_line(t: tkn.Token) bool {
+        return t.symbol != tkn.Symbol.Hashtag and t.symbol != tkn.Symbol.Space and t.symbol != tkn.Symbol.Minus and t.symbol != tkn.Symbol.Star;
+    }
+    fn is_bullet(t: tkn.Token) ?usize {
+        return if (t.symbol == tkn.Symbol.Space)
+            t.word.len
+        else if (t.symbol == tkn.Symbol.Minus or t.symbol == tkn.Symbol.Star)
+            0
+        else
+            null;
+    }
+    fn is_newline(t: tkn.Token) bool {
+        return t.symbol == tkn.Symbol.Newline;
     }
 
     fn next(self: *Self) ?tkn.Token {
@@ -215,7 +241,7 @@ pub const Parser = struct {
 test "Parser.parse()" {
     var parser = Parser.init(ut.allocator);
 
-    const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet";
+    const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c";
 
     var root = try parser.parse(content);
     defer root.deinit();
