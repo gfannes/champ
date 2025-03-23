@@ -5,11 +5,17 @@ const naft = @import("rubr").naft;
 
 const tkn = @import("tkn.zig");
 
+pub const Error = error{
+    UnexpectedState,
+};
+
 pub const Token = struct {
     const Self = @This();
     pub const Kind = enum {
         Text,
-        Amp,
+        Link,
+        Code,
+        Comment,
     };
 
     word: []const u8,
@@ -39,17 +45,16 @@ pub const Line = struct {
         self.tokens.deinit();
     }
 
-    pub fn append(self: *Self, word: []const u8, kind: Token.Kind) !void {
-        try self.tokens.append(Token{ .word = word, .kind = kind });
+    pub fn append(self: *Self, token: Token) !void {
+        if (token.word.len > 0)
+            try self.tokens.append(token);
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Line");
         defer n.deinit();
-        for (self.tokens.items) |token| {
-            if (token.word.len > 0 and token.word[0] != '\n')
-                n.text(token.word);
-        }
+        for (self.tokens.items) |token|
+            n.attr1(token.word);
     }
 };
 
@@ -96,17 +101,23 @@ pub const Node = struct {
     }
 };
 
+pub const Language = enum {
+    Markdown,
+    Cish,
+};
+
 pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
     ma: std.mem.Allocator,
-    next_token: ?tkn.Token = null,
+    language: Language,
 
+    next_token: ?tkn.Token = null,
     tokenizer: tkn.Tokenizer = undefined,
 
-    pub fn init(ma: std.mem.Allocator) Self {
-        return Self{ .ma = ma };
+    pub fn init(ma: std.mem.Allocator, language: Language) Self {
+        return Self{ .ma = ma, .language = language };
     }
 
     pub fn parse(self: *Self, content: []const u8) !Node {
@@ -114,35 +125,103 @@ pub const Parser = struct {
         root.type = Node.Type.Root;
 
         self.tokenizer = tkn.Tokenizer.init(content);
-        while (true) {
-            std.debug.print("parse()\n", .{});
-            if (try self.pop_section()) |el| {
-                try root.push_child(el);
-            } else if (try self.pop_paragraph()) |el| {
-                try root.push_child(el);
-            } else if (try self.pop_bullets()) |el| {
-                try root.push_child(el);
-            } else {
-                break;
-            }
+        switch (self.language) {
+            Language.Markdown => while (true) {
+                if (try self.pop_section()) |el|
+                    try root.push_child(el)
+                else if (try self.pop_paragraph()) |el|
+                    try root.push_child(el)
+                else if (try self.pop_bullets()) |el|
+                    try root.push_child(el)
+                else
+                    break;
+            },
+            Language.Cish => while (true) {
+                if (try self.pop_line()) |line|
+                    try root.push_child(line)
+                else
+                    break;
+            },
         }
 
         return root;
     }
 
     fn pop_line(self: *Self) !?Node {
-        var maybe_n: ?Node = null;
-        while (self.next()) |token| {
-            std.debug.print("Token {s}\n", .{token.word});
-            if (maybe_n == null)
-                maybe_n = Node.init(self.ma);
-            if (maybe_n) |*n| {
-                try n.line.append(token.word, Token.Kind.Text);
-                if (is_newline(token))
-                    break;
-            } else unreachable;
+        if (self.tokenizer.empty())
+            return null;
+
+        var n = Node.init(self.ma);
+
+        switch (self.language) {
+            Language.Markdown => try self.pop_line_markdown(&n),
+            Language.Cish => try self.pop_line_cish(&n),
         }
-        return maybe_n;
+
+        return n;
+    }
+
+    fn pop_line_markdown(self: *Self, n: *Node) !void {
+        if (self.pop_markdown_text()) |text|
+            try n.line.append(text);
+    }
+    fn pop_markdown_text(self: *Self) ?Token {
+        var maybe_out_token: ?Token = null;
+        while (self.next()) |in_token| {
+            if (is_newline(in_token))
+                break;
+
+            if (maybe_out_token) |*out_token|
+                out_token.word.len += in_token.word.len
+            else
+                maybe_out_token = Token{ .word = in_token.word, .kind = Token.Kind.Text };
+        }
+        return maybe_out_token;
+    }
+
+    fn pop_line_cish(self: *Self, n: *Node) !void {
+        if (self.pop_cish_code()) |code|
+            try n.line.append(code);
+        if (self.pop_cish_comment()) |comment|
+            try n.line.append(comment);
+    }
+    fn pop_cish_code(self: *Self) ?Token {
+        var maybe_out_token: ?Token = null;
+
+        while (true) {
+            if (self.peek()) |in_token|
+                if (is_comment(in_token, Language.Cish))
+                    break;
+
+            if (self.next()) |in_token| {
+                if (is_newline(in_token))
+                    break;
+
+                if (maybe_out_token) |*out_token|
+                    out_token.word.len += in_token.word.len
+                else
+                    maybe_out_token = Token{ .word = in_token.word, .kind = Token.Kind.Code };
+            }
+        }
+
+        return maybe_out_token;
+    }
+    fn pop_cish_comment(self: *Self) ?Token {
+        if (self.peek()) |first_token| {
+            if (!is_comment(first_token, Language.Cish))
+                return null;
+
+            var out_token = Token{ .word = first_token.word, .kind = Token.Kind.Comment };
+            out_token.word.len = 0;
+
+            while (self.next()) |in_token| {
+                if (is_newline(in_token))
+                    return out_token;
+                out_token.word.len += in_token.word.len;
+            }
+            return out_token;
+        }
+        return null;
     }
 
     fn pop_section(self: *Self) !?Node {
@@ -219,6 +298,12 @@ pub const Parser = struct {
         else
             null;
     }
+    fn is_comment(t: tkn.Token, language: Language) bool {
+        return switch (language) {
+            Language.Cish => t.symbol == tkn.Symbol.Slash,
+            else => false,
+        };
+    }
     fn is_newline(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Newline;
     }
@@ -237,15 +322,27 @@ pub const Parser = struct {
     }
 };
 
-// pub fn main() !void {
 test "Parser.parse()" {
-    var parser = Parser.init(ut.allocator);
+    {
+        var parser = Parser.init(ut.allocator, Language.Markdown);
 
-    const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c";
+        const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c";
 
-    var root = try parser.parse(content);
-    defer root.deinit();
+        var root = try parser.parse(content);
+        defer root.deinit();
 
-    var n = naft.Node.init(null);
-    root.write(&n);
+        var n = naft.Node.init(null);
+        root.write(&n);
+    }
+    {
+        var parser = Parser.init(ut.allocator, Language.Cish);
+
+        const content = "#include <iostream>\nint main(){\n  std::cout << \"Hello world.\" << std::endl; // &todo: place real program here\nreturn 0;\n}";
+
+        var root = try parser.parse(content);
+        defer root.deinit();
+
+        var n = naft.Node.init(null);
+        root.write(&n);
+    }
 }
