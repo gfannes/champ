@@ -8,7 +8,7 @@ const ignore = @import("rubr").ignore;
 const cli = @import("cli.zig");
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
-const config = @import("config.zig");
+const cfg = @import("cfg.zig");
 
 pub const Error = error{
     UnknownFileType,
@@ -16,7 +16,7 @@ pub const Error = error{
 
 pub const App = struct {
     options: *const cli.Options,
-    config: *const config.Config,
+    config: *const cfg.Config,
     ma: std.mem.Allocator,
 
     pub fn run(self: App) !void {
@@ -46,7 +46,7 @@ pub const App = struct {
                 const Buffer = std.ArrayList(u8);
 
                 outer: *const App,
-                grove: *const config.Grove,
+                grove: *const cfg.Grove,
                 content: *String,
                 ma: std.mem.Allocator,
 
