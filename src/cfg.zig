@@ -20,7 +20,7 @@ pub const Config = struct {
     }
 
     pub fn loadTestDefaults(self: *Config) !void {
-        self.max_memsize = 1024 * 1024 * 1024;
+        self.max_memsize = 10 * 1024 * 1024 * 1024;
 
         var envmap = try std.process.getEnvMap(self.ma);
         defer envmap.deinit();

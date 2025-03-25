@@ -16,6 +16,7 @@ pub const Term = struct {
         Link,
         Code,
         Comment,
+        Newline,
         Amp,
     };
 
@@ -26,10 +27,8 @@ pub const Term = struct {
         var n = parent.node("Term");
         defer n.deinit();
         n.attr("kind", self.kind);
-        if (self.word.len > 0 and self.word[0] != '\n')
-            n.attr("word", self.word)
-        else
-            n.attr("word", "<newline>");
+        if (self.kind != Kind.Newline)
+            n.attr("word", self.word);
     }
 };
 
@@ -54,8 +53,10 @@ pub const Line = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Line");
         defer n.deinit();
-        for (self.terms.items) |term|
-            n.attr1(term.word);
+        for (self.terms.items) |term| {
+            // n.attr1(term.word);
+            term.write(&n);
+        }
     }
 };
 
@@ -185,113 +186,97 @@ pub const Parser = struct {
     }
 
     fn pop_line_text(self: *Self, n: *Node) !void {
-        while (true) {
-            if (self.pop_amp()) |amp|
-                try n.line.append(amp)
-            else if (self.pop_text()) |text|
-                try n.line.append(text)
-            else
+        while (self.next()) |token| {
+            if (is_newline(token)) {
+                try n.line.append(self.pop_newline(token));
                 break;
+            } else if (is_amp(token)) {
+                try n.line.append(self.pop_amp(token));
+            } else {
+                try n.line.append(self.pop_text(token));
+            }
         }
     }
 
     fn pop_line_with_comment(self: *Self, n: *Node) !void {
-        if (self.pop_code()) |code|
-            try n.line.append(code);
-
-        if (self.pop_comment()) |comment| {
-            try n.line.append(comment);
-
-            while (true) {
-                if (self.pop_amp()) |amp|
-                    try n.line.append(amp)
-                else if (self.pop_text()) |text|
-                    try n.line.append(text)
-                else
-                    break;
+        var found_comment = false;
+        while (self.next()) |token| {
+            if (is_newline(token)) {
+                try n.line.append(self.pop_newline(token));
+                break;
+            } else if (!found_comment and is_comment(token, self.language)) {
+                try n.line.append(self.pop_comment(token));
+                found_comment = true;
+            } else if (found_comment) {
+                if (is_amp(token)) {
+                    try n.line.append(self.pop_amp(token));
+                } else {
+                    try n.line.append(self.pop_text(token));
+                }
+            } else {
+                try n.line.append(self.pop_code(token));
             }
         }
     }
 
-    fn pop_amp(self: *Self) ?Term {
-        if (self.peek()) |first_token| {
-            if (!is_amp(first_token))
-                return null;
-            self.commit_peek();
+    fn pop_newline(_: *Self, token: tkn.Token) Term {
+        std.debug.assert(is_newline(token));
 
-            var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
-            while (self.peek()) |token| {
-                if (is_whitespace(token) or is_newline(token))
-                    break;
-                self.commit_peek();
-
-                amp.word.len += token.word.len;
-            }
-            return amp;
-        }
-        return null;
+        return Term{ .word = token.word, .kind = Term.Kind.Newline };
     }
 
-    fn pop_text(self: *Self) ?Term {
-        if (self.peek()) |first_token| {
-            if (is_amp(first_token))
-                return null;
+    fn pop_amp(self: *Self, first_token: tkn.Token) Term {
+        std.debug.assert(first_token.symbol == tkn.Symbol.Ampersand);
+
+        var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
+        while (self.peek()) |token| {
+            if (is_whitespace(token) or is_newline(token))
+                break;
             self.commit_peek();
 
-            var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
-            while (self.peek()) |token| {
-                if (is_amp(token))
-                    break;
-                self.commit_peek();
-
-                text.word.len += token.word.len;
-
-                if (is_newline(token))
-                    break;
-            }
-            return text;
+            amp.word.len += token.word.len;
         }
-        return null;
+        return amp;
     }
 
-    fn pop_code(self: *Self) ?Term {
-        if (self.peek()) |first_token| {
-            if (is_comment(first_token, self.language))
-                return null;
+    fn pop_text(self: *Self, first_token: tkn.Token) Term {
+        std.debug.assert(first_token.symbol != tkn.Symbol.Ampersand);
+        std.debug.assert(first_token.symbol != tkn.Symbol.Newline);
+
+        var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
+        while (self.peek()) |token| {
+            if (is_amp(token) or is_newline(token))
+                break;
             self.commit_peek();
 
-            var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
-            while (self.peek()) |token| {
-                if (is_comment(token, self.language))
-                    break;
-                self.commit_peek();
-
-                code.word.len += token.word.len;
-
-                if (is_newline(token))
-                    break;
-            }
-            return code;
+            text.word.len += token.word.len;
         }
-        return null;
+        return text;
     }
 
-    fn pop_comment(self: *Self) ?Term {
-        if (self.peek()) |first_token| {
-            if (!is_comment(first_token, self.language))
-                return null;
+    fn pop_code(self: *Self, first_token: tkn.Token) Term {
+        var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
+        while (self.peek()) |token| {
+            if (is_comment(token, self.language) or is_newline(token))
+                break;
             self.commit_peek();
 
-            var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
-            while (self.peek()) |token| {
-                if (!is_whitespace(token) or is_newline(token))
-                    break;
-                self.commit_peek();
-                term.word.len += token.word.len;
-            }
-            return term;
+            code.word.len += token.word.len;
         }
-        return null;
+        return code;
+    }
+
+    fn pop_comment(self: *Self, first_token: tkn.Token) Term {
+        std.debug.assert(is_comment(first_token, self.language));
+
+        var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+        while (self.peek()) |token| {
+            if (!is_whitespace(token) or is_newline(token))
+                break;
+            self.commit_peek();
+            term.word.len += token.word.len;
+        }
+        return term;
     }
 
     fn pop_section(self: *Self) !?Node {
