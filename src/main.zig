@@ -2,7 +2,7 @@ const std = @import("std");
 
 const cli = @import("cli.zig");
 const cfg = @import("cfg.zig");
-const App = @import("app.zig").App;
+const app = @import("app.zig");
 
 pub fn main() !void {
     var gp = std.heap.GeneralPurposeAllocator(.{}){};
@@ -35,7 +35,7 @@ pub fn main() !void {
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        var app = App{ .options = &options, .config = &config, .ma = ma };
-        try app.run();
+        var my_app = app.App{ .options = &options, .config = &config, .ma = ma };
+        try my_app.run();
     }
 }
