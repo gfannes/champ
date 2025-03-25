@@ -16,6 +16,7 @@ pub const Term = struct {
         Link,
         Code,
         Comment,
+        Amp,
     };
 
     word: []const u8,
@@ -184,62 +185,108 @@ pub const Parser = struct {
     }
 
     fn pop_line_text(self: *Self, n: *Node) !void {
-        if (self.pop_text()) |text|
-            try n.line.append(text);
-    }
-    fn pop_text(self: *Self) ?Term {
-        var maybe_term: ?Term = null;
-        while (self.next()) |token| {
-            if (is_newline(token))
-                break;
-
-            if (maybe_term) |*term|
-                term.word.len += token.word.len
+        while (true) {
+            if (self.pop_amp()) |amp|
+                try n.line.append(amp)
+            else if (self.pop_text()) |text|
+                try n.line.append(text)
             else
-                maybe_term = Term{ .word = token.word, .kind = Term.Kind.Text };
+                break;
         }
-        return maybe_term;
     }
 
     fn pop_line_with_comment(self: *Self, n: *Node) !void {
         if (self.pop_code()) |code|
             try n.line.append(code);
-        if (self.pop_comment()) |comment|
+
+        if (self.pop_comment()) |comment| {
             try n.line.append(comment);
-    }
-    fn pop_code(self: *Self) ?Term {
-        var maybe_term: ?Term = null;
 
-        while (true) {
-            if (self.peek()) |token| {
-                if (is_comment(token, self.language))
+            while (true) {
+                if (self.pop_amp()) |amp|
+                    try n.line.append(amp)
+                else if (self.pop_text()) |text|
+                    try n.line.append(text)
+                else
                     break;
-            } else break;
+            }
+        }
+    }
 
-            if (self.next()) |token| {
+    fn pop_amp(self: *Self) ?Term {
+        if (self.peek()) |first_token| {
+            if (!is_amp(first_token))
+                return null;
+            self.commit_peek();
+
+            var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
+            while (self.peek()) |token| {
+                if (is_whitespace(token) or is_newline(token))
+                    break;
+                self.commit_peek();
+
+                amp.word.len += token.word.len;
+            }
+            return amp;
+        }
+        return null;
+    }
+
+    fn pop_text(self: *Self) ?Term {
+        if (self.peek()) |first_token| {
+            if (is_amp(first_token))
+                return null;
+            self.commit_peek();
+
+            var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
+            while (self.peek()) |token| {
+                if (is_amp(token))
+                    break;
+                self.commit_peek();
+
+                text.word.len += token.word.len;
+
                 if (is_newline(token))
                     break;
-
-                if (maybe_term) |*term|
-                    term.word.len += token.word.len
-                else
-                    maybe_term = Term{ .word = token.word, .kind = Term.Kind.Code };
-            } else unreachable;
+            }
+            return text;
         }
-
-        return maybe_term;
+        return null;
     }
+
+    fn pop_code(self: *Self) ?Term {
+        if (self.peek()) |first_token| {
+            if (is_comment(first_token, self.language))
+                return null;
+            self.commit_peek();
+
+            var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
+            while (self.peek()) |token| {
+                if (is_comment(token, self.language))
+                    break;
+                self.commit_peek();
+
+                code.word.len += token.word.len;
+
+                if (is_newline(token))
+                    break;
+            }
+            return code;
+        }
+        return null;
+    }
+
     fn pop_comment(self: *Self) ?Term {
         if (self.peek()) |first_token| {
             if (!is_comment(first_token, self.language))
                 return null;
+            self.commit_peek();
 
             var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
-            term.word.len = 0;
-
-            while (self.next()) |token| {
-                if (is_newline(token))
-                    return term;
+            while (self.peek()) |token| {
+                if (!is_whitespace(token) or is_newline(token))
+                    break;
+                self.commit_peek();
                 term.word.len += token.word.len;
             }
             return term;
@@ -328,6 +375,12 @@ pub const Parser = struct {
             else => false,
         };
     }
+    fn is_amp(t: tkn.Token) bool {
+        return t.symbol == tkn.Symbol.Ampersand and t.word.len == 1;
+    }
+    fn is_whitespace(t: tkn.Token) bool {
+        return t.symbol == tkn.Symbol.Space;
+    }
     fn is_newline(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Newline;
     }
@@ -343,6 +396,9 @@ pub const Parser = struct {
         if (self.next_token == null)
             self.next_token = self.tokenizer.next();
         return self.next_token;
+    }
+    fn commit_peek(self: *Self) void {
+        self.next_token = null;
     }
     fn empty(self: *Self) bool {
         if (self.next_token == null)

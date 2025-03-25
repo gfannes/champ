@@ -4,9 +4,18 @@ const Options = @import("cli.zig").Options;
 const App = @import("app.zig").App;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const ma = gpa.allocator();
+    var gp = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gp.deinit();
+    const gpa = gp.allocator();
+
+    const buffer = try gpa.alloc(u8, 1024 * 1024 * 1024);
+    defer gpa.free(buffer);
+    var fb = std.heap.FixedBufferAllocator.init(buffer);
+    const fba = fb.allocator();
+
+    // gpa: 1075ms
+    // fba: 640ms
+    const ma = if (false) gpa else fba;
 
     var options = Options{};
     options.init(ma);
