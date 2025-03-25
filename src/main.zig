@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const Options = @import("cli.zig").Options;
+const cli = @import("cli.zig");
+const config = @import("config.zig");
 const App = @import("app.zig").App;
 
 pub fn main() !void {
@@ -8,31 +9,32 @@ pub fn main() !void {
     defer _ = gp.deinit();
     const gpa = gp.allocator();
 
-    const buffer = try gpa.alloc(u8, 1024 * 1024 * 1024);
-    defer gpa.free(buffer);
-    var fb = std.heap.FixedBufferAllocator.init(buffer);
-    const fba = fb.allocator();
+    var options = cli.Options{};
+    options.init(gpa);
+    defer options.deinit();
+
+    var cfg = config.Config.init(gpa);
+    defer cfg.deinit();
+    try cfg.loadTestDefaults();
 
     // gpa: 1075ms
     // fba: 640ms
-    const ma = if (false) gpa else fba;
-
-    var options = Options{};
-    options.init(ma);
-    defer options.deinit();
+    var ma = gpa;
+    var maybe_fb: ?std.heap.FixedBufferAllocator = null;
+    defer if (maybe_fb) |fb| gpa.free(fb.buffer);
+    if (cfg.max_memsize) |max_memsize| {
+        maybe_fb = std.heap.FixedBufferAllocator.init(try gpa.alloc(u8, max_memsize));
+        if (maybe_fb) |*fb| ma = fb.allocator();
+    }
 
     options.parse() catch {
         options.print_help = true;
     };
 
-    std.debug.print("After parsing\n", .{});
-
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        var app = try App.init(&options, ma);
-        defer app.deinit();
-
+        var app = App{ .options = &options, .config = &cfg, .ma = ma };
         try app.run();
     }
 }

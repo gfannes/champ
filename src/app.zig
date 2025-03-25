@@ -5,7 +5,7 @@ const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const ignore = @import("rubr").ignore;
 
-const Options = @import("cli.zig").Options;
+const cli = @import("cli.zig");
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
 const config = @import("config.zig");
@@ -15,20 +15,9 @@ pub const Error = error{
 };
 
 pub const App = struct {
-    options: *const Options,
-    config: config.Config,
-
+    options: *const cli.Options,
+    config: *const config.Config,
     ma: std.mem.Allocator,
-
-    pub fn init(options: *const Options, ma: std.mem.Allocator) !App {
-        var cfg = config.Config.init(ma);
-        try cfg.loadTestDefaults();
-        return App{ .options = options, .config = cfg, .ma = ma };
-    }
-
-    pub fn deinit(self: *App) void {
-        self.config.deinit();
-    }
 
     pub fn run(self: App) !void {
         const start_time = std.time.milliTimestamp();

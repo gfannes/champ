@@ -5,6 +5,8 @@ pub const Config = struct {
     const Groves = std.ArrayList(Grove);
 
     groves: Groves,
+    max_memsize: ?usize = null,
+
     ma: std.mem.Allocator,
 
     pub fn init(ma: std.mem.Allocator) Config {
@@ -18,6 +20,8 @@ pub const Config = struct {
     }
 
     pub fn loadTestDefaults(self: *Config) !void {
+        self.max_memsize = 1024 * 1024 * 1024;
+
         var envmap = try std.process.getEnvMap(self.ma);
         defer envmap.deinit();
 
