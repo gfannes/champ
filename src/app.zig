@@ -10,6 +10,10 @@ const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
 const config = @import("config.zig");
 
+pub const Error = error{
+    UnknownFileType,
+};
+
 pub const App = struct {
     options: *const Options,
     config: config.Config,
@@ -48,9 +52,6 @@ pub const App = struct {
             var content = String.init(self.ma);
             defer content.deinit();
 
-            var parser = mero.Parser.init(self.ma);
-            defer parser.deinit();
-
             var cb = struct {
                 const Self = @This();
                 const Buffer = std.ArrayList(u8);
@@ -58,7 +59,7 @@ pub const App = struct {
                 outer: *const App,
                 grove: *const config.Grove,
                 content: *String,
-                parser: *mero.Parser,
+                ma: std.mem.Allocator,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
@@ -116,13 +117,21 @@ pub const App = struct {
                     }
 
                     if (my.outer.options.do_parse) {
-                        try my.parser.parse(my.content.items);
-                        for (my.parser.lines.items) |line| {
-                            std.debug.print("Line: {s}\n", .{line});
+                        const my_ext = std.fs.path.extension(name);
+                        if (mero.Language.from_extension(my_ext)) |language| {
+                            var parser = mero.Parser.init(my.ma, language);
+                            var root = try parser.parse(my.content.items);
+                            defer root.deinit();
+                            // for (parser.lines.items) |line| {
+                            //     std.debug.print("Line: {s}\n", .{line});
+                            // }
+                        } else {
+                            std.debug.print("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+                            // return Error.UnknownFileType;
                         }
                     }
                 }
-            }{ .outer = &self, .grove = &grove, .content = &content, .parser = &parser };
+            }{ .outer = &self, .grove = &grove, .content = &content, .ma = self.ma };
             cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});

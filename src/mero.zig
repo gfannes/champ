@@ -9,7 +9,7 @@ pub const Error = error{
     UnexpectedState,
 };
 
-pub const Token = struct {
+pub const Term = struct {
     const Self = @This();
     pub const Kind = enum {
         Text,
@@ -22,7 +22,7 @@ pub const Token = struct {
     kind: Kind,
 
     pub fn write(self: Self, parent: *naft.Node) void {
-        var n = parent.node("Token");
+        var n = parent.node("Term");
         defer n.deinit();
         n.attr("kind", self.kind);
         if (self.word.len > 0 and self.word[0] != '\n')
@@ -34,27 +34,27 @@ pub const Token = struct {
 
 pub const Line = struct {
     const Self = @This();
-    const Tokens = std.ArrayList(Token);
+    const Terms = std.ArrayList(Term);
 
-    tokens: Tokens,
+    terms: Terms,
 
     pub fn init(ma: std.mem.Allocator) Line {
-        return Self{ .tokens = Tokens.init(ma) };
+        return Self{ .terms = Terms.init(ma) };
     }
     pub fn deinit(self: *Self) void {
-        self.tokens.deinit();
+        self.terms.deinit();
     }
 
-    pub fn append(self: *Self, token: Token) !void {
-        if (token.word.len > 0)
-            try self.tokens.append(token);
+    pub fn append(self: *Self, term: Term) !void {
+        if (term.word.len > 0)
+            try self.terms.append(term);
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Line");
         defer n.deinit();
-        for (self.tokens.items) |token|
-            n.attr1(token.word);
+        for (self.terms.items) |term|
+            n.attr1(term.word);
     }
 };
 
@@ -104,6 +104,26 @@ pub const Node = struct {
 pub const Language = enum {
     Markdown,
     Cish,
+    Ruby,
+    Text,
+
+    pub fn from_extension(ext: []const u8) ?Language {
+        if (std.mem.eql(u8, ext, ".md"))
+            return Language.Markdown;
+
+        if (std.mem.eql(u8, ext, ".rb"))
+            return Language.Ruby;
+
+        if (std.mem.eql(u8, ext, ".txt"))
+            return Language.Text;
+
+        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai" };
+        for (cish_exts) |el|
+            if (std.mem.eql(u8, ext, el))
+                return Language.Cish;
+
+        return null;
+    }
 };
 
 pub const Parser = struct {
@@ -122,6 +142,7 @@ pub const Parser = struct {
 
     pub fn parse(self: *Self, content: []const u8) !Node {
         var root = Node.init(self.ma);
+        errdefer root.deinit();
         root.type = Node.Type.Root;
 
         self.tokenizer = tkn.Tokenizer.init(content);
@@ -136,7 +157,7 @@ pub const Parser = struct {
                 else
                     break;
             },
-            Language.Cish => while (true) {
+            else => while (true) {
                 if (try self.pop_line()) |line|
                     try root.push_child(line)
                 else
@@ -148,78 +169,80 @@ pub const Parser = struct {
     }
 
     fn pop_line(self: *Self) !?Node {
-        if (self.tokenizer.empty())
+        if (self.empty())
             return null;
 
         var n = Node.init(self.ma);
+        errdefer n.deinit();
 
         switch (self.language) {
-            Language.Markdown => try self.pop_line_markdown(&n),
-            Language.Cish => try self.pop_line_cish(&n),
+            Language.Markdown, Language.Text => try self.pop_line_text(&n),
+            Language.Cish, Language.Ruby => try self.pop_line_with_comment(&n),
         }
 
         return n;
     }
 
-    fn pop_line_markdown(self: *Self, n: *Node) !void {
-        if (self.pop_markdown_text()) |text|
+    fn pop_line_text(self: *Self, n: *Node) !void {
+        if (self.pop_text()) |text|
             try n.line.append(text);
     }
-    fn pop_markdown_text(self: *Self) ?Token {
-        var maybe_out_token: ?Token = null;
-        while (self.next()) |in_token| {
-            if (is_newline(in_token))
+    fn pop_text(self: *Self) ?Term {
+        var maybe_term: ?Term = null;
+        while (self.next()) |token| {
+            if (is_newline(token))
                 break;
 
-            if (maybe_out_token) |*out_token|
-                out_token.word.len += in_token.word.len
+            if (maybe_term) |*term|
+                term.word.len += token.word.len
             else
-                maybe_out_token = Token{ .word = in_token.word, .kind = Token.Kind.Text };
+                maybe_term = Term{ .word = token.word, .kind = Term.Kind.Text };
         }
-        return maybe_out_token;
+        return maybe_term;
     }
 
-    fn pop_line_cish(self: *Self, n: *Node) !void {
-        if (self.pop_cish_code()) |code|
+    fn pop_line_with_comment(self: *Self, n: *Node) !void {
+        if (self.pop_code()) |code|
             try n.line.append(code);
-        if (self.pop_cish_comment()) |comment|
+        if (self.pop_comment()) |comment|
             try n.line.append(comment);
     }
-    fn pop_cish_code(self: *Self) ?Token {
-        var maybe_out_token: ?Token = null;
+    fn pop_code(self: *Self) ?Term {
+        var maybe_term: ?Term = null;
 
         while (true) {
-            if (self.peek()) |in_token|
-                if (is_comment(in_token, Language.Cish))
+            if (self.peek()) |token| {
+                if (is_comment(token, self.language))
+                    break;
+            } else break;
+
+            if (self.next()) |token| {
+                if (is_newline(token))
                     break;
 
-            if (self.next()) |in_token| {
-                if (is_newline(in_token))
-                    break;
-
-                if (maybe_out_token) |*out_token|
-                    out_token.word.len += in_token.word.len
+                if (maybe_term) |*term|
+                    term.word.len += token.word.len
                 else
-                    maybe_out_token = Token{ .word = in_token.word, .kind = Token.Kind.Code };
-            }
+                    maybe_term = Term{ .word = token.word, .kind = Term.Kind.Code };
+            } else unreachable;
         }
 
-        return maybe_out_token;
+        return maybe_term;
     }
-    fn pop_cish_comment(self: *Self) ?Token {
+    fn pop_comment(self: *Self) ?Term {
         if (self.peek()) |first_token| {
-            if (!is_comment(first_token, Language.Cish))
+            if (!is_comment(first_token, self.language))
                 return null;
 
-            var out_token = Token{ .word = first_token.word, .kind = Token.Kind.Comment };
-            out_token.word.len = 0;
+            var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+            term.word.len = 0;
 
-            while (self.next()) |in_token| {
-                if (is_newline(in_token))
-                    return out_token;
-                out_token.word.len += in_token.word.len;
+            while (self.next()) |token| {
+                if (is_newline(token))
+                    return term;
+                term.word.len += token.word.len;
             }
-            return out_token;
+            return term;
         }
         return null;
     }
@@ -301,6 +324,7 @@ pub const Parser = struct {
     fn is_comment(t: tkn.Token, language: Language) bool {
         return switch (language) {
             Language.Cish => t.symbol == tkn.Symbol.Slash,
+            Language.Ruby => t.symbol == tkn.Symbol.Hashtag,
             else => false,
         };
     }
@@ -319,6 +343,11 @@ pub const Parser = struct {
         if (self.next_token == null)
             self.next_token = self.tokenizer.next();
         return self.next_token;
+    }
+    fn empty(self: *Self) bool {
+        if (self.next_token == null)
+            self.next_token = self.tokenizer.next();
+        return self.next_token == null;
     }
 };
 

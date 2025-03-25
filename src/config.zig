@@ -28,7 +28,7 @@ pub const Config = struct {
 
         var buffer: [std.fs.max_path_bytes]u8 = undefined;
         var fba = std.heap.FixedBufferAllocator.init(&buffer);
-        const am_dir = try std.mem.concat(fba.allocator(), u8, &[_][]const u8{ home_dir, "/auro/master" });
+        const am_dir = try std.mem.concat(fba.allocator(), u8, &[_][]const u8{ home_dir, "/auro/root-all" });
 
         {
             var grove = try Grove.init("am", am_dir, self.ma);

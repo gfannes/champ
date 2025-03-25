@@ -74,10 +74,6 @@ pub const Tokenizer = struct {
 
         return maybe_token;
     }
-
-    pub fn empty(self: Self) bool {
-        return self.content.len == 0;
-    }
 };
 
 // &perf: Reducing the Symbols to only those needed will result in larger Tokens and thus less iterations
