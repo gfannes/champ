@@ -11,9 +11,9 @@ pub const Options = struct {
     exe_name: []const u8 = &.{},
     print_help: bool = false,
     groves: Strings = undefined,
-    do_print: bool = false,
     do_scan: bool = false,
     do_parse: bool = false,
+    verbose: usize = 0,
 
     _args: [][*:0]u8 = &.{},
     _aa: std.heap.ArenaAllocator = undefined,
@@ -33,6 +33,9 @@ pub const Options = struct {
         while (self._pop()) |arg| {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
+            } else if (arg.is("-v", "--verbose")) {
+                if (self._pop()) |x|
+                    self.verbose = try x.as(usize);
             } else if (arg.is("-g", "--grove")) {
                 if (self._pop()) |x|
                     try self.groves.append(x.arg);
@@ -40,8 +43,6 @@ pub const Options = struct {
                 self.do_scan = true;
             } else if (arg.is("-p", "--parse")) {
                 self.do_parse = true;
-            } else if (arg.is("-P", "--print")) {
-                self.do_print = true;
             } else {
                 std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
                 return error.UnknownArgument;
@@ -52,11 +53,11 @@ pub const Options = struct {
     pub fn help(_: Options) []const u8 {
         const msg = "" ++
             "chimp <options>\n" ++
-            "    -h  --help       Print this help\n" ++
-            "    -g  --grove      Grove\n" ++
-            "    -s  --scan       Scan\n" ++
-            "    -p  --parse      Parse\n" ++
-            "    -P  --print      Print\n" ++
+            "    -h  --help           Print this help\n" ++
+            "    -v  --verbose LEVEL  Verbosity LEVEL [optional, default 0]\n" ++
+            "    -g  --grove   NAME   Use grove NAME\n" ++
+            "    -s  --scan           Scan\n" ++
+            "    -p  --parse          Parse\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }
@@ -74,9 +75,15 @@ pub const Options = struct {
 };
 
 const Arg = struct {
+    const Self = @This();
+
     arg: []const u8,
 
     fn is(self: Arg, sh: []const u8, lh: []const u8) bool {
         return std.mem.eql(u8, self.arg, sh) or std.mem.eql(u8, self.arg, lh);
+    }
+
+    fn as(self: Self, T: type) !T {
+        return try std.fmt.parseInt(T, self.arg, 10);
     }
 };

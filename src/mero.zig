@@ -80,6 +80,16 @@ pub const Node = struct {
         self.childs.deinit();
     }
 
+    pub fn each_amp(self: Self, cb: anytype) !void {
+        for (self.line.terms.items) |term| {
+            if (term.kind == Term.Kind.Amp)
+                try cb.call(term.word);
+        }
+        for (self.childs.items) |child| {
+            try child.each_amp(cb);
+        }
+    }
+
     pub fn goc_child(self: *Self, ix: usize) !*Node {
         while (ix >= self.childs.items.len) {
             try self.childs.append(Node.init(self.ma));
@@ -100,6 +110,22 @@ pub const Node = struct {
         for (self.childs.items) |child| {
             child.write(&n);
         }
+    }
+};
+
+pub const File = struct {
+    const Self = @This();
+
+    root: Node,
+    name: []const u8,
+    ma: std.mem.Allocator,
+
+    pub fn init(root: Node, name: []const u8, ma: std.mem.Allocator) !File {
+        return File{ .root = root, .name = try ma.dupe(u8, name), .ma = ma };
+    }
+    pub fn deinit(self: *Self) void {
+        self.root.deinit();
+        self.ma.free(self.name);
     }
 };
 
@@ -185,6 +211,7 @@ pub const Parser = struct {
         return n;
     }
 
+    // &todo: handle inline code, code blocks and formulas for Markdown
     fn pop_line_text(self: *Self, n: *Node) !void {
         while (self.next()) |token| {
             if (is_newline(token)) {
@@ -198,6 +225,7 @@ pub const Parser = struct {
         }
     }
 
+    // &todo: handle multiline comments
     fn pop_line_with_comment(self: *Self, n: *Node) !void {
         var found_comment = false;
         while (self.next()) |token| {
@@ -207,12 +235,16 @@ pub const Parser = struct {
             } else if (!found_comment and is_comment(token, self.language)) {
                 try n.line.append(self.pop_comment(token));
                 found_comment = true;
-            } else if (found_comment) {
-                if (is_amp(token)) {
-                    try n.line.append(self.pop_amp(token));
-                } else {
-                    try n.line.append(self.pop_text(token));
+
+                // We only check for Amp right after the comment
+                if (self.peek()) |token2| {
+                    if (is_amp(token2)) {
+                        self.commit_peek();
+                        try n.line.append(self.pop_amp(token2));
+                    }
                 }
+            } else if (found_comment) {
+                try n.line.append(self.pop_text(token));
             } else {
                 try n.line.append(self.pop_code(token));
             }
@@ -225,6 +257,12 @@ pub const Parser = struct {
         return Term{ .word = token.word, .kind = Term.Kind.Newline };
     }
 
+    // &todo: do not accept a sequences that
+    // - ends with [,()-;=]
+    // - start with '&#'
+    // - are empty
+    // &todo: do not include trailing ':'
+    // &todo: only accept amp right before whitespace or comment (+whitespace)
     fn pop_amp(self: *Self, first_token: tkn.Token) Term {
         std.debug.assert(first_token.symbol == tkn.Symbol.Ampersand);
 

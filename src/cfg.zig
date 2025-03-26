@@ -43,6 +43,14 @@ pub const Config = struct {
             try self.groves.append(grove);
         }
         {
+            var grove = try Grove.init("amt", am_dir, self.ma);
+            for ([_][]const u8{"txt"}) |ext| {
+                try grove.addInclude(ext);
+            }
+            grove.max_size = 256000;
+            try self.groves.append(grove);
+        }
+        {
             var grove = try Grove.init("amdebug", am_dir, self.ma);
             for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
                 try grove.addInclude(ext);

@@ -5,6 +5,9 @@ const cfg = @import("cfg.zig");
 const app = @import("app.zig");
 
 pub fn main() !void {
+    var stdout = std.io.getStdOut();
+    var out = stdout.writer();
+
     var gp = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gp.deinit();
     const gpa = gp.allocator();
@@ -27,7 +30,7 @@ pub fn main() !void {
     var maybe_fb: ?std.heap.FixedBufferAllocator = null;
     defer if (maybe_fb) |fb| gpa.free(fb.buffer);
     if (config.max_memsize) |max_memsize| {
-        std.debug.print("Running with max_memsize {}\n", .{max_memsize});
+        std.debug.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
         maybe_fb = std.heap.FixedBufferAllocator.init(try gpa.alloc(u8, max_memsize));
         if (maybe_fb) |*fb| ma = fb.allocator();
     }
@@ -35,7 +38,7 @@ pub fn main() !void {
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        var my_app = app.App{ .options = &options, .config = &config, .ma = ma };
+        var my_app = app.App{ .options = &options, .config = &config, .out = &out, .ma = ma };
         try my_app.run();
     }
 }

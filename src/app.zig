@@ -15,18 +15,21 @@ pub const Error = error{
 };
 
 pub const App = struct {
+    const Self = @This();
+
     options: *const cli.Options,
     config: *const cfg.Config,
+    out: *const std.fs.File.Writer,
     ma: std.mem.Allocator,
 
-    pub fn run(self: App) !void {
+    pub fn run(self: Self) !void {
         const start_time = std.time.milliTimestamp();
         try self._run();
         const stop_time = std.time.milliTimestamp();
         std.debug.print("Duration: {}ms\n", .{stop_time - start_time});
     }
 
-    fn _run(self: App) !void {
+    fn _run(self: Self) !void {
         for (self.config.groves.items) |grove| {
             if (!strings.contains(u8, self.options.groves.items, grove.name))
                 // Skip this grove
@@ -42,10 +45,10 @@ pub const App = struct {
             defer content.deinit();
 
             var cb = struct {
-                const Self = @This();
+                const Cb = @This();
                 const Buffer = std.ArrayList(u8);
 
-                outer: *const App,
+                outer: *const Self,
                 grove: *const cfg.Grove,
                 content: *String,
                 ma: std.mem.Allocator,
@@ -53,13 +56,10 @@ pub const App = struct {
                 file_count: usize = 0,
                 byte_count: usize = 0,
                 token_count: usize = 0,
-                out: std.fs.File.Writer = undefined,
 
-                pub fn init(slf: *Self) void {
-                    slf.out = std.io.getStdOut().writer();
-                }
+                pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
+                    // std.debug.print("Cb.call({s})\n", .{path});
 
-                pub fn call(my: *Self, dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
                     const name = path[offsets.name..];
 
                     if (my.grove.include) |include| {
@@ -82,12 +82,12 @@ pub const App = struct {
                         if (my.file_count >= max_count)
                             return;
 
-                    if (my.outer.options.do_print) {
-                        try my.out.print("{s}\n", .{path});
-                        if (false) {
-                            try my.out.print("  base {s}\n", .{path[offsets.base..]});
-                            try my.out.print("  name {s}\n", .{path[offsets.name..]});
-                        }
+                    if (my.outer.log(2)) |out| {
+                        try out.print("{s}\n", .{path});
+                    }
+                    if (my.outer.log(3)) |out| {
+                        try out.print("  base: {s}\n", .{path[offsets.base..]});
+                        try out.print("  name: {s}\n", .{path[offsets.name..]});
                     }
 
                     // Read data: 160ms
@@ -110,7 +110,27 @@ pub const App = struct {
                         if (mero.Language.from_extension(my_ext)) |language| {
                             var parser = mero.Parser.init(my.ma, language);
                             var root = try parser.parse(my.content.items);
-                            defer root.deinit();
+                            errdefer root.deinit();
+
+                            var mero_file = try mero.File.init(root, path, my.ma);
+                            defer mero_file.deinit();
+
+                            if (my.outer.log(1)) |out| {
+                                var cb = struct {
+                                    path: []const u8,
+                                    o: @TypeOf(out),
+                                    did_log_filename: bool = false,
+
+                                    pub fn call(s: *@This(), amp: []const u8) !void {
+                                        if (!s.did_log_filename) {
+                                            try s.o.print("Filename: {s}\n", .{s.path});
+                                            s.did_log_filename = true;
+                                        }
+                                        try s.o.print("{s}\n", .{amp});
+                                    }
+                                }{ .path = path, .o = out };
+                                try mero_file.root.each_amp(&cb);
+                            }
                             // for (parser.lines.items) |line| {
                             //     std.debug.print("Line: {s}\n", .{line});
                             // }
@@ -121,7 +141,6 @@ pub const App = struct {
                     }
                 }
             }{ .outer = &self, .grove = &grove, .content = &content, .ma = self.ma };
-            cb.init();
 
             // const dir = try std.fs.cwd().openDir(grove.path, .{});
             const dir = try std.fs.openDirAbsolute(grove.path, .{});
@@ -130,5 +149,11 @@ pub const App = struct {
             try w.walk(dir, &cb);
             std.debug.print("file_count: {}, byte_count {}MB, token_count {}\n", .{ cb.file_count, cb.byte_count / 1000000, cb.token_count });
         }
+    }
+
+    fn log(self: Self, level: usize) ?*const std.fs.File.Writer {
+        if (self.options.verbose >= level)
+            return self.out;
+        return null;
     }
 };
