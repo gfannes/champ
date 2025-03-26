@@ -30,24 +30,29 @@ pub const Config = struct {
             home_dir = dir;
         }
 
-        var buffer: [std.fs.max_path_bytes]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&buffer);
-        const am_dir = try std.mem.concat(fba.allocator(), u8, &[_][]const u8{ home_dir, "/auro/root-all" });
+        var am_buf: [std.fs.max_path_bytes]u8 = undefined;
+        var am_fba = std.heap.FixedBufferAllocator.init(&am_buf);
+        const am_dir = try std.mem.concat(am_fba.allocator(), u8, &[_][]const u8{ home_dir, "/auro/root-all" });
+
+        var test_buf: [std.fs.max_path_bytes]u8 = undefined;
+        var test_fba = std.heap.FixedBufferAllocator.init(&test_buf);
+        const test_dir = try std.mem.concat(test_fba.allocator(), u8, &[_][]const u8{ home_dir, "/tmp/b" });
 
         {
             var grove = try Grove.init("am", am_dir, self.ma);
-            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai" }) |ext| {
+            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai", "rs" }) |ext| {
                 try grove.addInclude(ext);
             }
             grove.max_size = 256000;
             try self.groves.append(grove);
         }
         {
-            var grove = try Grove.init("amt", am_dir, self.ma);
-            for ([_][]const u8{"txt"}) |ext| {
+            var grove = try Grove.init("amt", test_dir, self.ma);
+            for ([_][]const u8{"md"}) |ext| {
                 try grove.addInclude(ext);
             }
             grove.max_size = 256000;
+            grove.max_count = 1;
             try self.groves.append(grove);
         }
         {

@@ -15,6 +15,7 @@ pub const Term = struct {
         Text,
         Link,
         Code,
+        Formula,
         Comment,
         Newline,
         Amp,
@@ -63,7 +64,7 @@ pub const Line = struct {
 pub const Node = struct {
     const Self = @This();
     const Childs = std.ArrayList(Node);
-    const Type = enum { Root, Section, Paragraph, Bullets };
+    const Type = enum { Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
     line: Line,
@@ -161,7 +162,6 @@ pub const Parser = struct {
     ma: std.mem.Allocator,
     language: Language,
 
-    next_token: ?tkn.Token = null,
     tokenizer: tkn.Tokenizer = undefined,
 
     pub fn init(ma: std.mem.Allocator, language: Language) Self {
@@ -176,14 +176,15 @@ pub const Parser = struct {
         self.tokenizer = tkn.Tokenizer.init(content);
         switch (self.language) {
             Language.Markdown => while (true) {
-                if (try self.pop_section()) |el|
-                    try root.push_child(el)
-                else if (try self.pop_paragraph()) |el|
-                    try root.push_child(el)
-                else if (try self.pop_bullets()) |el|
-                    try root.push_child(el)
-                else
+                if (try self.pop_section_node()) |el| {
+                    try root.push_child(el);
+                } else if (try self.pop_paragraph_node()) |el| {
+                    try root.push_child(el);
+                } else if (try self.pop_bullets_node()) |el| {
+                    try root.push_child(el);
+                } else {
                     break;
+                }
             },
             else => while (true) {
                 if (try self.pop_line()) |line|
@@ -197,141 +198,345 @@ pub const Parser = struct {
     }
 
     fn pop_line(self: *Self) !?Node {
-        if (self.empty())
+        if (self.tokenizer.empty())
             return null;
 
         var n = Node.init(self.ma);
         errdefer n.deinit();
 
         switch (self.language) {
-            Language.Markdown, Language.Text => try self.pop_line_text(&n),
-            Language.Cish, Language.Ruby => try self.pop_line_with_comment(&n),
+            Language.Markdown => try self.pop_markdown_text(&n),
+            Language.Text => try self.pop_text(&n),
+            Language.Cish, Language.Ruby => try self.pop_code_comment_text(&n),
         }
 
         return n;
     }
 
-    // &todo: handle inline code, code blocks and formulas for Markdown
-    fn pop_line_text(self: *Self, n: *Node) !void {
-        while (self.next()) |token| {
+    fn pop_markdown_text(self: *Self, n: *Node) !void {
+        while (self.tokenizer.peek()) |token| {
             if (is_newline(token)) {
-                try n.line.append(self.pop_newline(token));
+                try n.line.append(self.pop_newline_term() orelse unreachable);
                 break;
-            } else if (is_amp(token)) {
-                try n.line.append(self.pop_amp(token));
-            } else {
-                try n.line.append(self.pop_text(token));
             }
+            if (is_amp_start(self.tokenizer.current(), token)) {
+                if (self.pop_amp_term()) |amp| {
+                    try n.line.append(amp);
+                    continue;
+                }
+            }
+            if (self.pop_markdown_code_term()) |code| {
+                try n.line.append(code);
+                continue;
+            }
+            if (self.pop_markdown_formula_term()) |formula| {
+                try n.line.append(formula);
+                continue;
+            }
+            if (self.pop_comment_start()) |comment_start| {
+                std.debug.assert(self.language == Language.Markdown);
+
+                var comment = comment_start;
+                var maybe_past: ?tkn.Token = null;
+                while (self.tokenizer.next()) |current| {
+                    comment.word.len += current.word.len;
+                    if (maybe_past) |past| {
+                        if (past.symbol == tkn.Symbol.Minus and past.word.len >= 2 and current.symbol == tkn.Symbol.CloseAngle)
+                            break;
+                    }
+                    maybe_past = current;
+                }
+                try n.line.append(comment);
+                continue;
+            }
+            try n.line.append(self.pop_text_term() orelse unreachable);
+        }
+    }
+
+    fn pop_text(self: *Self, n: *Node) !void {
+        while (self.tokenizer.peek()) |token| {
+            if (is_newline(token)) {
+                try n.line.append(self.pop_newline_term() orelse unreachable);
+                break;
+            }
+            if (is_amp_start(self.tokenizer.current(), token)) {
+                if (self.pop_amp_term()) |amp| {
+                    try n.line.append(amp);
+                    continue;
+                }
+            }
+            try n.line.append(self.pop_text_term() orelse unreachable);
         }
     }
 
     // &todo: handle multiline comments
-    fn pop_line_with_comment(self: *Self, n: *Node) !void {
+    fn pop_code_comment_text(self: *Self, n: *Node) !void {
         var found_comment = false;
-        while (self.next()) |token| {
+        while (self.tokenizer.peek()) |token| {
             if (is_newline(token)) {
-                try n.line.append(self.pop_newline(token));
+                try n.line.append(self.pop_newline_term() orelse unreachable);
                 break;
-            } else if (!found_comment and is_comment(token, self.language)) {
-                try n.line.append(self.pop_comment(token));
-                found_comment = true;
+            }
+            if (!found_comment) {
+                if (self.pop_comment_start()) |comment| {
+                    try n.line.append(comment);
+                    found_comment = true;
 
-                // We only check for Amp right after the comment
-                if (self.peek()) |token2| {
-                    if (is_amp(token2)) {
-                        self.commit_peek();
-                        try n.line.append(self.pop_amp(token2));
+                    // We only check for Amp right after the comment
+                    if (self.tokenizer.peek()) |token2| {
+                        if (is_amp_start(null, token2)) {
+                            if (self.pop_amp_term()) |amp|
+                                try n.line.append(amp);
+                        }
                     }
+                } else {
+                    try n.line.append(self.pop_code_term() orelse unreachable);
                 }
-            } else if (found_comment) {
-                try n.line.append(self.pop_text(token));
             } else {
-                try n.line.append(self.pop_code(token));
+                try n.line.append(self.pop_text_term() orelse unreachable);
             }
         }
     }
 
-    fn pop_newline(_: *Self, token: tkn.Token) Term {
-        std.debug.assert(is_newline(token));
-
-        return Term{ .word = token.word, .kind = Term.Kind.Newline };
-    }
-
-    // &todo: do not accept a sequences that
-    // - ends with [,()-;=]
-    // - start with '&#'
-    // - are empty
-    // &todo: do not include trailing ':'
-    // &todo: only accept amp right before whitespace or comment (+whitespace)
-    fn pop_amp(self: *Self, first_token: tkn.Token) Term {
-        std.debug.assert(first_token.symbol == tkn.Symbol.Ampersand);
-
-        var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
-        while (self.peek()) |token| {
-            if (is_whitespace(token) or is_newline(token))
-                break;
-            self.commit_peek();
-
-            amp.word.len += token.word.len;
+    fn pop_newline_term(self: *Self) ?Term {
+        if (self.tokenizer.next()) |token| {
+            if (token.symbol == tkn.Symbol.Newline)
+                return Term{ .word = token.word, .kind = Term.Kind.Newline };
         }
-        return amp;
+        return null;
     }
 
-    fn pop_text(self: *Self, first_token: tkn.Token) Term {
-        std.debug.assert(first_token.symbol != tkn.Symbol.Ampersand);
-        std.debug.assert(first_token.symbol != tkn.Symbol.Newline);
+    fn pop_amp_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (is_amp_start(null, first_token)) {
+                // Savepoint to rollback to original state
+                const sp_1 = self.tokenizer;
 
-        var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
-        while (self.peek()) |token| {
-            if (is_amp(token) or is_newline(token))
-                break;
-            self.commit_peek();
+                var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
+                self.tokenizer.commit_peek();
 
-            text.word.len += token.word.len;
+                // Savepoint to rollback to state before adding a ':'. This is used to avoid a trailing ':' in Amp.
+                var sp_2: ?tkn.Tokenizer = null;
+
+                while (self.tokenizer.peek()) |token| {
+                    if (is_whitespace(token) or is_newline(token))
+                        // We accept this Amp
+                        break;
+
+                    if (!is_amp_body(token)) {
+                        // Restore the tokenizer: this is not an Amp
+                        self.tokenizer = sp_1;
+                        return null;
+                    }
+
+                    if (token.symbol == tkn.Symbol.Colon)
+                        // Setup savepoint to support removing this ':' if it turns-out to be a trailing ':'
+                        sp_2 = self.tokenizer
+                    else
+                        // Reset sp_2 (if any), this will accept the ':'
+                        sp_2 = null;
+
+                    self.tokenizer.commit_peek();
+                    amp.word.len += token.word.len;
+                }
+
+                if (sp_2) |sp| {
+                    self.tokenizer = sp;
+                    if (self.tokenizer.peek()) |token|
+                        amp.word.len -= token.word.len;
+                }
+
+                if (amp.word.len == first_token.word.len) {
+                    // Do not accept an empty Amp
+                    self.tokenizer = sp_1;
+                    return null;
+                }
+
+                return amp;
+            }
         }
-        return text;
+        return null;
     }
 
-    fn pop_code(self: *Self, first_token: tkn.Token) Term {
-        var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
-        while (self.peek()) |token| {
-            if (is_comment(token, self.language) or is_newline(token))
-                break;
-            self.commit_peek();
+    fn pop_text_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
+            self.tokenizer.commit_peek();
 
-            code.word.len += token.word.len;
+            while (self.tokenizer.peek()) |token| {
+                if (is_newline(token) or is_amp_start(self.tokenizer.current(), token) or self.is_comment_start())
+                    break;
+                if (self.language == Language.Markdown and (token.symbol == tkn.Symbol.Backtick or token.symbol == tkn.Symbol.Dollar))
+                    break;
+
+                self.tokenizer.commit_peek();
+                text.word.len += token.word.len;
+            }
+            return text;
         }
-        return code;
+        return null;
     }
 
-    fn pop_comment(self: *Self, first_token: tkn.Token) Term {
-        std.debug.assert(is_comment(first_token, self.language));
+    fn pop_code_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
+            self.tokenizer.commit_peek();
 
-        var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
-        while (self.peek()) |token| {
-            if (!is_whitespace(token) or is_newline(token))
-                break;
-            self.commit_peek();
-            term.word.len += token.word.len;
+            while (self.tokenizer.peek()) |token| {
+                if (is_newline(token) or self.is_comment_start())
+                    break;
+
+                self.tokenizer.commit_peek();
+                code.word.len += token.word.len;
+            }
+            return code;
         }
-        return term;
+        return null;
     }
 
-    fn pop_section(self: *Self) !?Node {
-        if (self.peek()) |first_token| {
+    fn pop_markdown_code_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (first_token.symbol != tkn.Symbol.Backtick)
+                return null;
+
+            var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.next()) |token| {
+                code.word.len += token.word.len;
+
+                if (token.symbol == first_token.symbol and token.word.len == first_token.word.len)
+                    break;
+            }
+
+            return code;
+        }
+        return null;
+    }
+    fn pop_markdown_formula_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (first_token.symbol != tkn.Symbol.Dollar)
+                return null;
+
+            var formula = Term{ .word = first_token.word, .kind = Term.Kind.Formula };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.next()) |token| {
+                formula.word.len += token.word.len;
+
+                if (token.symbol == first_token.symbol and token.word.len == first_token.word.len)
+                    break;
+            }
+
+            return formula;
+        }
+        return null;
+    }
+
+    fn is_comment_start(self: *Self) bool {
+        if (self.tokenizer.peek()) |first_token| {
+            switch (self.language) {
+                Language.Cish => {
+                    if (first_token.symbol == tkn.Symbol.Slash and first_token.word.len >= 2)
+                        return true;
+                },
+                Language.Ruby => {
+                    if (first_token.symbol == tkn.Symbol.Hashtag)
+                        return true;
+                },
+                Language.Markdown => {
+                    if (first_token.symbol != tkn.Symbol.OpenAngle or first_token.word.len != 1)
+                        return false;
+
+                    const sp = self.tokenizer;
+                    defer self.tokenizer = sp;
+
+                    _ = self.tokenizer.next();
+
+                    if (self.tokenizer.next()) |token| {
+                        if (token.symbol != tkn.Symbol.Exclamation or token.word.len != 1)
+                            return false;
+                    }
+                    if (self.tokenizer.next()) |token| {
+                        if (token.symbol != tkn.Symbol.Minus or token.word.len < 2)
+                            return false;
+                    }
+
+                    return true;
+                },
+                else => return false,
+            }
+        }
+        return false;
+    }
+
+    fn pop_comment_start(self: *Self) ?Term {
+        var maybe_sp: ?tkn.Tokenizer = self.tokenizer;
+
+        if (self.tokenizer.next()) |first_token| {
+            defer {
+                if (maybe_sp) |sp| {
+                    self.tokenizer = sp;
+                }
+            }
+
+            var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+
+            switch (self.language) {
+                Language.Cish => {
+                    if (first_token.symbol != tkn.Symbol.Slash or first_token.word.len < 2)
+                        return null;
+                },
+                Language.Ruby => {
+                    if (first_token.symbol != tkn.Symbol.Hashtag)
+                        return null;
+                },
+                Language.Markdown => {
+                    if (first_token.symbol != tkn.Symbol.OpenAngle or first_token.word.len != 1)
+                        return null;
+                    if (self.tokenizer.next()) |token| {
+                        if (token.symbol != tkn.Symbol.Exclamation or token.word.len != 1) return null;
+                        term.word.len += token.word.len;
+                    }
+                    if (self.tokenizer.next()) |token| {
+                        if (token.symbol != tkn.Symbol.Minus or token.word.len < 2) return null;
+                        term.word.len += token.word.len;
+                    }
+                },
+                else => return null,
+            }
+
+            // Disable rollback
+            maybe_sp = null;
+
+            while (self.tokenizer.peek()) |token| {
+                if (is_whitespace(token)) {
+                    // We add whitespace to the comment start
+                    self.tokenizer.commit_peek();
+                    term.word.len += token.word.len;
+                } else break;
+            }
+
+            return term;
+        }
+        return null;
+    }
+
+    fn pop_section_node(self: *Self) !?Node {
+        if (self.tokenizer.peek()) |first_token| {
             if (is_title(first_token)) |my_depth| {
                 var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Section;
 
-                while (self.peek()) |token| {
+                while (self.tokenizer.peek()) |token| {
                     if (is_title(token)) |depth| {
                         if (depth <= my_depth)
                             // This is the start of a section with a depth too low: we cannot nest
                             break;
-                        try n.push_child(try self.pop_section() orelse unreachable);
-                    } else if (try self.pop_paragraph()) |p| {
+                        try n.push_child(try self.pop_section_node() orelse unreachable);
+                    } else if (try self.pop_paragraph_node()) |p| {
                         try n.push_child(p);
-                    } else if (try self.pop_bullets()) |p| {
+                    } else if (try self.pop_bullets_node()) |p| {
                         try n.push_child(p);
                     } else break;
                 }
@@ -342,13 +547,13 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_paragraph(self: *Self) !?Node {
-        if (self.peek()) |first_token| {
+    fn pop_paragraph_node(self: *Self) !?Node {
+        if (self.tokenizer.peek()) |first_token| {
             if (is_line(first_token)) {
                 var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Paragraph;
 
-                while (try self.pop_bullets()) |p| {
+                while (try self.pop_bullets_node()) |p| {
                     try n.push_child(p);
                 }
                 return n;
@@ -357,18 +562,18 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_bullets(self: *Self) !?Node {
-        if (self.peek()) |first_token| {
+    fn pop_bullets_node(self: *Self) !?Node {
+        if (self.tokenizer.peek()) |first_token| {
             if (is_bullet(first_token)) |my_depth| {
                 var n = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Bullets;
 
-                while (self.peek()) |token| {
+                while (self.tokenizer.peek()) |token| {
                     if (is_bullet(token)) |depth| {
                         if (depth <= my_depth)
                             // This is the start of a section with a depth too low: we cannot nest
                             break;
-                        try n.push_child(try self.pop_bullets() orelse unreachable);
+                        try n.push_child(try self.pop_bullets_node() orelse unreachable);
                     } else break;
                 }
                 return n;
@@ -391,42 +596,21 @@ pub const Parser = struct {
         else
             null;
     }
-    fn is_comment(t: tkn.Token, language: Language) bool {
-        return switch (language) {
-            Language.Cish => t.symbol == tkn.Symbol.Slash,
-            Language.Ruby => t.symbol == tkn.Symbol.Hashtag,
-            else => false,
-        };
-    }
-    fn is_amp(t: tkn.Token) bool {
+    fn is_amp_start(maybe_past: ?tkn.Token, t: tkn.Token) bool {
+        if (maybe_past) |past|
+            if (!is_newline(past) and !is_whitespace(past))
+                return false;
         return t.symbol == tkn.Symbol.Ampersand and t.word.len == 1;
+    }
+    fn is_amp_body(t: tkn.Token) bool {
+        const S = tkn.Symbol;
+        return t.symbol == S.Word or t.symbol == S.Underscore or t.symbol == S.Colon or t.symbol == S.Exclamation or t.symbol == S.Dot or t.symbol == S.Tilde;
     }
     fn is_whitespace(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Space;
     }
     fn is_newline(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Newline;
-    }
-
-    fn next(self: *Self) ?tkn.Token {
-        if (self.next_token != null) {
-            defer self.next_token = null;
-            return self.next_token;
-        }
-        return self.tokenizer.next();
-    }
-    fn peek(self: *Self) ?tkn.Token {
-        if (self.next_token == null)
-            self.next_token = self.tokenizer.next();
-        return self.next_token;
-    }
-    fn commit_peek(self: *Self) void {
-        self.next_token = null;
-    }
-    fn empty(self: *Self) bool {
-        if (self.next_token == null)
-            self.next_token = self.tokenizer.next();
-        return self.next_token == null;
     }
 };
 

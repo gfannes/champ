@@ -4,6 +4,7 @@ const Strange = @import("rubr").strange.Strange;
 const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const ignore = @import("rubr").ignore;
+const naft = @import("rubr").naft;
 
 const cli = @import("cli.zig");
 const tkn = @import("tkn.zig");
@@ -131,9 +132,10 @@ pub const App = struct {
                                 }{ .path = path, .o = out };
                                 try mero_file.root.each_amp(&cb);
                             }
-                            // for (parser.lines.items) |line| {
-                            //     std.debug.print("Line: {s}\n", .{line});
-                            // }
+                            if (my.outer.log(4)) |out| {
+                                var n = naft.Node.init(out.*);
+                                mero_file.root.write(&n);
+                            }
                         } else {
                             std.debug.print("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
                             // return Error.UnknownFileType;

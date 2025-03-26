@@ -13,6 +13,11 @@ pub const Tokenizer = struct {
 
     content: []const u8,
 
+    // Single future token to support peek()
+    peek_token: ?Token = null,
+    // Last token emitted from next() to supports current()
+    current_token: ?Token = null,
+
     pub fn init(content: []const u8) Self {
         return Self{ .content = content };
     }
@@ -47,9 +52,38 @@ pub const Tokenizer = struct {
         self.content.len = 0;
     }
 
+    pub fn next(self: *Self) ?Token {
+        if (self.peek_token == null)
+            self.current_token = self.next_()
+        else
+            self.commit_peek();
+        return self.current_token;
+    }
+
+    pub fn peek(self: *Self) ?Token {
+        if (self.peek_token == null)
+            self.peek_token = self.next_();
+        return self.peek_token;
+    }
+
+    pub fn current(self: *Self) ?Token {
+        return self.current_token;
+    }
+
+    pub fn commit_peek(self: *Self) void {
+        self.current_token = self.peek_token;
+        self.peek_token = null;
+    }
+
+    pub fn empty(self: *Self) bool {
+        if (self.peek_token == null)
+            self.peek_token = self.next_();
+        return self.peek_token == null;
+    }
+
     // &perf: It might be faster to prepare a few tokens and cache them
     // 355ms
-    pub fn next(self: *Self) ?Token {
+    fn next_(self: *Self) ?Token {
         // Note: storing a local Token and returning ?*Token is slower
         var maybe_token: ?Token = null;
 
