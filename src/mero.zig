@@ -7,6 +7,7 @@ const tkn = @import("tkn.zig");
 
 pub const Error = error{
     UnexpectedState,
+    CouldNotParseText,
 };
 
 pub const Term = struct {
@@ -134,6 +135,7 @@ pub const Language = enum {
     Markdown,
     Cish,
     Ruby,
+    Lua,
     Text,
 
     pub fn from_extension(ext: []const u8) ?Language {
@@ -142,6 +144,9 @@ pub const Language = enum {
 
         if (std.mem.eql(u8, ext, ".rb"))
             return Language.Ruby;
+
+        if (std.mem.eql(u8, ext, ".lua"))
+            return Language.Lua;
 
         if (std.mem.eql(u8, ext, ".txt"))
             return Language.Text;
@@ -206,37 +211,63 @@ pub const Parser = struct {
 
         switch (self.language) {
             Language.Markdown => try self.pop_markdown_text(&n),
-            Language.Text => try self.pop_text(&n),
-            Language.Cish, Language.Ruby => try self.pop_code_comment_text(&n),
+            Language.Text => try self.pop_text_text(&n),
+            Language.Cish, Language.Ruby, Language.Lua => try self.pop_code_comment_text(&n),
         }
 
         return n;
     }
 
     fn pop_markdown_text(self: *Self, n: *Node) !void {
+        var text = struct {
+            const My = @This();
+
+            line: *Line,
+            maybe_text: ?Term = null,
+
+            fn commit(my: *My) !void {
+                if (my.maybe_text) |text| {
+                    try my.line.append(text);
+                    my.maybe_text = null;
+                }
+            }
+            fn push(my: *My, token: tkn.Token) void {
+                if (my.maybe_text) |*text|
+                    text.word.len += token.word.len
+                else
+                    my.maybe_text = Term{ .word = token.word, .kind = Term.Kind.Text };
+            }
+        }{ .line = &n.line };
+
         while (self.tokenizer.peek()) |token| {
             if (is_newline(token)) {
+                try text.commit();
                 try n.line.append(self.pop_newline_term() orelse unreachable);
-                break;
+                return;
             }
+
             if (is_amp_start(self.tokenizer.current(), token)) {
                 if (self.pop_amp_term()) |amp| {
+                    try text.commit();
                     try n.line.append(amp);
                     continue;
                 }
             }
             if (self.pop_markdown_code_term()) |code| {
+                try text.commit();
                 try n.line.append(code);
                 continue;
             }
             if (self.pop_markdown_formula_term()) |formula| {
+                try text.commit();
                 try n.line.append(formula);
                 continue;
             }
-            if (self.pop_comment_start()) |comment_start| {
+            if (self.pop_markdown_comment_start()) |comment_start| {
                 std.debug.assert(self.language == Language.Markdown);
 
                 var comment = comment_start;
+
                 var maybe_past: ?tkn.Token = null;
                 while (self.tokenizer.next()) |current| {
                     comment.word.len += current.word.len;
@@ -246,17 +277,23 @@ pub const Parser = struct {
                     }
                     maybe_past = current;
                 }
+
+                try text.commit();
                 try n.line.append(comment);
                 continue;
             }
-            try n.line.append(self.pop_text_term() orelse unreachable);
+
+            text.push(token);
+            self.tokenizer.commit_peek();
         }
+
+        try text.commit();
     }
 
-    fn pop_text(self: *Self, n: *Node) !void {
+    fn pop_text_text(self: *Self, n: *Node) !void {
         while (self.tokenizer.peek()) |token| {
-            if (is_newline(token)) {
-                try n.line.append(self.pop_newline_term() orelse unreachable);
+            if (self.pop_newline_term()) |newline| {
+                try n.line.append(newline);
                 break;
             }
             if (is_amp_start(self.tokenizer.current(), token)) {
@@ -265,43 +302,91 @@ pub const Parser = struct {
                     continue;
                 }
             }
-            try n.line.append(self.pop_text_term() orelse unreachable);
+            if (self.pop_nonmarkdown_text_term()) |text| {
+                try n.line.append(text);
+                continue;
+            }
+
+            std.debug.print("What else can we have?\n", .{});
+            return Error.CouldNotParseText;
         }
     }
 
     // &todo: handle multiline comments
     fn pop_code_comment_text(self: *Self, n: *Node) !void {
+        // &rework: this struct is copied from pop_markdown_text()
+        var text = struct {
+            const My = @This();
+
+            line: *Line,
+            maybe_text: ?Term = null,
+
+            fn commit(my: *My) !void {
+                if (my.maybe_text) |text| {
+                    try my.line.append(text);
+                    my.maybe_text = null;
+                }
+            }
+            fn push(my: *My, token: tkn.Token) void {
+                if (my.maybe_text) |*text|
+                    text.word.len += token.word.len
+                else
+                    my.maybe_text = Term{ .word = token.word, .kind = Term.Kind.Text };
+            }
+        }{ .line = &n.line };
+
+        // &perf dropped a bit now that each of the pop_X() functions fully check if they found something.
+        // Before, 'token' was inspected here and used to identify what Term can be parsed
         var found_comment = false;
         while (self.tokenizer.peek()) |token| {
-            if (is_newline(token)) {
-                try n.line.append(self.pop_newline_term() orelse unreachable);
+            if (self.pop_newline_term()) |newline| {
+                try text.commit();
+                try n.line.append(newline);
                 break;
             }
             if (!found_comment) {
-                if (self.pop_comment_start()) |comment| {
+                if (self.pop_nonmarkdown_comment_term()) |comment| {
+                    try text.commit();
                     try n.line.append(comment);
                     found_comment = true;
 
-                    // We only check for Amp right after the comment
+                    // We only check for Amp right after the Comment
                     if (self.tokenizer.peek()) |token2| {
                         if (is_amp_start(null, token2)) {
-                            if (self.pop_amp_term()) |amp|
+                            if (self.pop_amp_term()) |amp| {
+                                try text.commit();
                                 try n.line.append(amp);
+                            }
                         }
                     }
-                } else {
-                    try n.line.append(self.pop_code_term() orelse unreachable);
+                    continue;
                 }
-            } else {
-                try n.line.append(self.pop_text_term() orelse unreachable);
+
+                // Anything before Comment is Code
+                if (self.pop_code_term()) |code| {
+                    try text.commit();
+                    try n.line.append(code);
+                    continue;
+                }
+
+                std.debug.print("What else can we have?\n", .{});
+                return Error.CouldNotParseText;
             }
+
+            // We are after Comment (and potentially Amp): this is Text
+            text.push(token);
+            self.tokenizer.commit_peek();
         }
+
+        try text.commit();
     }
 
     fn pop_newline_term(self: *Self) ?Term {
-        if (self.tokenizer.next()) |token| {
-            if (token.symbol == tkn.Symbol.Newline)
+        if (self.tokenizer.peek()) |token| {
+            if (is_newline(token)) {
+                self.tokenizer.commit_peek();
                 return Term{ .word = token.word, .kind = Term.Kind.Newline };
+            }
         }
         return null;
     }
@@ -358,15 +443,13 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_text_term(self: *Self) ?Term {
+    fn pop_nonmarkdown_text_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
             self.tokenizer.commit_peek();
 
             while (self.tokenizer.peek()) |token| {
-                if (is_newline(token) or is_amp_start(self.tokenizer.current(), token) or self.is_comment_start())
-                    break;
-                if (self.language == Language.Markdown and (token.symbol == tkn.Symbol.Backtick or token.symbol == tkn.Symbol.Dollar))
+                if (is_newline(token) or is_comment(token, self.language) or is_amp_start(self.tokenizer.current(), token))
                     break;
 
                 self.tokenizer.commit_peek();
@@ -377,13 +460,34 @@ pub const Parser = struct {
         return null;
     }
 
+    fn pop_nonmarkdown_comment_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (!is_comment(first_token, self.language))
+                return null;
+
+            var comment = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.peek()) |token| {
+                if (is_whitespace(token)) {
+                    // We add whitespace to the comment start
+                    self.tokenizer.commit_peek();
+                    comment.word.len += token.word.len;
+                } else break;
+            }
+
+            return comment;
+        }
+        return null;
+    }
+
     fn pop_code_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
             self.tokenizer.commit_peek();
 
             while (self.tokenizer.peek()) |token| {
-                if (is_newline(token) or self.is_comment_start())
+                if (is_newline(token) or is_comment(token, self.language))
                     break;
 
                 self.tokenizer.commit_peek();
@@ -433,92 +537,55 @@ pub const Parser = struct {
         return null;
     }
 
-    fn is_comment_start(self: *Self) bool {
+    fn pop_markdown_comment_start(self: *Self) ?Term {
+        std.debug.assert(self.language == Language.Markdown);
+
+        // We look for '<!--'
+
         if (self.tokenizer.peek()) |first_token| {
-            switch (self.language) {
-                Language.Cish => {
-                    if (first_token.symbol == tkn.Symbol.Slash and first_token.word.len >= 2)
-                        return true;
-                },
-                Language.Ruby => {
-                    if (first_token.symbol == tkn.Symbol.Hashtag)
-                        return true;
-                },
-                Language.Markdown => {
-                    if (first_token.symbol != tkn.Symbol.OpenAngle or first_token.word.len != 1)
-                        return false;
+            // Is this '<'?
+            if (first_token.symbol != tkn.Symbol.OpenAngle or first_token.word.len != 1)
+                return null;
 
-                    const sp = self.tokenizer;
-                    defer self.tokenizer = sp;
-
-                    _ = self.tokenizer.next();
-
-                    if (self.tokenizer.next()) |token| {
-                        if (token.symbol != tkn.Symbol.Exclamation or token.word.len != 1)
-                            return false;
-                    }
-                    if (self.tokenizer.next()) |token| {
-                        if (token.symbol != tkn.Symbol.Minus or token.word.len < 2)
-                            return false;
-                    }
-
-                    return true;
-                },
-                else => return false,
-            }
-        }
-        return false;
-    }
-
-    fn pop_comment_start(self: *Self) ?Term {
-        var maybe_sp: ?tkn.Tokenizer = self.tokenizer;
-
-        if (self.tokenizer.next()) |first_token| {
+            // Setup rollback
+            var maybe_sp: ?tkn.Tokenizer = self.tokenizer;
             defer {
                 if (maybe_sp) |sp| {
                     self.tokenizer = sp;
                 }
             }
 
-            var term = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+            var comment_start = Term{ .word = first_token.word, .kind = Term.Kind.Comment };
+            self.tokenizer.commit_peek();
 
-            switch (self.language) {
-                Language.Cish => {
-                    if (first_token.symbol != tkn.Symbol.Slash or first_token.word.len < 2)
-                        return null;
-                },
-                Language.Ruby => {
-                    if (first_token.symbol != tkn.Symbol.Hashtag)
-                        return null;
-                },
-                Language.Markdown => {
-                    if (first_token.symbol != tkn.Symbol.OpenAngle or first_token.word.len != 1)
-                        return null;
-                    if (self.tokenizer.next()) |token| {
-                        if (token.symbol != tkn.Symbol.Exclamation or token.word.len != 1) return null;
-                        term.word.len += token.word.len;
-                    }
-                    if (self.tokenizer.next()) |token| {
-                        if (token.symbol != tkn.Symbol.Minus or token.word.len < 2) return null;
-                        term.word.len += token.word.len;
-                    }
-                },
-                else => return null,
+            if (self.tokenizer.next()) |token| {
+                // Is this '!'?
+                if (token.symbol != tkn.Symbol.Exclamation or token.word.len != 1)
+                    return null;
+                comment_start.word.len += token.word.len;
+            }
+            if (self.tokenizer.next()) |token| {
+                // Is this '--'?
+                if (token.symbol != tkn.Symbol.Minus or token.word.len < 2)
+                    return null;
+                comment_start.word.len += token.word.len;
             }
 
             // Disable rollback
             maybe_sp = null;
 
+            // We include any additional whitespace into the comment_start
             while (self.tokenizer.peek()) |token| {
                 if (is_whitespace(token)) {
                     // We add whitespace to the comment start
                     self.tokenizer.commit_peek();
-                    term.word.len += token.word.len;
+                    comment_start.word.len += token.word.len;
                 } else break;
             }
 
-            return term;
+            return comment_start;
         }
+
         return null;
     }
 
@@ -595,6 +662,14 @@ pub const Parser = struct {
             0
         else
             null;
+    }
+    fn is_comment(t: tkn.Token, language: Language) bool {
+        return switch (language) {
+            Language.Cish => t.symbol == tkn.Symbol.Slash and t.word.len >= 2,
+            Language.Ruby => t.symbol == tkn.Symbol.Hashtag,
+            Language.Lua => t.symbol == tkn.Symbol.Minus and t.word.len >= 2,
+            else => false,
+        };
     }
     fn is_amp_start(maybe_past: ?tkn.Token, t: tkn.Token) bool {
         if (maybe_past) |past|

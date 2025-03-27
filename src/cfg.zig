@@ -40,7 +40,7 @@ pub const Config = struct {
 
         {
             var grove = try Grove.init("am", am_dir, self.ma);
-            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai", "rs" }) |ext| {
+            for ([_][]const u8{ "md", "txt", "rb", "hpp", "cpp", "h", "c", "chai", "rs", "lua" }) |ext| {
                 try grove.addInclude(ext);
             }
             grove.max_size = 256000;
