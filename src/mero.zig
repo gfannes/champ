@@ -7,7 +7,7 @@ const tkn = @import("tkn.zig");
 
 pub const Error = error{
     UnexpectedState,
-    CouldNotParseText,
+    CouldNotParse,
 };
 
 pub const Term = struct {
@@ -160,6 +160,8 @@ pub const Language = enum {
     }
 };
 
+// &rework: Split pop_txt_X(), pop_md_X() and pop_nonmd_X() into different structs and maybe files
+// &todo: Add UTs for all different conditions
 pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
@@ -210,15 +212,15 @@ pub const Parser = struct {
         errdefer n.deinit();
 
         switch (self.language) {
-            Language.Markdown => try self.pop_markdown_text(&n),
-            Language.Text => try self.pop_text_text(&n),
-            Language.Cish, Language.Ruby, Language.Lua => try self.pop_code_comment_text(&n),
+            Language.Markdown => try self.pop_md_text(&n),
+            Language.Text => try self.pop_txt_text(&n),
+            Language.Cish, Language.Ruby, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
         }
 
         return n;
     }
 
-    fn pop_markdown_text(self: *Self, n: *Node) !void {
+    fn pop_md_text(self: *Self, n: *Node) !void {
         var text = struct {
             const My = @This();
 
@@ -253,17 +255,17 @@ pub const Parser = struct {
                     continue;
                 }
             }
-            if (self.pop_markdown_code_term()) |code| {
+            if (self.pop_md_code_term()) |code| {
                 try text.commit();
                 try n.line.append(code);
                 continue;
             }
-            if (self.pop_markdown_formula_term()) |formula| {
+            if (self.pop_md_formula_term()) |formula| {
                 try text.commit();
                 try n.line.append(formula);
                 continue;
             }
-            if (self.pop_markdown_comment_start()) |comment_start| {
+            if (self.pop_md_comment_start()) |comment_start| {
                 std.debug.assert(self.language == Language.Markdown);
 
                 var comment = comment_start;
@@ -290,63 +292,38 @@ pub const Parser = struct {
         try text.commit();
     }
 
-    fn pop_text_text(self: *Self, n: *Node) !void {
+    fn pop_txt_text(self: *Self, n: *Node) !void {
         while (self.tokenizer.peek()) |token| {
-            if (self.pop_newline_term()) |newline| {
-                try n.line.append(newline);
-                break;
-            }
             if (is_amp_start(self.tokenizer.current(), token)) {
                 if (self.pop_amp_term()) |amp| {
                     try n.line.append(amp);
                     continue;
                 }
             }
-            if (self.pop_nonmarkdown_text_term()) |text| {
+
+            // If token is '&' but above could not pop a real Amp, make sure we will pop a Text
+            const accept_inital_amp = true;
+            if (self.pop_txt_text_term(accept_inital_amp)) |text| {
                 try n.line.append(text);
                 continue;
             }
 
-            std.debug.print("What else can we have?\n", .{});
-            return Error.CouldNotParseText;
+            if (self.pop_newline_term()) |newline| {
+                try n.line.append(newline);
+                break;
+            }
+
+            std.debug.print("Unexpected token for txt '{s}'\n", .{token.word});
+            return Error.CouldNotParse;
         }
     }
 
     // &todo: handle multiline comments
-    fn pop_code_comment_text(self: *Self, n: *Node) !void {
-        // &rework: this struct is copied from pop_markdown_text()
-        var text = struct {
-            const My = @This();
-
-            line: *Line,
-            maybe_text: ?Term = null,
-
-            fn commit(my: *My) !void {
-                if (my.maybe_text) |text| {
-                    try my.line.append(text);
-                    my.maybe_text = null;
-                }
-            }
-            fn push(my: *My, token: tkn.Token) void {
-                if (my.maybe_text) |*text|
-                    text.word.len += token.word.len
-                else
-                    my.maybe_text = Term{ .word = token.word, .kind = Term.Kind.Text };
-            }
-        }{ .line = &n.line };
-
-        // &perf dropped a bit now that each of the pop_X() functions fully check if they found something.
-        // Before, 'token' was inspected here and used to identify what Term can be parsed
+    fn pop_nonmd_code_comment_text(self: *Self, n: *Node) !void {
         var found_comment = false;
-        while (self.tokenizer.peek()) |token| {
-            if (self.pop_newline_term()) |newline| {
-                try text.commit();
-                try n.line.append(newline);
-                break;
-            }
+        while (true) {
             if (!found_comment) {
-                if (self.pop_nonmarkdown_comment_term()) |comment| {
-                    try text.commit();
+                if (self.pop_nonmd_comment_term()) |comment| {
                     try n.line.append(comment);
                     found_comment = true;
 
@@ -354,31 +331,30 @@ pub const Parser = struct {
                     if (self.tokenizer.peek()) |token2| {
                         if (is_amp_start(null, token2)) {
                             if (self.pop_amp_term()) |amp| {
-                                try text.commit();
                                 try n.line.append(amp);
                             }
                         }
                     }
                     continue;
-                }
-
-                // Anything before Comment is Code
-                if (self.pop_code_term()) |code| {
-                    try text.commit();
+                } else if (self.pop_nonmd_code_term()) |code| {
                     try n.line.append(code);
                     continue;
                 }
-
-                std.debug.print("What else can we have?\n", .{});
-                return Error.CouldNotParseText;
+            } else if (self.pop_nonmd_text_term()) |text| {
+                try n.line.append(text);
+                continue;
             }
 
-            // We are after Comment (and potentially Amp): this is Text
-            text.push(token);
-            self.tokenizer.commit_peek();
-        }
+            if (self.pop_newline_term()) |newline| {
+                try n.line.append(newline);
+                break;
+            }
 
-        try text.commit();
+            if (self.tokenizer.peek()) |token| {
+                std.debug.print("Unexpected token for nonmd '{s}'\n", .{token.word});
+                return Error.CouldNotParse;
+            } else break;
+        }
     }
 
     fn pop_newline_term(self: *Self) ?Term {
@@ -443,13 +419,17 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_nonmarkdown_text_term(self: *Self) ?Term {
+    // Only called after Comment and potentially Amp was already found
+    fn pop_nonmd_text_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
+            if (is_newline(first_token))
+                return null;
+
             var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
             self.tokenizer.commit_peek();
 
             while (self.tokenizer.peek()) |token| {
-                if (is_newline(token) or is_comment(token, self.language) or is_amp_start(self.tokenizer.current(), token))
+                if (is_newline(token))
                     break;
 
                 self.tokenizer.commit_peek();
@@ -460,7 +440,27 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_nonmarkdown_comment_term(self: *Self) ?Term {
+    fn pop_txt_text_term(self: *Self, accept_initial_amp: bool) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (is_newline(first_token) or (!accept_initial_amp and is_amp_start(self.tokenizer.current(), first_token)))
+                return null;
+
+            var text = Term{ .word = first_token.word, .kind = Term.Kind.Text };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.peek()) |token| {
+                if (is_newline(token) or is_amp_start(self.tokenizer.current(), token))
+                    break;
+
+                self.tokenizer.commit_peek();
+                text.word.len += token.word.len;
+            }
+            return text;
+        }
+        return null;
+    }
+
+    fn pop_nonmd_comment_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             if (!is_comment(first_token, self.language))
                 return null;
@@ -481,8 +481,11 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_code_term(self: *Self) ?Term {
+    fn pop_nonmd_code_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
+            if (is_newline(first_token) or is_comment(first_token, self.language))
+                return null;
+
             var code = Term{ .word = first_token.word, .kind = Term.Kind.Code };
             self.tokenizer.commit_peek();
 
@@ -498,7 +501,7 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_markdown_code_term(self: *Self) ?Term {
+    fn pop_md_code_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             if (first_token.symbol != tkn.Symbol.Backtick)
                 return null;
@@ -517,7 +520,7 @@ pub const Parser = struct {
         }
         return null;
     }
-    fn pop_markdown_formula_term(self: *Self) ?Term {
+    fn pop_md_formula_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             if (first_token.symbol != tkn.Symbol.Dollar)
                 return null;
@@ -537,7 +540,7 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_markdown_comment_start(self: *Self) ?Term {
+    fn pop_md_comment_start(self: *Self) ?Term {
         std.debug.assert(self.language == Language.Markdown);
 
         // We look for '<!--'
