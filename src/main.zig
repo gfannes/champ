@@ -20,6 +20,20 @@ pub fn main() !void {
         options.print_help = true;
     };
 
+    if (options.mode == cli.Mode.Lsp) {
+        try options.setLogfile("/tmp/chimp.log");
+    }
+
+    var maybe_outfile: ?std.fs.File = null;
+    defer {
+        if (maybe_outfile) |outfile| outfile.close();
+    }
+    if (options.logfile) |logfile| {
+        const outfile = try std.fs.createFileAbsolute(logfile, .{});
+        out = outfile.writer();
+        maybe_outfile = outfile;
+    }
+
     var config = cfg.Config.init(gpa);
     defer config.deinit();
     try config.loadTestDefaults();
@@ -30,7 +44,7 @@ pub fn main() !void {
     var maybe_fb: ?std.heap.FixedBufferAllocator = null;
     defer if (maybe_fb) |fb| gpa.free(fb.buffer);
     if (config.max_memsize) |max_memsize| {
-        std.debug.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
+        try out.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
         maybe_fb = std.heap.FixedBufferAllocator.init(try gpa.alloc(u8, max_memsize));
         if (maybe_fb) |*fb| ma = fb.allocator();
     }

@@ -10,9 +10,12 @@ const cli = @import("cli.zig");
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
 const cfg = @import("cfg.zig");
+const lsp = @import("lsp.zig");
 
 pub const Error = error{
     UnknownFileType,
+    ModeNotSet,
+    NotImplemented,
 };
 
 pub const App = struct {
@@ -25,12 +28,18 @@ pub const App = struct {
 
     pub fn run(self: Self) !void {
         const start_time = std.time.milliTimestamp();
-        try self._run();
+        if (self.options.mode) |mode| {
+            switch (mode) {
+                cli.Mode.Ls => try self.run_ls(),
+                cli.Mode.Lsp => try self.run_lsp(),
+            }
+        } else return Error.ModeNotSet;
+        try self.run_ls();
         const stop_time = std.time.milliTimestamp();
         std.debug.print("Duration: {}ms\n", .{stop_time - start_time});
     }
 
-    fn _run(self: Self) !void {
+    fn run_ls(self: Self) !void {
         for (self.config.groves.items) |grove| {
             if (!strings.contains(u8, self.options.groves.items, grove.name))
                 // Skip this grove
@@ -150,6 +159,20 @@ pub const App = struct {
 
             try w.walk(dir, &cb);
             std.debug.print("file_count: {}, byte_count {}MB, token_count {}\n", .{ cb.file_count, cb.byte_count / 1000000, cb.token_count });
+        }
+    }
+
+    fn run_lsp(self: Self) !void {
+        try self.out.print("Lsp server started {}\n", .{std.time.timestamp()});
+
+        var cin = std.io.getStdIn();
+        var cout = std.io.getStdOut();
+
+        var server = lsp.Server.init(cin.reader(), cout.writer(), self.out.*, self.ma);
+        defer server.deinit();
+
+        while (true) {
+            try server.waitForRequest();
         }
     }
 

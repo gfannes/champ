@@ -1,33 +1,46 @@
 const std = @import("std");
 
-const CliError = error{
+const Error = error{
     CouldNotFindExeName,
     UnknownArgument,
+    ModeAlreadySet,
+};
+
+pub const Mode = enum {
+    Ls,
+    Lsp,
 };
 
 pub const Options = struct {
+    const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
     exe_name: []const u8 = &.{},
     print_help: bool = false,
     groves: Strings = undefined,
+    logfile: ?[]const u8 = null,
     do_scan: bool = false,
     do_parse: bool = false,
     verbose: usize = 0,
+    mode: ?Mode = null,
 
     _args: [][*:0]u8 = &.{},
     _aa: std.heap.ArenaAllocator = undefined,
 
-    pub fn init(self: *Options, ma: std.mem.Allocator) void {
+    pub fn init(self: *Self, ma: std.mem.Allocator) void {
         self._args = std.os.argv;
         self._aa = std.heap.ArenaAllocator.init(ma);
         self.groves = Strings.init(self._aa.allocator());
     }
-    pub fn deinit(self: Options) void {
+    pub fn deinit(self: Self) void {
         self._aa.deinit();
     }
 
-    pub fn parse(self: *Options) !void {
+    pub fn setLogfile(self: *Self, logfile: []const u8) !void {
+        self.logfile = try self._aa.allocator().dupe(u8, logfile);
+    }
+
+    pub fn parse(self: *Self) !void {
         self.exe_name = (self._pop() orelse return error.CouldNotFindExeName).arg;
 
         while (self._pop()) |arg| {
@@ -39,10 +52,21 @@ pub const Options = struct {
             } else if (arg.is("-g", "--grove")) {
                 if (self._pop()) |x|
                     try self.groves.append(x.arg);
+            } else if (arg.is("-l", "--log")) {
+                if (self._pop()) |x|
+                    self.logfile = x.arg;
             } else if (arg.is("-s", "--scan")) {
                 self.do_scan = true;
             } else if (arg.is("-p", "--parse")) {
                 self.do_parse = true;
+            } else if (arg.is("ls", "ls")) {
+                if (self.mode != null)
+                    return Error.ModeAlreadySet;
+                self.mode = Mode.Ls;
+            } else if (arg.is("lsp", "lsp")) {
+                if (self.mode != null)
+                    return Error.ModeAlreadySet;
+                self.mode = Mode.Lsp;
             } else {
                 std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
                 return error.UnknownArgument;
@@ -50,19 +74,24 @@ pub const Options = struct {
         }
     }
 
-    pub fn help(_: Options) []const u8 {
+    pub fn help(_: Self) []const u8 {
         const msg = "" ++
-            "chimp <options>\n" ++
+            "chimp <options> <command>\n" ++
+            "  Options:\n" ++
             "    -h  --help           Print this help\n" ++
             "    -v  --verbose LEVEL  Verbosity LEVEL [optional, default 0]\n" ++
             "    -g  --grove   NAME   Use grove NAME\n" ++
+            "    -l  --log     FILE   Log to FILE\n" ++
             "    -s  --scan           Scan\n" ++
             "    -p  --parse          Parse\n" ++
+            "  Commands:\n" ++
+            "    ls                   List\n" ++
+            "    lsp                  Lsp server\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }
 
-    fn _pop(self: *Options) ?Arg {
+    fn _pop(self: *Self) ?Arg {
         if (self._args.len == 0) return null;
 
         const ma = self._aa.allocator();

@@ -17,7 +17,8 @@ end
 
 desc 'Run all UTs'
 task :ut, %i[filter] do |task, args|
-    sh "zig build test"
+    filter = (args[:filter]||'').split(':').map{|e|"-Dtest-filter=#{e}"}*' '
+    sh "zig build test #{filter}"
 
     mode = :release
     # mode = :debug
