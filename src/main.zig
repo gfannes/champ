@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const cli = @import("cli.zig");
 const cfg = @import("cfg.zig");
@@ -40,7 +41,10 @@ pub fn main() !void {
 
     var cfg_loader = try cfg.Loader.init(gpa);
     defer cfg_loader.deinit();
-    try cfg_loader.loadFromFile("/home/geertf/.config/champ/config.zon");
+
+    const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
+    try cfg_loader.loadFromFile(config_fp);
+
     const config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
     std.debug.print("config: {any}\n", .{config});
 
