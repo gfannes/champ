@@ -6,6 +6,14 @@ task :default do
     sh 'rake -T'
 end
 
+desc 'Install'
+task :install do
+    # safe is faster than fast...
+    mode = :safe
+    # mode = :fast
+    sh("zig build install --release=#{mode}")
+end
+
 desc 'Run'
 task :run, %i[extra mode] do |task, args|
     mode = args[:mode]&.to_sym || :release

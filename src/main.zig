@@ -4,6 +4,10 @@ const cli = @import("cli.zig");
 const cfg = @import("cfg.zig");
 const app = @import("app.zig");
 
+pub const Error = error{
+    CouldNotLoadConfig,
+};
+
 pub fn main() !void {
     var stdout = std.io.getStdOut();
     var out = stdout.writer();
@@ -34,9 +38,11 @@ pub fn main() !void {
         maybe_outfile = outfile;
     }
 
-    var config = cfg.Config.init(gpa);
-    defer config.deinit();
-    try config.loadTestDefaults();
+    var cfg_loader = try cfg.Loader.init(gpa);
+    defer cfg_loader.deinit();
+    try cfg_loader.loadFromFile("/home/geertf/.config/champ/config.zon");
+    const config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
+    std.debug.print("config: {any}\n", .{config});
 
     // gpa: 1075ms
     // fba: 640ms

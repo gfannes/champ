@@ -34,13 +34,12 @@ pub const App = struct {
                 cli.Mode.Lsp => try self.run_lsp(),
             }
         } else return Error.ModeNotSet;
-        try self.run_ls();
         const stop_time = std.time.milliTimestamp();
         std.debug.print("Duration: {}ms\n", .{stop_time - start_time});
     }
 
     fn run_ls(self: Self) !void {
-        for (self.config.groves.items) |grove| {
+        for (self.config.groves) |grove| {
             if (!strings.contains(u8, self.options.groves.items, grove.name))
                 // Skip this grove
                 continue;
@@ -74,7 +73,7 @@ pub const App = struct {
 
                     if (my.grove.include) |include| {
                         const ext = std.fs.path.extension(name);
-                        if (!strings.contains(u8, include.items, ext))
+                        if (!strings.contains(u8, include, ext))
                             // Skip this extension
                             return;
                     }
