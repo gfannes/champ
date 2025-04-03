@@ -8,7 +8,6 @@ end
 
 desc 'Install'
 task :install do
-    # safe is faster than fast...
     mode = :safe
     # mode = :fast
 
