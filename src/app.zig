@@ -170,8 +170,25 @@ pub const App = struct {
         var server = lsp.Server.init(cin.reader(), cout.writer(), self.out.*, self.ma);
         defer server.deinit();
 
-        while (true) {
-            try server.waitForRequest();
+        var count: usize = 0;
+        while (true) : (count += 1) {
+            try self.out.print("[Iteration](count:{})\n", .{count});
+
+            const request, const response = try server.receive();
+            if (request.id) |_| {
+                if (std.mem.eql(u8, request.method, "initialize")) {
+                    const result = try server.alloc(&response.result, 1);
+                    const capabilities = try server.alloc(&result.capabilities, 1);
+                    capabilities.documentSymbolProvider = true;
+                    capabilities.workspaceSymbolProvider = true;
+                    const serverInfo = try server.alloc(&result.serverInfo, 1);
+                    serverInfo.name = "chimp";
+                    serverInfo.version = "1.2.3";
+                    try server.send(response);
+                } else if (std.mem.eql(u8, request.method, "textDocument/documentSymbol")) {}
+            } else {
+                if (std.mem.eql(u8, request.method, "initialize")) {}
+            }
         }
     }
 

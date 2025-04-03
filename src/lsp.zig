@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const dto = @import("lsp/dto.zig");
+
 const strange = @import("rubr").strange;
 
 pub const Error = error{
@@ -7,6 +9,7 @@ pub const Error = error{
     CouldNotReadEOH,
     CouldNotReadContentLength,
     CouldNotReadData,
+    UnexpectedCountForOptional,
 };
 
 pub const Server = struct {
@@ -15,51 +18,103 @@ pub const Server = struct {
 
     in: std.fs.File.Reader,
     out: std.fs.File.Writer,
-    log: std.fs.File.Writer,
-
-    buffer: Buffer,
+    log: ?std.fs.File.Writer,
+    ma: std.mem.Allocator,
 
     content_length: ?usize = null,
+    content: Buffer,
 
-    pub fn init(in: std.fs.File.Reader, out: std.fs.File.Writer, log: std.fs.File.Writer, ma: std.mem.Allocator) Self {
-        return Self{ .in = in, .out = out, .log = log, .buffer = Buffer.init(ma) };
+    aa: std.heap.ArenaAllocator,
+    request: dto.Request = undefined,
+    response: dto.Response = undefined,
+
+    pub fn init(in: std.fs.File.Reader, out: std.fs.File.Writer, log: ?std.fs.File.Writer, ma: std.mem.Allocator) Self {
+        return Self{
+            .in = in,
+            .out = out,
+            .log = log,
+            .ma = ma,
+            .content = Buffer.init(ma),
+            .aa = std.heap.ArenaAllocator.init(ma),
+        };
     }
     pub fn deinit(self: *Self) void {
-        self.buffer.deinit();
+        self.content.deinit();
+        self.aa.deinit();
     }
 
-    pub fn waitForRequest(self: *Self) !void {
+    pub fn receive(self: *Self) !struct { *const dto.Request, *dto.Response } {
+        self.aa.deinit();
+        self.aa = std.heap.ArenaAllocator.init(self.ma);
+
         try self.readHeader();
         try self.readContent();
+
+        if (self.log) |log|
+            try log.print("[Request]({s})\n", .{self.content.items});
+        self.request = (try std.json.parseFromSlice(dto.Request, self.aa.allocator(), self.content.items, .{})).value;
+
+        self.response = dto.Response{ .id = self.request.id };
+
+        return .{ &self.request, &self.response };
+    }
+
+    pub fn send(self: *Self, response: *const dto.Response) !void {
+        try self.content.resize(0);
+        try std.json.stringify(response, .{}, self.content.writer());
+        if (self.log) |log|
+            try log.print("[Response]({s})\n", .{self.content.items});
+        try self.out.print("Content-Length: {}\r\n\r\n{s}", .{ self.content.items.len, self.content.items });
+    }
+
+    pub fn alloc(self: *Self, dst: anytype, count: usize) !AllocType(@TypeOf(dst.*)) {
+        _ = self;
+        const Dst = @TypeOf(dst.*);
+        const typeInfo = @typeInfo(Dst);
+        switch (typeInfo) {
+            .optional => {
+                if (count != 1) return Error.UnexpectedCountForOptional;
+                dst.* = typeInfo.optional.child{};
+                return &(dst.* orelse unreachable);
+            },
+            else => unreachable,
+        }
+    }
+
+    fn AllocType(T: type) type {
+        const ti = @typeInfo(T);
+        switch (ti) {
+            .optional => return *ti.optional.child,
+            else => unreachable,
+        }
     }
 
     fn readHeader(self: *Self) !void {
         self.content_length = null;
 
-        try self.buffer.resize(1024);
-        if (try self.in.readUntilDelimiterOrEof(self.buffer.items, '\r')) |line| {
-            try self.log.print("[Line](content:{s})\n", .{line});
+        try self.content.resize(1024);
+        if (try self.in.readUntilDelimiterOrEof(self.content.items, '\r')) |line| {
+            if (self.log) |log|
+                try log.print("[Line](content:{s})\n", .{line});
 
             var str = strange.Strange.init(line);
 
-            if (str.popTo(':')) |key| {
-                if (!std.mem.eql(u8, key, "Content-Length"))
-                    return Error.UnexpectedKey;
-            }
-            _ = str.popMany(' ');
+            if (str.popStr("Content-Length:")) {
+                _ = str.popMany(' ');
+                self.content_length = str.popInt(usize) orelse return Error.CouldNotReadContentLength;
+            } else return Error.UnexpectedKey;
 
-            self.content_length = if (str.popInt(usize)) |i| i else return Error.CouldNotReadContentLength;
-            try self.buffer.resize(3);
-            if (try self.in.readAll(self.buffer.items) != 3) return Error.CouldNotReadEOH;
-            if (!std.mem.eql(u8, self.buffer.items, "\n\r\n")) return Error.CouldNotReadEOH;
+            // Read the remaining "\n\r\n"
+            try self.content.resize(3);
+            if (try self.in.readAll(self.content.items) != 3) return Error.CouldNotReadEOH;
+            if (!std.mem.eql(u8, self.content.items, "\n\r\n")) return Error.CouldNotReadEOH;
         }
     }
 
     fn readContent(self: *Self) !void {
         if (self.content_length) |cl| {
-            try self.buffer.resize(cl);
-            if (try self.in.readAll(self.buffer.items) != cl) return Error.CouldNotReadData;
-            try self.log.print("data:{s}\n", .{self.buffer.items});
+            try self.content.resize(cl);
+            if (try self.in.readAll(self.content.items) != cl) return Error.CouldNotReadData;
         }
     }
 };
@@ -219,157 +274,27 @@ test "lsp" {
         \\  "id": 0
         \\}
     ;
-    const Request = struct {
-        const Params = struct {
-            const Capabilities = struct {
-                const General = struct {
-                    positionEncodings: [][]const u8,
-                };
-                const TextDocument = struct {
-                    const ResolveSupport = struct {
-                        properties: [][]const u8,
-                    };
-                    const TagSupport = struct {
-                        valueSet: []i64,
-                    };
-                    const CodeAction = struct {
-                        const CodeActionLiteralSupport = struct {
-                            const CodeActionKind = struct {
-                                valueSet: [][]const u8,
-                            };
-                            codeActionKind: CodeActionKind,
-                        };
-                        codeActionLiteralSupport: CodeActionLiteralSupport,
-                        dataSupport: bool,
-                        disabledSupport: bool,
-                        isPreferredSupport: bool,
-                        resolveSupport: ResolveSupport,
-                    };
-                    const Completion = struct {
-                        const CompletionItem = struct {
-                            deprecatedSupport: bool,
-                            insertReplaceSupport: bool,
-                            resolveSupport: ResolveSupport,
-                            snippetSupport: bool,
-                            tagSupport: TagSupport,
-                        };
-                        const CompletionItemKind = struct {
-                            // valueSet: [][]const u8 = &.{},
-                        };
-                        completionItem: CompletionItem,
-                        completionItemKind: CompletionItemKind,
-                    };
-                    const Formatting = struct {
-                        dynamicRegistration: bool,
-                    };
-                    const Hover = struct {
-                        contentFormat: [][]const u8,
-                    };
-                    const InlayHint = struct {
-                        dynamicRegistration: bool,
-                    };
-                    const PublishDiagnostics = struct {
-                        tagSupport: TagSupport,
-                        versionSupport: bool,
-                    };
-                    const Rename = struct {
-                        dynamicRegistration: bool,
-                        honorsChangeAnnotations: bool,
-                        prepareSupport: bool,
-                    };
-                    const SignatureHelp = struct {
-                        const SignatureInformation = struct {
-                            const ParameterInformation = struct {
-                                labelOffsetSupport: bool,
-                            };
-                            activeParameterSupport: bool,
-                            documentationFormat: [][]const u8,
-                            parameterInformation: ParameterInformation,
-                        };
-                        signatureInformation: SignatureInformation,
-                    };
-
-                    codeAction: CodeAction,
-                    completion: Completion,
-                    formatting: Formatting,
-                    hover: Hover,
-                    inlayHint: InlayHint,
-                    publishDiagnostics: PublishDiagnostics,
-                    rename: Rename,
-                    signatureHelp: SignatureHelp,
-                };
-                const Window = struct {
-                    workDoneProgress: bool,
-                };
-
-                general: General,
-                textDocument: TextDocument,
-                window: Window,
-                workspace: Workspace,
-                const Workspace = struct {
-                    const DidChangeConfiguration = struct {
-                        dynamicRegistration: bool,
-                    };
-                    const DidChangeWatchedFiles = struct {
-                        dynamicRegistration: bool,
-                        relativePatternSupport: bool,
-                    };
-                    const ExecuteCommand = struct {
-                        dynamicRegistration: bool,
-                    };
-                    const FileOperations = struct {
-                        didRename: bool,
-                        willRename: bool,
-                    };
-                    const InlayHint = struct {
-                        refreshSupport: bool,
-                    };
-                    const Symbol = struct {
-                        dynamicRegistration: bool,
-                    };
-                    const WorkspaceEdit = struct {
-                        documentChanges: bool,
-                        failureHandling: []const u8,
-                        normalizesLineEndings: bool,
-                        resourceOperations: [][]const u8,
-                    };
-
-                    applyEdit: bool,
-                    configuration: bool,
-                    didChangeConfiguration: DidChangeConfiguration,
-                    didChangeWatchedFiles: DidChangeWatchedFiles,
-                    executeCommand: ExecuteCommand,
-                    fileOperations: FileOperations,
-                    inlayHint: InlayHint,
-                    symbol: Symbol,
-                    workspaceEdit: WorkspaceEdit,
-                    workspaceFolders: bool,
-                };
-            };
-            const ClientInfo = struct {
-                name: []const u8,
-                version: []const u8,
-            };
-            const WorkspaceFolder = struct {
-                name: []const u8,
-                uri: []const u8,
-            };
-
-            capabilities: Capabilities,
-            clientInfo: ClientInfo,
-            processId: usize,
-            rootPath: []const u8,
-            rootUri: []const u8,
-            workspaceFolders: []WorkspaceFolder,
-        };
-
-        jsonrpc: []const u8,
-        method: []const u8,
-        params: Params,
-        id: usize,
-    };
     var aa = std.heap.ArenaAllocator.init(ut.allocator);
     defer aa.deinit();
-    const p = try std.json.parseFromSlice(Request, aa.allocator(), request, .{});
+    const p = try std.json.parseFromSlice(dto.Request, aa.allocator(), request, .{});
     std.debug.print("p: {}\n", .{p.value});
+
+    {
+        const response = dto.Response{
+            .id = 42,
+            .result = dto.Response.Result{
+                .capabilities = dto.ServerCapabilities{ .workspaceSymbolProvider = true },
+                .serverInfo = dto.ServerInfo{
+                    .name = "chimp",
+                    .version = "0.0.0",
+                },
+            },
+        };
+
+        var buffer = std.ArrayList(u8).init(ut.allocator);
+        defer buffer.deinit();
+
+        try std.json.stringify(response, .{}, buffer.writer());
+        std.debug.print("response {s}\n", .{buffer.items});
+    }
 }

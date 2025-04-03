@@ -11,14 +11,14 @@ pub const Error = error{
 
 pub fn main() !void {
     var stdout = std.io.getStdOut();
-    var out = stdout.writer();
+    var stdoutw = stdout.writer();
 
-    var gp = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gp.deinit();
-    const gpa = gp.allocator();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const gpaa = gpa.allocator();
 
     var options = cli.Options{};
-    options.init(gpa);
+    try options.init(gpaa);
     defer options.deinit();
 
     options.parse() catch {
@@ -35,34 +35,33 @@ pub fn main() !void {
     }
     if (options.logfile) |logfile| {
         const outfile = try std.fs.createFileAbsolute(logfile, .{});
-        out = outfile.writer();
+        stdoutw = outfile.writer();
         maybe_outfile = outfile;
     }
 
-    var cfg_loader = try cfg.Loader.init(gpa);
+    var cfg_loader = try cfg.Loader.init(gpaa);
     defer cfg_loader.deinit();
 
     const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
     try cfg_loader.loadFromFile(config_fp);
 
     const config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
-    std.debug.print("config: {any}\n", .{config});
 
     // gpa: 1075ms
     // fba: 640ms
-    var ma = gpa;
+    var ma = gpaa;
     var maybe_fb: ?std.heap.FixedBufferAllocator = null;
-    defer if (maybe_fb) |fb| gpa.free(fb.buffer);
+    defer if (maybe_fb) |fb| gpaa.free(fb.buffer);
     if (config.max_memsize) |max_memsize| {
-        try out.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
-        maybe_fb = std.heap.FixedBufferAllocator.init(try gpa.alloc(u8, max_memsize));
+        try stdoutw.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
+        maybe_fb = std.heap.FixedBufferAllocator.init(try gpaa.alloc(u8, max_memsize));
         if (maybe_fb) |*fb| ma = fb.allocator();
     }
 
     if (options.print_help) {
         std.debug.print("{s}", .{options.help()});
     } else {
-        var my_app = app.App{ .options = &options, .config = &config, .out = &out, .ma = ma };
+        var my_app = app.App{ .options = &options, .config = &config, .out = &stdoutw, .ma = ma };
         try my_app.run();
     }
 }

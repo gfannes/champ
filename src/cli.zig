@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const cli = @import("rubr").cli;
+
 const Error = error{
     CouldNotFindExeName,
     UnknownArgument,
@@ -24,36 +26,39 @@ pub const Options = struct {
     verbose: usize = 0,
     mode: ?Mode = null,
 
-    _args: [][*:0]u8 = &.{},
-    _aa: std.heap.ArenaAllocator = undefined,
+    args: cli.Args = undefined,
+    aa: std.heap.ArenaAllocator = undefined,
 
-    pub fn init(self: *Self, ma: std.mem.Allocator) void {
-        self._args = std.os.argv;
-        self._aa = std.heap.ArenaAllocator.init(ma);
-        self.groves = Strings.init(self._aa.allocator());
+    pub fn init(self: *Self, ma: std.mem.Allocator) !void {
+        self.args = cli.Args.init(ma);
+        try self.args.setupFromOS();
+
+        self.aa = std.heap.ArenaAllocator.init(ma);
+        self.groves = Strings.init(self.aa.allocator());
     }
-    pub fn deinit(self: Self) void {
-        self._aa.deinit();
+    pub fn deinit(self: *Self) void {
+        self.args.deinit();
+        self.aa.deinit();
     }
 
     pub fn setLogfile(self: *Self, logfile: []const u8) !void {
-        self.logfile = try self._aa.allocator().dupe(u8, logfile);
+        self.logfile = try self.aa.allocator().dupe(u8, logfile);
     }
 
     pub fn parse(self: *Self) !void {
-        self.exe_name = (self._pop() orelse return error.CouldNotFindExeName).arg;
+        self.exe_name = (self.args.pop() orelse return error.CouldNotFindExeName).arg;
 
-        while (self._pop()) |arg| {
+        while (self.args.pop()) |arg| {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
             } else if (arg.is("-v", "--verbose")) {
-                if (self._pop()) |x|
+                if (self.args.pop()) |x|
                     self.verbose = try x.as(usize);
             } else if (arg.is("-g", "--grove")) {
-                if (self._pop()) |x|
+                if (self.args.pop()) |x|
                     try self.groves.append(x.arg);
             } else if (arg.is("-l", "--log")) {
-                if (self._pop()) |x|
+                if (self.args.pop()) |x|
                     self.logfile = x.arg;
             } else if (arg.is("-s", "--scan")) {
                 self.do_scan = true;
@@ -89,30 +94,5 @@ pub const Options = struct {
             "    lsp                  Lsp server\n" ++
             "Developed by Geert Fannes\n";
         return msg;
-    }
-
-    fn _pop(self: *Self) ?Arg {
-        if (self._args.len == 0) return null;
-
-        const ma = self._aa.allocator();
-        const arg = ma.dupe(u8, std.mem.sliceTo(self._args[0], 0)) catch return null;
-        self._args.ptr += 1;
-        self._args.len -= 1;
-
-        return Arg{ .arg = arg };
-    }
-};
-
-const Arg = struct {
-    const Self = @This();
-
-    arg: []const u8,
-
-    fn is(self: Arg, sh: []const u8, lh: []const u8) bool {
-        return std.mem.eql(u8, self.arg, sh) or std.mem.eql(u8, self.arg, lh);
-    }
-
-    fn as(self: Self, T: type) !T {
-        return try std.fmt.parseInt(T, self.arg, 10);
     }
 };

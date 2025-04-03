@@ -11,7 +11,9 @@ task :install do
     # safe is faster than fast...
     mode = :safe
     # mode = :fast
-    sh("zig build install --release=#{mode}")
+
+    gubg_bin_dir = File.join(ENV['gubg'], 'bin')
+    sh("zig build install --release=#{mode} --prefix-exe-dir #{gubg_bin_dir}")
 end
 
 desc 'Run'
