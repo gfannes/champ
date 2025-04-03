@@ -171,23 +171,45 @@ pub const App = struct {
         defer server.deinit();
 
         var count: usize = 0;
-        while (true) : (count += 1) {
+        var do_continue = true;
+        var init_ok = false;
+        while (do_continue) : (count += 1) {
             try self.out.print("[Iteration](count:{})\n", .{count});
 
-            const request, const response = try server.receive();
+            const request = try server.receive();
+            const dto = lsp.dto;
             if (request.id) |_| {
                 if (std.mem.eql(u8, request.method, "initialize")) {
-                    const result = try server.alloc(&response.result, 1);
-                    const capabilities = try server.alloc(&result.capabilities, 1);
-                    capabilities.documentSymbolProvider = true;
-                    capabilities.workspaceSymbolProvider = true;
-                    const serverInfo = try server.alloc(&result.serverInfo, 1);
-                    serverInfo.name = "chimp";
-                    serverInfo.version = "1.2.3";
-                    try server.send(response);
-                } else if (std.mem.eql(u8, request.method, "textDocument/documentSymbol")) {}
+                    const result = dto.InitializeResult{
+                        .capabilities = dto.ServerCapabilities{
+                            .documentSymbolProvider = true,
+                            .workspaceSymbolProvider = true,
+                        },
+                        .serverInfo = dto.ServerInfo{
+                            .name = "chimp",
+                            .version = "1.2.3",
+                        },
+                    };
+                    try server.send(result);
+                } else if (std.mem.eql(u8, request.method, "shutdown")) {
+                    try server.send(null);
+                } else if (std.mem.eql(u8, request.method, "textDocument/documentSymbol")) {
+                    // &todo replace with actual symbols. Workspace symbols seems to not work in Helix.
+                    const symbols = [_]dto.DocumentSymbol{ .{ .name = "abc" }, .{ .name = "def", .kind = 5 } };
+                    try server.send(symbols);
+                } else {
+                    try self.out.print("Unhandled request '{s}'\n", .{request.method});
+                }
             } else {
-                if (std.mem.eql(u8, request.method, "initialize")) {}
+                if (std.mem.eql(u8, request.method, "textDocument/didOpen")) {
+                    //
+                } else if (std.mem.eql(u8, request.method, "initialized")) {
+                    init_ok = true;
+                } else if (std.mem.eql(u8, request.method, "exit")) {
+                    do_continue = false;
+                } else {
+                    try self.out.print("Unhandled notification '{s}'\n", .{request.method});
+                }
             }
         }
     }

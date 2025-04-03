@@ -16,18 +16,22 @@ pub const Request = struct {
 
     jsonrpc: []const u8,
     method: []const u8,
-    params: Params,
+    params: ?Params = null,
     id: ?i32 = null,
 };
 
-pub const Response = struct {
-    pub const Result = struct {
-        capabilities: ?ServerCapabilities = null,
-        serverInfo: ?ServerInfo = null,
+// Generic Response with injected, optional Result
+// &todo: Add support for 'error'
+pub fn Response(Result: type) type {
+    return struct {
+        id: i32,
+        result: ?*const Result,
     };
+}
 
-    id: ?i32 = null,
-    result: ?Result = null,
+pub const InitializeResult = struct {
+    capabilities: ServerCapabilities,
+    serverInfo: ServerInfo,
 };
 
 pub const Position = struct {
@@ -49,9 +53,9 @@ pub const DocumentSymbol = struct {
 
 pub const TextDocumentItem = struct {
     uri: []const u8,
-    languageId: []const u8,
-    version: i32,
-    text: []const u8,
+    languageId: ?[]const u8 = null,
+    version: ?i32 = null,
+    text: ?[]const u8 = null,
 };
 
 pub const WorkspaceFolder = struct {

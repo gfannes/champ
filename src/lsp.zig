@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const dto = @import("lsp/dto.zig");
+pub const dto = @import("lsp/dto.zig");
 
 const strange = @import("rubr").strange;
 
@@ -10,6 +10,8 @@ pub const Error = error{
     CouldNotReadContentLength,
     CouldNotReadData,
     UnexpectedCountForOptional,
+    ExpectedValidRequest,
+    ExpectedValidId,
 };
 
 pub const Server = struct {
@@ -25,8 +27,7 @@ pub const Server = struct {
     content: Buffer,
 
     aa: std.heap.ArenaAllocator,
-    request: dto.Request = undefined,
-    response: dto.Response = undefined,
+    request: ?dto.Request = null,
 
     pub fn init(in: std.fs.File.Reader, out: std.fs.File.Writer, log: ?std.fs.File.Writer, ma: std.mem.Allocator) Self {
         return Self{
@@ -43,7 +44,7 @@ pub const Server = struct {
         self.aa.deinit();
     }
 
-    pub fn receive(self: *Self) !struct { *const dto.Request, *dto.Response } {
+    pub fn receive(self: *Self) !*const dto.Request {
         self.aa.deinit();
         self.aa = std.heap.ArenaAllocator.init(self.ma);
 
@@ -54,16 +55,32 @@ pub const Server = struct {
             try log.print("[Request]({s})\n", .{self.content.items});
         self.request = (try std.json.parseFromSlice(dto.Request, self.aa.allocator(), self.content.items, .{})).value;
 
-        self.response = dto.Response{ .id = self.request.id };
-
-        return .{ &self.request, &self.response };
+        return &(self.request orelse unreachable);
     }
 
-    pub fn send(self: *Self, response: *const dto.Response) !void {
+    pub fn send(self: *Self, result: anytype) !void {
+        const request = self.request orelse return Error.ExpectedValidRequest;
+        const id = request.id orelse return Error.ExpectedValidId;
+        defer self.request = null;
+
+        const Result = @TypeOf(result);
+
+        const response = sw: switch (@typeInfo(Result)) {
+            .null => {
+                const Response = dto.Response(bool);
+                break :sw Response{ .id = id, .result = null };
+            },
+            else => {
+                const Response = dto.Response(Result);
+                break :sw Response{ .id = id, .result = &result };
+            },
+        };
+
         try self.content.resize(0);
         try std.json.stringify(response, .{}, self.content.writer());
         if (self.log) |log|
             try log.print("[Response]({s})\n", .{self.content.items});
+
         try self.out.print("Content-Length: {}\r\n\r\n{s}", .{ self.content.items.len, self.content.items });
     }
 
