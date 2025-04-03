@@ -297,15 +297,19 @@ test "lsp" {
     std.debug.print("p: {}\n", .{p.value});
 
     {
-        const response = dto.Response{
-            .id = 42,
-            .result = dto.Response.Result{
-                .capabilities = dto.ServerCapabilities{ .workspaceSymbolProvider = true },
-                .serverInfo = dto.ServerInfo{
-                    .name = "chimp",
-                    .version = "0.0.0",
-                },
+        const Result = dto.InitializeResult;
+        const result: Result = .{
+            .capabilities = dto.ServerCapabilities{ .workspaceSymbolProvider = true },
+            .serverInfo = dto.ServerInfo{
+                .name = "chimp",
+                .version = "0.0.0",
             },
+        };
+
+        const Response = dto.Response(Result);
+        const response = Response{
+            .id = 42,
+            .result = &result,
         };
 
         var buffer = std.ArrayList(u8).init(ut.allocator);
