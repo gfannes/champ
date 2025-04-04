@@ -9,7 +9,7 @@ const Error = error{
 };
 
 pub const Mode = enum {
-    Ls,
+    Perf,
     Lsp,
 };
 
@@ -64,10 +64,10 @@ pub const Options = struct {
                 self.do_scan = true;
             } else if (arg.is("-p", "--parse")) {
                 self.do_parse = true;
-            } else if (arg.is("ls", "ls")) {
+            } else if (arg.is("perf", "perf")) {
                 if (self.mode != null)
                     return Error.ModeAlreadySet;
-                self.mode = Mode.Ls;
+                self.mode = Mode.Perf;
             } else if (arg.is("lsp", "lsp")) {
                 if (self.mode != null)
                     return Error.ModeAlreadySet;
@@ -90,7 +90,7 @@ pub const Options = struct {
             "    -s  --scan           Scan\n" ++
             "    -p  --parse          Parse\n" ++
             "  Commands:\n" ++
-            "    ls                   List\n" ++
+            "    perf                 Performance tests\n" ++
             "    lsp                  Lsp server\n" ++
             "Developed by Geert Fannes\n";
         return msg;

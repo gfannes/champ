@@ -1,7 +1,3 @@
-const std = @import("std");
-
-const cli = @import("cli.zig");
-const cfg = @import("cfg.zig");
 const app = @import("app.zig");
 
 pub fn main() !void {
