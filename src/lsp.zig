@@ -21,7 +21,7 @@ pub const Server = struct {
     in: std.fs.File.Reader,
     out: std.fs.File.Writer,
     log: ?std.fs.File.Writer,
-    ma: std.mem.Allocator,
+    a: std.mem.Allocator,
 
     content_length: ?usize = null,
     content: Buffer,
@@ -29,14 +29,14 @@ pub const Server = struct {
     aa: std.heap.ArenaAllocator,
     request: ?dto.Request = null,
 
-    pub fn init(in: std.fs.File.Reader, out: std.fs.File.Writer, log: ?std.fs.File.Writer, ma: std.mem.Allocator) Self {
+    pub fn init(in: std.fs.File.Reader, out: std.fs.File.Writer, log: ?std.fs.File.Writer, a: std.mem.Allocator) Self {
         return Self{
             .in = in,
             .out = out,
             .log = log,
-            .ma = ma,
-            .content = Buffer.init(ma),
-            .aa = std.heap.ArenaAllocator.init(ma),
+            .a = a,
+            .content = Buffer.init(a),
+            .aa = std.heap.ArenaAllocator.init(a),
         };
     }
     pub fn deinit(self: *Self) void {
@@ -46,7 +46,7 @@ pub const Server = struct {
 
     pub fn receive(self: *Self) !*const dto.Request {
         self.aa.deinit();
-        self.aa = std.heap.ArenaAllocator.init(self.ma);
+        self.aa = std.heap.ArenaAllocator.init(self.a);
 
         try self.readHeader();
         try self.readContent();
