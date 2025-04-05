@@ -1,30 +1,115 @@
 const std = @import("std");
 
+const tkn = @import("../tkn.zig");
+const cfg = @import("../cfg.zig");
+const mero = @import("../mero.zig");
 const Parser = @import("parser.zig").Parser;
 
 const naft = @import("rubr").naft;
+const strings = @import("rubr").strings;
+const walker = @import("rubr").walker;
+const Log = @import("rubr").log.Log;
 
 pub const Grove = struct {
     const Self = @This();
+    const String = std.ArrayList(u8);
 
-    name: []const u8,
+    log: *const Log,
+    name: ?[]const u8 = null,
     path: ?[]const u8 = null,
     a: std.mem.Allocator,
 
-    pub fn init(name: []const u8, a: std.mem.Allocator) !Self {
-        return Self{ .name = try a.dupe(name), .a = a };
+    pub fn init(log: *const Log, a: std.mem.Allocator) !Self {
+        return Self{ .log = log, .a = a };
     }
     pub fn deinit(self: *Self) void {
-        self.a.free(self.name);
+        if (self.name) |name|
+            self.a.free(name);
         if (self.path) |path|
             self.a.free(path);
     }
 
-    pub fn loadFromPath(self: *Self, path: []const u8) !void {
-        self.path = try self.a.dupe(path);
-        //    parser: Parser,
-        // .parser=Parser.init(a)
+    pub fn load(self: *Self, cfg_grove: *const cfg.Grove) !void {
+        var content = String.init(self.a);
+        defer content.deinit();
+
+        var cb = Cb{ .outer = self, .cfg_grove = cfg_grove, .content = &content, .a = self.a };
+
+        const dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
+
+        var w = try walker.Walker.init(self.a);
+        defer w.deinit();
+        try w.walk(dir, &cb);
+
+        self.name = try self.a.dupe(u8, cfg_grove.name);
+        self.path = try self.a.dupe(u8, cfg_grove.path);
     }
+
+    const Cb = struct {
+        outer: *const Self,
+        cfg_grove: *const cfg.Grove,
+        content: *String,
+        a: std.mem.Allocator,
+
+        file_count: usize = 0,
+
+        pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
+            const name = path[offsets.name..];
+
+            if (my.cfg_grove.include) |include| {
+                const ext = std.fs.path.extension(name);
+                if (!strings.contains(u8, include, ext))
+                    // Skip this extension
+                    return;
+            }
+
+            const file = try dir.openFile(name, .{});
+            defer file.close();
+
+            const stat = try file.stat();
+
+            const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
+            if (!size_is_ok)
+                return;
+
+            if (my.cfg_grove.max_count) |max_count|
+                if (my.file_count >= max_count)
+                    return;
+            my.file_count += 1;
+
+            try my.content.resize(stat.size);
+            _ = try file.readAll(my.content.items);
+
+            const my_ext = std.fs.path.extension(name);
+            if (mero.Language.from_extension(my_ext)) |language| {
+                var parser = mero.Parser.init(my.a, language);
+                var root = try parser.parse(my.content.items);
+                errdefer root.deinit();
+
+                var mero_file = try mero.File.init(root, path, my.a);
+                defer mero_file.deinit();
+
+                if (my.outer.log.level(1)) |out| {
+                    var cb = struct {
+                        path: []const u8,
+                        o: @TypeOf(out),
+                        did_log_filename: bool = false,
+
+                        pub fn call(s: *@This(), amp: []const u8) !void {
+                            if (!s.did_log_filename) {
+                                try s.o.print("Filename: {s}\n", .{s.path});
+                                s.did_log_filename = true;
+                            }
+                            try s.o.print("{s}\n", .{amp});
+                        }
+                    }{ .path = path, .o = out };
+                    try mero_file.root.each_amp(&cb);
+                }
+            } else {
+                try my.outer.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+            }
+        }
+    };
 };
 
 pub const Term = struct {

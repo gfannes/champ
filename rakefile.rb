@@ -10,9 +10,11 @@ desc 'Install'
 task :install do
     mode = :safe
     # mode = :fast
+    # mode = nil
 
     gubg_bin_dir = File.join(ENV['gubg'], 'bin')
-    sh("zig build install --release=#{mode} --prefix-exe-dir #{gubg_bin_dir}")
+    mode_str = mode ? "--release=#{mode}" : ''
+    sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
 end
 
 desc 'Run'

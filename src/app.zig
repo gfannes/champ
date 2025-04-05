@@ -118,12 +118,13 @@ pub const App = struct {
                     try perf.call();
                 },
                 cli.Mode.Lsp => {
-                    const lsp = Lsp{
+                    var lsp = Lsp{
                         .config = &self.config,
                         .options = &self.options,
                         .log = &self.log,
                         .a = self.a,
                     };
+                    try lsp.init();
                     try lsp.call();
                 },
             }

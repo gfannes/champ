@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Log = @import("rubr").log.Log;
 const lsp = @import("rubr").lsp;
+const strings = @import("rubr").strings;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
@@ -18,13 +19,20 @@ pub const Lsp = struct {
     forest: mero.Forest = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest = mero.Forest.init(self.a);
+        self.forest = mero.Forest.init(self.log, self.a);
     }
     pub fn deinit(self: *Self) void {
         self.forest.deinit();
     }
 
-    pub fn call(self: Self) !void {
+    pub fn call(self: *Self) !void {
+        for (self.config.groves) |cfg_grove| {
+            if (!strings.contains(u8, self.options.groves.items, cfg_grove.name))
+                // Skip this grove
+                continue;
+            try self.forest.loadGrove(&cfg_grove);
+        }
+
         try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});
 
         var cin = std.io.getStdIn();
