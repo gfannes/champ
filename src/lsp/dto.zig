@@ -3,21 +3,28 @@ const std = @import("std");
 // Data Transfer Objects for LSP
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#responseMessage
 
+pub const String = []const u8;
+
 pub const Request = struct {
     pub const Params = struct {
         capabilities: ?ClientCapabilities = null,
         clientInfo: ?ClientInfo = null,
         processId: ?usize = null,
-        rootPath: ?[]const u8 = null,
-        rootUri: ?[]const u8 = null,
+        rootPath: ?String = null,
+        rootUri: ?String = null,
         workspaceFolders: ?[]WorkspaceFolder = null,
         textDocument: ?TextDocumentItem = null,
+        query: ?String = null,
     };
 
-    jsonrpc: []const u8,
-    method: []const u8,
+    jsonrpc: String,
+    method: String,
     params: ?Params = null,
     id: ?i32 = null,
+
+    pub fn is(self: Request, method: String) bool {
+        return std.mem.eql(u8, method, self.method);
+    }
 };
 
 // Generic Response with injected, optional Result
@@ -45,36 +52,49 @@ pub const Range = struct {
 };
 
 pub const DocumentSymbol = struct {
-    name: []const u8 = &.{},
+    name: String = &.{},
     kind: u32 = 7,
     range: Range = .{},
     selectionRange: Range = .{},
 };
 
+pub const WorkspaceSymbol = struct {
+    name: String = &.{},
+    kind: u32 = 7,
+    location: Location = .{},
+    containerName: ?String = null,
+    score: ?f32 = null,
+};
+
+pub const Location = struct {
+    uri: String = &.{},
+    range: Range = .{},
+};
+
 pub const TextDocumentItem = struct {
-    uri: []const u8,
-    languageId: ?[]const u8 = null,
+    uri: String,
+    languageId: ?String = null,
     version: ?i32 = null,
-    text: ?[]const u8 = null,
+    text: ?String = null,
 };
 
 pub const WorkspaceFolder = struct {
-    name: []const u8,
-    uri: []const u8,
+    name: String,
+    uri: String,
 };
 
 pub const ClientInfo = struct {
-    name: []const u8,
-    version: []const u8,
+    name: String,
+    version: String,
 };
 
 pub const ClientCapabilities = struct {
     pub const General = struct {
-        positionEncodings: [][]const u8,
+        positionEncodings: []String,
     };
     pub const TextDocument = struct {
         pub const ResolveSupport = struct {
-            properties: [][]const u8,
+            properties: []String,
         };
         pub const TagSupport = struct {
             valueSet: []i64,
@@ -82,7 +102,7 @@ pub const ClientCapabilities = struct {
         pub const CodeAction = struct {
             pub const CodeActionLiteralSupport = struct {
                 pub const CodeActionKind = struct {
-                    valueSet: [][]const u8,
+                    valueSet: []String,
                 };
                 codeActionKind: CodeActionKind,
             };
@@ -101,7 +121,7 @@ pub const ClientCapabilities = struct {
                 tagSupport: TagSupport,
             };
             pub const CompletionItemKind = struct {
-                // valueSet: [][]const u8 = &.{},
+                // valueSet: []String = &.{},
             };
             completionItem: CompletionItem,
             completionItemKind: CompletionItemKind,
@@ -110,7 +130,7 @@ pub const ClientCapabilities = struct {
             dynamicRegistration: bool,
         };
         pub const Hover = struct {
-            contentFormat: [][]const u8,
+            contentFormat: []String,
         };
         pub const InlayHint = struct {
             dynamicRegistration: bool,
@@ -130,7 +150,7 @@ pub const ClientCapabilities = struct {
                     labelOffsetSupport: bool,
                 };
                 activeParameterSupport: bool,
-                documentationFormat: [][]const u8,
+                documentationFormat: []String,
                 parameterInformation: ParameterInformation,
             };
             signatureInformation: SignatureInformation,
@@ -176,9 +196,9 @@ pub const ClientCapabilities = struct {
         };
         pub const WorkspaceEdit = struct {
             documentChanges: bool,
-            failureHandling: []const u8,
+            failureHandling: String,
             normalizesLineEndings: bool,
-            resourceOperations: [][]const u8,
+            resourceOperations: []String,
         };
 
         applyEdit: bool,
@@ -195,11 +215,20 @@ pub const ClientCapabilities = struct {
 };
 
 pub const ServerCapabilities = struct {
+    pub const Workspace = struct {
+        pub const WorkspaceFolders = struct {
+            supported: bool,
+        };
+
+        workspaceFolders: ?WorkspaceFolders = null,
+    };
+
     documentSymbolProvider: ?bool = null,
     workspaceSymbolProvider: ?bool = null,
+    workspace: ?Workspace = null,
 };
 
 pub const ServerInfo = struct {
-    name: ?[]const u8 = null,
-    version: ?[]const u8 = null,
+    name: ?String = null,
+    version: ?String = null,
 };

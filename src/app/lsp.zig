@@ -32,11 +32,16 @@ pub const Lsp = struct {
             const request = try server.receive();
             const dto = lsp.dto;
             if (request.id) |_| {
-                if (std.mem.eql(u8, request.method, "initialize")) {
+                if (request.is("initialize")) {
                     const result = dto.InitializeResult{
                         .capabilities = dto.ServerCapabilities{
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
+                            .workspace = dto.ServerCapabilities.Workspace{
+                                .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
+                                    .supported = true,
+                                },
+                            },
                         },
                         .serverInfo = dto.ServerInfo{
                             .name = "chimp",
@@ -44,21 +49,36 @@ pub const Lsp = struct {
                         },
                     };
                     try server.send(result);
-                } else if (std.mem.eql(u8, request.method, "shutdown")) {
+                } else if (request.is("shutdown")) {
                     try server.send(null);
-                } else if (std.mem.eql(u8, request.method, "textDocument/documentSymbol")) {
+                } else if (request.is("textDocument/documentSymbol")) {
                     // &todo replace with actual symbols. Workspace symbols seems to not work in Helix.
-                    const symbols = [_]dto.DocumentSymbol{ .{ .name = "abc" }, .{ .name = "def", .kind = 5 } };
+                    const symbols = [_]dto.DocumentSymbol{ .{ .name = "document property" }, .{ .name = "document class", .kind = 5 } };
+                    try server.send(symbols);
+                } else if (request.is("workspace/symbol")) {
+                    const symbols = [_]dto.WorkspaceSymbol{
+                        .{
+                            .name = "workspace property",
+                            .location = .{ .uri = "file:///home/geertf/chimp/test.chimp" },
+                            .score = 0.2,
+                        },
+                        .{
+                            .name = "workspace class",
+                            .kind = 5,
+                            .location = .{ .uri = "file:///home/geertf/chimp/rakefile.rb" },
+                            // .score = 0.1,
+                        },
+                    };
                     try server.send(symbols);
                 } else {
                     try self.log.print("Unhandled request '{s}'\n", .{request.method});
                 }
             } else {
-                if (std.mem.eql(u8, request.method, "textDocument/didOpen")) {
+                if (request.is("textDocument/didOpen")) {
                     //
-                } else if (std.mem.eql(u8, request.method, "initialized")) {
+                } else if (request.is("initialized")) {
                     init_ok = true;
-                } else if (std.mem.eql(u8, request.method, "exit")) {
+                } else if (request.is("exit")) {
                     do_continue = false;
                 } else {
                     try self.log.print("Unhandled notification '{s}'\n", .{request.method});
