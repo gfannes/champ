@@ -1,10 +1,10 @@
 const std = @import("std");
 
 const Log = @import("rubr").log.Log;
+const lsp = @import("rubr").lsp;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
-const lsp = @import("../lsp.zig");
 
 pub const Lsp = struct {
     const Self = @This();
