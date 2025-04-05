@@ -1,12 +1,30 @@
 const std = @import("std");
 
+const Parser = @import("parser.zig").Parser;
+
 const naft = @import("rubr").naft;
 
 pub const Grove = struct {
     const Self = @This();
 
     name: []const u8,
-    path: []const u8,
+    path: ?[]const u8 = null,
+    a: std.mem.Allocator,
+
+    pub fn init(name: []const u8, a: std.mem.Allocator) !Self {
+        return Self{ .name = try a.dupe(name), .a = a };
+    }
+    pub fn deinit(self: *Self) void {
+        self.a.free(self.name);
+        if (self.path) |path|
+            self.a.free(path);
+    }
+
+    pub fn loadFromPath(self: *Self, path: []const u8) !void {
+        self.path = try self.a.dupe(path);
+        //    parser: Parser,
+        // .parser=Parser.init(a)
+    }
 };
 
 pub const Term = struct {

@@ -21,17 +21,18 @@ pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
-    ma: std.mem.Allocator,
+    a: std.mem.Allocator,
     language: Language,
 
     tokenizer: tkn.Tokenizer = undefined,
 
-    pub fn init(ma: std.mem.Allocator, language: Language) Self {
-        return Self{ .ma = ma, .language = language };
+    pub fn init(a: std.mem.Allocator, language: Language) Self {
+        return Self{ .a = a, .language = language };
     }
+    pub fn deinit(_: *Self) void {}
 
     pub fn parse(self: *Self, content: []const u8) !Node {
-        var root = Node.init(self.ma);
+        var root = Node.init(self.a);
         errdefer root.deinit();
         root.type = Node.Type.Root;
 
@@ -63,7 +64,7 @@ pub const Parser = struct {
         if (self.tokenizer.empty())
             return null;
 
-        var n = Node.init(self.ma);
+        var n = Node.init(self.a);
         errdefer n.deinit();
 
         switch (self.language) {

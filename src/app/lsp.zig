@@ -5,6 +5,7 @@ const lsp = @import("rubr").lsp;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
+const mero = @import("../mero.zig");
 
 pub const Lsp = struct {
     const Self = @This();
@@ -13,6 +14,15 @@ pub const Lsp = struct {
     options: *const cli.Options,
     log: *const Log,
     a: std.mem.Allocator,
+
+    forest: mero.Forest = undefined,
+
+    pub fn init(self: *Self) !void {
+        self.forest = mero.Forest.init(self.a);
+    }
+    pub fn deinit(self: *Self) void {
+        self.forest.deinit();
+    }
 
     pub fn call(self: Self) !void {
         try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});

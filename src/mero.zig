@@ -4,3 +4,5 @@ pub const File = dto.File;
 
 const parser = @import("mero/parser.zig");
 pub const Parser = parser.Parser;
+
+pub const Forest = @import("mero/forest.zig").Forest;
