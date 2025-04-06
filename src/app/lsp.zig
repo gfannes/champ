@@ -26,14 +26,14 @@ pub const Lsp = struct {
     }
 
     pub fn call(self: *Self) !void {
+        try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});
+
         for (self.config.groves) |cfg_grove| {
             if (!strings.contains(u8, self.options.groves.items, cfg_grove.name))
                 // Skip this grove
                 continue;
             try self.forest.loadGrove(&cfg_grove);
         }
-
-        try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});
 
         var cin = std.io.getStdIn();
         var cout = std.io.getStdOut();
@@ -74,20 +74,24 @@ pub const Lsp = struct {
                     const symbols = [_]dto.DocumentSymbol{ .{ .name = "document property" }, .{ .name = "document class", .kind = 5 } };
                     try server.send(symbols);
                 } else if (request.is("workspace/symbol")) {
-                    const symbols = [_]dto.WorkspaceSymbol{
-                        .{
-                            .name = "workspace property",
-                            .location = .{ .uri = "file:///home/geertf/chimp/test.chimp" },
-                            .score = 0.2,
-                        },
-                        .{
-                            .name = "workspace class",
-                            .kind = 5,
-                            .location = .{ .uri = "file:///home/geertf/chimp/rakefile.rb" },
-                            // .score = 0.1,
-                        },
-                    };
-                    try server.send(symbols);
+                    var symbols = std.ArrayList(dto.WorkspaceSymbol).init(self.a);
+                    defer symbols.deinit();
+
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+
+                    var iter = self.forest.iter();
+                    while (iter.next()) |e| {
+                        try symbols.append(dto.WorkspaceSymbol{
+                            .name = e.name,
+                            .location = dto.Location{
+                                .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", e.path }),
+                            },
+                        });
+                    }
+
+                    try server.send(symbols.items);
                 } else {
                     try self.log.print("Unhandled request '{s}'\n", .{request.method});
                 }

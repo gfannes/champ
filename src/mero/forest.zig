@@ -28,4 +28,30 @@ pub const Forest = struct {
         try grove.load(cfg_grove);
         try self.groves.append(grove);
     }
+
+    pub const Iter = struct {
+        pub const Value = struct {
+            name: []const u8,
+            path: []const u8,
+        };
+
+        outer: *const Self,
+        grove_ix: usize = 0,
+        file_ix: usize = 0,
+
+        pub fn next(self: *Iter) ?Value {
+            const value: Value = switch (self.grove_ix) {
+                0 => Value{ .name = "name0", .path = "path0" },
+                1 => Value{ .name = "name1", .path = "path1" },
+                2 => Value{ .name = "name2", .path = "path2" },
+                else => return null,
+            };
+            self.grove_ix += 1;
+            return value;
+        }
+    };
+
+    pub fn iter(self: Self) Iter {
+        return Iter{ .outer = &self };
+    }
 };
