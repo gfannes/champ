@@ -9,6 +9,7 @@ const naft = @import("rubr").naft;
 const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const Log = @import("rubr").log.Log;
+const index = @import("rubr").index;
 
 pub const Grove = struct {
     const Self = @This();
@@ -82,12 +83,11 @@ pub const Grove = struct {
 
             const my_ext = std.fs.path.extension(name);
             if (mero.Language.from_extension(my_ext)) |language| {
-                var parser = mero.Parser.init(my.a, language);
-                var root = try parser.parse(my.content.items);
-                errdefer root.deinit();
+                var parser = try mero.Parser.init(name, language, my.content.items, my.a);
+                defer parser.deinit();
 
-                var mero_file = try mero.File.init(root, path, my.a);
-                defer mero_file.deinit();
+                var mero_file = try parser.parse();
+                errdefer mero_file.deinit();
 
                 if (my.outer.log.level(1)) |out| {
                     var cb = struct {
@@ -103,7 +103,7 @@ pub const Grove = struct {
                             try s.o.print("{s}\n", .{amp});
                         }
                     }{ .path = path, .o = out };
-                    try mero_file.root.each_amp(&cb);
+                    try mero_file.each_amp(&cb);
                 }
             } else {
                 try my.outer.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
@@ -138,28 +138,24 @@ pub const Term = struct {
 
 pub const Line = struct {
     const Self = @This();
-    const Terms = std.ArrayList(Term);
 
-    terms: Terms,
+    terms_ixr: index.Range = .{},
 
-    pub fn init(ma: std.mem.Allocator) Line {
-        return Self{ .terms = Terms.init(ma) };
-    }
-    pub fn deinit(self: *Self) void {
-        self.terms.deinit();
-    }
-
-    pub fn append(self: *Self, term: Term) !void {
-        if (term.word.len > 0)
-            try self.terms.append(term);
+    pub fn append(self: *Self, term: Term, terms: *File.Terms) !void {
+        if (term.word.len > 0) {
+            if (self.terms_ixr.empty())
+                self.terms_ixr = .{ .begin = terms.items.len, .end = terms.items.len };
+            try terms.append(term);
+            self.terms_ixr.end += 1;
+        }
     }
 
-    pub fn write(self: Self, parent: *naft.Node) void {
+    pub fn write(self: Self, terms: []const Term, parent: *naft.Node) void {
         var n = parent.node("Line");
         defer n.deinit();
-        for (self.terms.items) |term| {
+        for (self.terms_ixr.begin..self.terms_ixr.end) |ix| {
             // n.attr1(term.word);
-            term.write(&n);
+            terms[ix].write(&n);
         }
     }
 };
@@ -170,33 +166,33 @@ pub const Node = struct {
     pub const Type = enum { Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
-    line: Line,
+    line: Line = .{},
     childs: Childs,
-    ma: std.mem.Allocator,
+    a: std.mem.Allocator,
 
-    pub fn init(ma: std.mem.Allocator) Self {
-        return Self{ .line = Line.init(ma), .childs = Childs.init(ma), .ma = ma };
+    pub fn init(a: std.mem.Allocator) Self {
+        return Self{ .childs = Childs.init(a), .a = a };
     }
     pub fn deinit(self: *Self) void {
-        self.line.deinit();
         for (self.childs.items) |*child|
             child.deinit();
         self.childs.deinit();
     }
 
-    pub fn each_amp(self: Self, cb: anytype) !void {
-        for (self.line.terms.items) |term| {
+    pub fn each_amp(self: Self, terms: []const Term, cb: anytype) !void {
+        for (self.line.terms_ixr.begin..self.line.terms_ixr.end) |ix| {
+            const term: *const Term = &terms[ix];
             if (term.kind == Term.Kind.Amp)
                 try cb.call(term.word);
         }
         for (self.childs.items) |child| {
-            try child.each_amp(cb);
+            try child.each_amp(terms, cb);
         }
     }
 
     pub fn goc_child(self: *Self, ix: usize) !*Node {
         while (ix >= self.childs.items.len) {
-            try self.childs.append(Node.init(self.ma));
+            try self.childs.append(Node.init(self.a));
         }
         return &self.childs.items[ix];
     }
@@ -205,31 +201,45 @@ pub const Node = struct {
         return self.childs.append(n);
     }
 
-    pub fn write(self: Self, parent: *naft.Node) void {
+    pub fn write(self: Self, terms: []const Term, parent: *naft.Node) void {
         var n = parent.node("Node");
         defer n.deinit();
         if (self.type) |t| n.attr("type", t);
 
-        self.line.write(&n);
+        self.line.write(terms, &n);
         for (self.childs.items) |child| {
-            child.write(&n);
+            child.write(terms, &n);
         }
     }
 };
 
 pub const File = struct {
     const Self = @This();
+    const Terms = std.ArrayList(Term);
 
     root: Node,
-    name: []const u8,
-    ma: std.mem.Allocator,
+    path: []const u8,
+    terms: Terms,
+    a: std.mem.Allocator,
 
-    pub fn init(root: Node, name: []const u8, ma: std.mem.Allocator) !File {
-        return File{ .root = root, .name = try ma.dupe(u8, name), .ma = ma };
+    pub fn init(path: []const u8, a: std.mem.Allocator) !File {
+        return File{ .root = Node.init(a), .path = try a.dupe(u8, path), .terms = Terms.init(a), .a = a };
     }
     pub fn deinit(self: *Self) void {
         self.root.deinit();
-        self.ma.free(self.name);
+        self.a.free(self.path);
+        self.terms.deinit();
+    }
+
+    pub fn each_amp(self: Self, cb: anytype) !void {
+        try self.root.each_amp(self.terms.items, cb);
+    }
+    pub fn write(self: Self, parent: *naft.Node) void {
+        var n = parent.node("File");
+        defer n.deinit();
+
+        n.attr("path", self.path);
+        self.root.write(self.terms.items, &n);
     }
 };
 

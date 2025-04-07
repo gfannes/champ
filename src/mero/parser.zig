@@ -6,6 +6,7 @@ const tkn = @import("../tkn.zig");
 
 const dto = @import("dto.zig");
 const Language = dto.Language;
+const File = dto.File;
 const Node = dto.Node;
 const Term = dto.Term;
 const Line = dto.Line;
@@ -13,6 +14,7 @@ const Line = dto.Line;
 pub const Error = error{
     UnexpectedState,
     CouldNotParse,
+    ExpectedFile,
 };
 
 // &rework: Split pop_txt_X(), pop_md_X() and pop_nonmd_X() into different structs and maybe files
@@ -21,43 +23,50 @@ pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
-    a: std.mem.Allocator,
+    file: ?File,
     language: Language,
+    tokenizer: tkn.Tokenizer,
+    a: std.mem.Allocator,
 
-    tokenizer: tkn.Tokenizer = undefined,
-
-    pub fn init(a: std.mem.Allocator, language: Language) Self {
-        return Self{ .a = a, .language = language };
+    pub fn init(path: []const u8, language: Language, content: []const u8, a: std.mem.Allocator) !Self {
+        return Self{
+            .file = try File.init(path, a),
+            .language = language,
+            .tokenizer = tkn.Tokenizer.init(content),
+            .a = a,
+        };
     }
-    pub fn deinit(_: *Self) void {}
+    pub fn deinit(self: *Self) void {
+        if (self.file) |*file|
+            file.deinit();
+    }
 
-    pub fn parse(self: *Self, content: []const u8) !Node {
-        var root = Node.init(self.a);
-        errdefer root.deinit();
-        root.type = Node.Type.Root;
+    pub fn parse(self: *Self) !File {
+        var file = self.file orelse return Error.ExpectedFile;
+        file.root.type = Node.Type.Root;
 
-        self.tokenizer = tkn.Tokenizer.init(content);
         switch (self.language) {
             Language.Markdown => while (true) {
                 if (try self.pop_section_node()) |el| {
-                    try root.push_child(el);
+                    try file.root.push_child(el);
                 } else if (try self.pop_paragraph_node()) |el| {
-                    try root.push_child(el);
+                    try file.root.push_child(el);
                 } else if (try self.pop_bullets_node()) |el| {
-                    try root.push_child(el);
+                    try file.root.push_child(el);
                 } else {
                     break;
                 }
             },
             else => while (true) {
                 if (try self.pop_line()) |line|
-                    try root.push_child(line)
+                    try file.root.push_child(line)
                 else
                     break;
             },
         }
 
-        return root;
+        self.file = null;
+        return file;
     }
 
     fn pop_line(self: *Self) !?Node {
@@ -76,16 +85,22 @@ pub const Parser = struct {
         return n;
     }
 
+    fn appendToLine(self: *Self, n: *Node, term: Term) !void {
+        var file = self.file orelse unreachable;
+        try n.line.append(term, &file.terms);
+    }
+
     fn pop_md_text(self: *Self, n: *Node) !void {
         var text = struct {
             const My = @This();
 
-            line: *Line,
+            outer: *Self,
+            n: *Node,
             maybe_text: ?Term = null,
 
             fn commit(my: *My) !void {
                 if (my.maybe_text) |text| {
-                    try my.line.append(text);
+                    try my.outer.appendToLine(my.n, text);
                     my.maybe_text = null;
                 }
             }
@@ -95,30 +110,30 @@ pub const Parser = struct {
                 else
                     my.maybe_text = Term{ .word = token.word, .kind = Term.Kind.Text };
             }
-        }{ .line = &n.line };
+        }{ .outer = self, .n = n };
 
         while (self.tokenizer.peek()) |token| {
             if (is_newline(token)) {
                 try text.commit();
-                try n.line.append(self.pop_newline_term() orelse unreachable);
+                try self.appendToLine(n, self.pop_newline_term() orelse unreachable);
                 return;
             }
 
             if (is_amp_start(self.tokenizer.current(), token)) {
                 if (self.pop_amp_term()) |amp| {
                     try text.commit();
-                    try n.line.append(amp);
+                    try self.appendToLine(n, amp);
                     continue;
                 }
             }
             if (self.pop_md_code_term()) |code| {
                 try text.commit();
-                try n.line.append(code);
+                try self.appendToLine(n, code);
                 continue;
             }
             if (self.pop_md_formula_term()) |formula| {
                 try text.commit();
-                try n.line.append(formula);
+                try self.appendToLine(n, formula);
                 continue;
             }
             if (self.pop_md_comment_start()) |comment_start| {
@@ -137,7 +152,7 @@ pub const Parser = struct {
                 }
 
                 try text.commit();
-                try n.line.append(comment);
+                try self.appendToLine(n, comment);
                 continue;
             }
 
@@ -152,7 +167,7 @@ pub const Parser = struct {
         while (self.tokenizer.peek()) |token| {
             if (is_amp_start(self.tokenizer.current(), token)) {
                 if (self.pop_amp_term()) |amp| {
-                    try n.line.append(amp);
+                    try self.appendToLine(n, amp);
                     continue;
                 }
             }
@@ -160,12 +175,12 @@ pub const Parser = struct {
             // If token is '&' but above could not pop a real Amp, make sure we will pop a Text
             const accept_inital_amp = true;
             if (self.pop_txt_text_term(accept_inital_amp)) |text| {
-                try n.line.append(text);
+                try self.appendToLine(n, text);
                 continue;
             }
 
             if (self.pop_newline_term()) |newline| {
-                try n.line.append(newline);
+                try self.appendToLine(n, newline);
                 break;
             }
 
@@ -180,29 +195,29 @@ pub const Parser = struct {
         while (true) {
             if (!found_comment) {
                 if (self.pop_nonmd_comment_term()) |comment| {
-                    try n.line.append(comment);
+                    try self.appendToLine(n, comment);
                     found_comment = true;
 
                     // We only check for Amp right after the Comment
                     if (self.tokenizer.peek()) |token2| {
                         if (is_amp_start(null, token2)) {
                             if (self.pop_amp_term()) |amp| {
-                                try n.line.append(amp);
+                                try self.appendToLine(n, amp);
                             }
                         }
                     }
                     continue;
                 } else if (self.pop_nonmd_code_term()) |code| {
-                    try n.line.append(code);
+                    try self.appendToLine(n, code);
                     continue;
                 }
             } else if (self.pop_nonmd_text_term()) |text| {
-                try n.line.append(text);
+                try self.appendToLine(n, text);
                 continue;
             }
 
             if (self.pop_newline_term()) |newline| {
-                try n.line.append(newline);
+                try self.appendToLine(n, newline);
                 break;
             }
 
