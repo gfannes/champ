@@ -29,10 +29,11 @@ pub const Parser = struct {
     a: std.mem.Allocator,
 
     pub fn init(path: []const u8, language: Language, content: []const u8, a: std.mem.Allocator) !Self {
+        const file = try File.init(path, content, a);
         return Self{
-            .file = try File.init(path, a),
+            .file = file,
             .language = language,
-            .tokenizer = tkn.Tokenizer.init(content),
+            .tokenizer = tkn.Tokenizer.init(file.content),
             .a = a,
         };
     }
@@ -42,30 +43,32 @@ pub const Parser = struct {
     }
 
     pub fn parse(self: *Self) !File {
-        var file = self.file orelse return Error.ExpectedFile;
-        file.root.type = Node.Type.Root;
-
-        switch (self.language) {
-            Language.Markdown => while (true) {
-                if (try self.pop_section_node()) |el| {
-                    try file.root.push_child(el);
-                } else if (try self.pop_paragraph_node()) |el| {
-                    try file.root.push_child(el);
-                } else if (try self.pop_bullets_node()) |el| {
-                    try file.root.push_child(el);
-                } else {
-                    break;
-                }
-            },
-            else => while (true) {
-                if (try self.pop_line()) |line|
-                    try file.root.push_child(line)
-                else
-                    break;
-            },
+        if (self.file) |*file| {
+            switch (self.language) {
+                Language.Markdown => while (true) {
+                    if (try self.pop_section_node()) |el| {
+                        try file.root.push_child(el);
+                    } else if (try self.pop_paragraph_node()) |el| {
+                        try file.root.push_child(el);
+                    } else if (try self.pop_bullets_node()) |el| {
+                        try file.root.push_child(el);
+                    } else {
+                        break;
+                    }
+                },
+                else => while (true) {
+                    if (try self.pop_line()) |line|
+                        try file.root.push_child(line)
+                    else
+                        break;
+                },
+            }
         }
 
+        var file = self.file orelse return Error.ExpectedFile;
         self.file = null;
+        file.root.type = Node.Type.Root;
+
         return file;
     }
 
@@ -86,8 +89,8 @@ pub const Parser = struct {
     }
 
     fn appendToLine(self: *Self, n: *Node, term: Term) !void {
-        var file = self.file orelse unreachable;
-        try n.line.append(term, &file.terms);
+        if (self.file) |*file|
+            try n.line.append(term, &file.terms);
     }
 
     fn pop_md_text(self: *Self, n: *Node) !void {
@@ -120,6 +123,7 @@ pub const Parser = struct {
             }
 
             if (is_amp_start(self.tokenizer.current(), token)) {
+                // &todo: there might be more than one Amp here
                 if (self.pop_amp_term()) |amp| {
                     try text.commit();
                     try self.appendToLine(n, amp);

@@ -15,6 +15,7 @@ const cfg = @import("cfg.zig");
 
 const Perf = @import("app/perf.zig").Perf;
 const Lsp = @import("app/lsp.zig").Lsp;
+const Test = @import("app/test.zig").Test;
 
 pub const Error = error{
     UnknownFileType,
@@ -126,6 +127,16 @@ pub const App = struct {
                     };
                     try lsp.init();
                     try lsp.call();
+                },
+                cli.Mode.Test => {
+                    var tst = Test{
+                        .config = &self.config,
+                        .options = &self.options,
+                        .log = &self.log,
+                        .a = self.a,
+                    };
+                    try tst.init();
+                    try tst.call();
                 },
             }
         } else return Error.ModeNotSet;

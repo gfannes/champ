@@ -11,6 +11,7 @@ const Error = error{
 pub const Mode = enum {
     Perf,
     Lsp,
+    Test,
 };
 
 pub const Options = struct {
@@ -72,6 +73,10 @@ pub const Options = struct {
                 if (self.mode != null)
                     return Error.ModeAlreadySet;
                 self.mode = Mode.Lsp;
+            } else if (arg.is("test", "test")) {
+                if (self.mode != null)
+                    return Error.ModeAlreadySet;
+                self.mode = Mode.Test;
             } else {
                 std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
                 return error.UnknownArgument;
@@ -92,6 +97,7 @@ pub const Options = struct {
             "  Commands:\n" ++
             "    perf                 Performance tests\n" ++
             "    lsp                  Lsp server\n" ++
+            "    test                 Test\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }

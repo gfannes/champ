@@ -14,20 +14,25 @@ const index = @import("rubr").index;
 pub const Grove = struct {
     const Self = @This();
     const String = std.ArrayList(u8);
+    const Files = std.ArrayList(File);
 
     log: *const Log,
     name: ?[]const u8 = null,
     path: ?[]const u8 = null,
+    files: Files,
     a: std.mem.Allocator,
 
     pub fn init(log: *const Log, a: std.mem.Allocator) !Self {
-        return Self{ .log = log, .a = a };
+        return Self{ .log = log, .files = Files.init(a), .a = a };
     }
     pub fn deinit(self: *Self) void {
         if (self.name) |name|
             self.a.free(name);
         if (self.path) |path|
             self.a.free(path);
+        for (self.files) |file|
+            file.deinit();
+        self.files.deinit();
     }
 
     pub fn load(self: *Self, cfg_grove: *const cfg.Grove) !void {
@@ -47,7 +52,7 @@ pub const Grove = struct {
     }
 
     const Cb = struct {
-        outer: *const Self,
+        outer: *Self,
         cfg_grove: *const cfg.Grove,
         content: *String,
         a: std.mem.Allocator,
@@ -83,28 +88,10 @@ pub const Grove = struct {
 
             const my_ext = std.fs.path.extension(name);
             if (mero.Language.from_extension(my_ext)) |language| {
-                var parser = try mero.Parser.init(name, language, my.content.items, my.a);
+                var parser = try mero.Parser.init(path, language, my.content.items, my.a);
                 defer parser.deinit();
 
-                var mero_file = try parser.parse();
-                errdefer mero_file.deinit();
-
-                if (my.outer.log.level(1)) |out| {
-                    var cb = struct {
-                        path: []const u8,
-                        o: @TypeOf(out),
-                        did_log_filename: bool = false,
-
-                        pub fn call(s: *@This(), amp: []const u8) !void {
-                            if (!s.did_log_filename) {
-                                try s.o.print("Filename: {s}\n", .{s.path});
-                                s.did_log_filename = true;
-                            }
-                            try s.o.print("{s}\n", .{amp});
-                        }
-                    }{ .path = path, .o = out };
-                    try mero_file.each_amp(&cb);
-                }
+                try my.outer.files.append(try parser.parse());
             } else {
                 try my.outer.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
             }
@@ -219,15 +206,17 @@ pub const File = struct {
 
     root: Node,
     path: []const u8,
+    content: []const u8,
     terms: Terms,
     a: std.mem.Allocator,
 
-    pub fn init(path: []const u8, a: std.mem.Allocator) !File {
-        return File{ .root = Node.init(a), .path = try a.dupe(u8, path), .terms = Terms.init(a), .a = a };
+    pub fn init(path: []const u8, content: []const u8, a: std.mem.Allocator) !File {
+        return File{ .root = Node.init(a), .path = try a.dupe(u8, path), .content = try a.dupe(u8, content), .terms = Terms.init(a), .a = a };
     }
     pub fn deinit(self: *Self) void {
         self.root.deinit();
         self.a.free(self.path);
+        self.a.free(self.content);
         self.terms.deinit();
     }
 

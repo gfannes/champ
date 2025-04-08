@@ -1,6 +1,8 @@
 const std = @import("std");
 
 const Grove = @import("dto.zig").Grove;
+const File = @import("dto.zig").File;
+const Term = @import("dto.zig").Term;
 const cfg = @import("../cfg.zig");
 
 const Log = @import("rubr").log.Log;
@@ -38,20 +40,36 @@ pub const Forest = struct {
         outer: *const Self,
         grove_ix: usize = 0,
         file_ix: usize = 0,
+        term_ix: usize = 0,
 
         pub fn next(self: *Iter) ?Value {
-            const value: Value = switch (self.grove_ix) {
-                0 => Value{ .name = "name0", .path = "path0" },
-                1 => Value{ .name = "name1", .path = "path1" },
-                2 => Value{ .name = "name2", .path = "path2" },
-                else => return null,
-            };
-            self.grove_ix += 1;
-            return value;
+            while (self.grove_ix < self.outer.groves.items.len) {
+                const grove: *const Grove = &self.outer.groves.items[self.grove_ix];
+                while (self.file_ix < grove.files.items.len) {
+                    const file: *const File = &grove.files.items[self.file_ix];
+                    while (self.term_ix < file.terms.items.len) {
+                        const term: *const Term = &file.terms.items[self.term_ix];
+                        switch (term.kind) {
+                            Term.Kind.Amp => {
+                                self.term_ix += 1;
+                                return Value{ .name = term.word, .path = file.path };
+                            },
+                            else => {
+                                self.term_ix += 1;
+                            },
+                        }
+                    }
+                    self.file_ix += 1;
+                    self.term_ix = 0;
+                }
+                self.grove_ix += 1;
+                self.file_ix = 0;
+            }
+            return null;
         }
     };
 
-    pub fn iter(self: Self) Iter {
-        return Iter{ .outer = &self };
+    pub fn iter(self: *const Self) Iter {
+        return Iter{ .outer = self };
     }
 };
