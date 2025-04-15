@@ -35,11 +35,20 @@ pub const Forest = struct {
         pub const Value = struct {
             name: []const u8,
             path: []const u8,
+            line: usize,
+            start: usize,
+            end: usize,
+        };
+
+        const LineInfo = struct {
+            ix0: usize = 0,
+            start: [*]const u8,
         };
 
         outer: *const Self,
         grove_ix: usize = 0,
         file_ix: usize = 0,
+        line_info: ?LineInfo = null,
         term_ix: usize = 0,
 
         pub fn next(self: *Iter) ?Value {
@@ -47,12 +56,29 @@ pub const Forest = struct {
                 const grove: *const Grove = &self.outer.groves.items[self.grove_ix];
                 while (self.file_ix < grove.files.items.len) {
                     const file: *const File = &grove.files.items[self.file_ix];
+
+                    if (self.line_info == null)
+                        self.line_info = LineInfo{ .start = file.content.ptr };
+                    const line_info: *LineInfo = &(self.line_info orelse unreachable);
+
                     while (self.term_ix < file.terms.items.len) {
                         const term: *const Term = &file.terms.items[self.term_ix];
                         switch (term.kind) {
                             Term.Kind.Amp => {
                                 self.term_ix += 1;
-                                return Value{ .name = term.word, .path = file.path };
+                                const start = term.word.ptr - line_info.start;
+                                return Value{
+                                    .name = term.word,
+                                    .path = file.path,
+                                    .line = line_info.ix0,
+                                    .start = start,
+                                    .end = start + term.word.len,
+                                };
+                            },
+                            Term.Kind.Newline => {
+                                self.term_ix += 1;
+                                line_info.ix0 += term.word.len;
+                                line_info.start = term.word.ptr + term.word.len;
                             },
                             else => {
                                 self.term_ix += 1;
@@ -60,6 +86,7 @@ pub const Forest = struct {
                         }
                     }
                     self.file_ix += 1;
+                    self.line_info = null;
                     self.term_ix = 0;
                 }
                 self.grove_ix += 1;

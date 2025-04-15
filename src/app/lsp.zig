@@ -3,10 +3,16 @@ const std = @import("std");
 const Log = @import("rubr").log.Log;
 const lsp = @import("rubr").lsp;
 const strings = @import("rubr").strings;
+const fuzz = @import("rubr").fuzz;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
+
+pub const Error = error{
+    ExpectedParams,
+    ExpectedQuery,
+};
 
 pub const Lsp = struct {
     const Self = @This();
@@ -74,6 +80,9 @@ pub const Lsp = struct {
                     const symbols = [_]dto.DocumentSymbol{ .{ .name = "document property" }, .{ .name = "document class", .kind = 5 } };
                     try server.send(symbols);
                 } else if (request.is("workspace/symbol")) {
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const query = params.query orelse return Error.ExpectedQuery;
+
                     var symbols = std.ArrayList(dto.WorkspaceSymbol).init(self.a);
                     defer symbols.deinit();
 
@@ -83,13 +92,29 @@ pub const Lsp = struct {
 
                     var iter = self.forest.iter();
                     while (iter.next()) |e| {
+                        const score: f32 = @floatCast(fuzz.distance(query, e.name));
+
                         try symbols.append(dto.WorkspaceSymbol{
                             .name = e.name,
                             .location = dto.Location{
                                 .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", e.path }),
+                                .range = dto.Range{
+                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                                },
                             },
+                            .score = score,
                         });
                     }
+
+                    const Fn = struct {
+                        fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {
+                            const xx = x.score orelse unreachable;
+                            const yy = y.score orelse unreachable;
+                            return xx < yy;
+                        }
+                    };
+                    std.sort.block(dto.WorkspaceSymbol, symbols.items, {}, Fn.call);
 
                     try server.send(symbols.items);
                 } else {
