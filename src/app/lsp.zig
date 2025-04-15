@@ -12,6 +12,8 @@ const mero = @import("../mero.zig");
 pub const Error = error{
     ExpectedParams,
     ExpectedQuery,
+    ExpectedTextDocument,
+    UnexpectedFilenameFormat,
 };
 
 pub const Lsp = struct {
@@ -76,9 +78,46 @@ pub const Lsp = struct {
                 } else if (request.is("shutdown")) {
                     try server.send(null);
                 } else if (request.is("textDocument/documentSymbol")) {
-                    // &todo replace with actual symbols. Workspace symbols seems to not work in Helix.
-                    const symbols = [_]dto.DocumentSymbol{ .{ .name = "document property" }, .{ .name = "document class", .kind = 5 } };
-                    try server.send(symbols);
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+
+                    const prefix = "file://";
+                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
+                        return Error.UnexpectedFilenameFormat;
+
+                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+                    const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
+
+                    for (self.forest.groves.items) |grove| {
+                        for (grove.files.items) |file| {
+                            try self.log.print("{s}\n", .{file.path});
+                        }
+                    }
+
+                    if (self.forest.findFile(filename)) |file| {
+                        var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
+                        defer symbols.deinit();
+
+                        var iter = file.iter();
+                        while (iter.next()) |e| {
+                            try symbols.append(dto.DocumentSymbol{
+                                .name = e.content,
+                                .range = dto.Range{
+                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                                },
+                                .selectionRange = dto.Range{
+                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                                },
+                            });
+                        }
+                        try server.send(symbols.items);
+                    } else {
+                        try self.log.print("Error: could not find file {s}\n", .{filename});
+                        // &todo: Send error or null
+                        try server.send(&[_]dto.DocumentSymbol{});
+                    }
                 } else if (request.is("workspace/symbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;

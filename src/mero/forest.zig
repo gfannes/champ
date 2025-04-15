@@ -31,6 +31,18 @@ pub const Forest = struct {
         try self.groves.append(grove);
     }
 
+    pub fn findFile(self: Self, filename: []const u8) ?*const File {
+        for (self.groves.items) |grove| {
+            for (grove.files.items) |*file| {
+                if (std.mem.endsWith(u8, filename, file.path))
+                    return file;
+                // if (std.mem.eql(u8, file.path, filename))
+                //     return file;
+            }
+        }
+        return null;
+    }
+
     pub const Iter = struct {
         pub const Value = struct {
             name: []const u8,

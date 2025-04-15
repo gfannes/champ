@@ -223,6 +223,48 @@ pub const File = struct {
     pub fn each_amp(self: Self, cb: anytype) !void {
         try self.root.each_amp(self.terms.items, cb);
     }
+
+    pub const Iter = struct {
+        pub const Value = struct {
+            content: []const u8,
+            line: usize,
+            start: usize,
+            end: usize,
+        };
+
+        outer: *const File,
+        term_ix: usize = 0,
+        line_ix: usize = 0,
+        line_start: [*]const u8,
+
+        pub fn next(self: *Iter) ?Value {
+            while (self.term_ix < self.outer.terms.items.len) {
+                const term = &self.outer.terms.items[self.term_ix];
+                defer self.term_ix += 1;
+                switch (term.kind) {
+                    Term.Kind.Amp => {
+                        const start = term.word.ptr - self.line_start;
+                        return Value{
+                            .content = term.word,
+                            .line = self.line_ix,
+                            .start = start,
+                            .end = start + term.word.len,
+                        };
+                    },
+                    Term.Kind.Newline => {
+                        self.line_ix += term.word.len;
+                        self.line_start = term.word.ptr + term.word.len;
+                    },
+                    else => {},
+                }
+            }
+            return null;
+        }
+    };
+    pub fn iter(self: *const Self) Iter {
+        return Iter{ .outer = self, .line_start = self.content.ptr };
+    }
+
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("File");
         defer n.deinit();
@@ -252,7 +294,7 @@ pub const Language = enum {
         if (std.mem.eql(u8, ext, ".txt"))
             return Language.Text;
 
-        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai" };
+        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai", ".zig" };
         for (cish_exts) |el|
             if (std.mem.eql(u8, ext, el))
                 return Language.Cish;
