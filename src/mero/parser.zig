@@ -571,25 +571,25 @@ test "Parser.parse()" {
     const ut = std.testing;
 
     {
-        var parser = Parser.init(ut.allocator, Language.Markdown);
-
         const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c";
 
-        var root = try parser.parse(content);
-        defer root.deinit();
+        var parser = try Parser.init("path", Language.Markdown, content, ut.allocator);
+
+        var file = try parser.parse();
+        defer file.deinit();
 
         var n = naft.Node.init(null);
-        root.write(&n);
+        file.write(&n);
     }
     {
-        var parser = Parser.init(ut.allocator, Language.Cish);
-
         const content = "#include <iostream>\nint main(){\n  std::cout << \"Hello world.\" << std::endl; // &todo: place real program here\nreturn 0;\n}";
 
-        var root = try parser.parse(content);
-        defer root.deinit();
+        var parser = try Parser.init("path", Language.Cish, content, ut.allocator);
+
+        var file = try parser.parse();
+        defer file.deinit();
 
         var n = naft.Node.init(null);
-        root.write(&n);
+        file.write(&n);
     }
 }
