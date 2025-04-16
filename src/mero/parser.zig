@@ -123,7 +123,6 @@ pub const Parser = struct {
             }
 
             if (is_amp_start(self.tokenizer.current(), token)) {
-                // &todo: there might be more than one Amp here
                 if (self.pop_amp_term()) |amp| {
                     try text.commit();
                     try self.appendToLine(n, amp);
@@ -202,16 +201,26 @@ pub const Parser = struct {
                     try self.appendToLine(n, comment);
                     found_comment = true;
 
-                    // We only check for Amp right after the Comment
-                    if (self.tokenizer.peek()) |token2| {
-                        if (is_amp_start(null, token2)) {
-                            if (self.pop_amp_term()) |amp| {
-                                try self.appendToLine(n, amp);
-                            }
+                    // For now, we merge all Amps and Whitespaces
+                    // &multiamp &todo Add seperate Amps
+                    var maybe_term: ?dto.Term = null;
+                    while (self.pop_amp_term()) |amp| {
+                        if (maybe_term) |*term| {
+                            term.word.len += amp.word.len;
+                        } else {
+                            maybe_term = amp;
                         }
+
+                        if (self.pop_nonmd_whitespace_term()) |whitespace|
+                            (maybe_term orelse unreachable).word.len += whitespace.word.len;
                     }
+
+                    if (maybe_term) |term|
+                        try self.appendToLine(n, term);
+
                     continue;
-                } else if (self.pop_nonmd_code_term()) |code| {
+                }
+                if (self.pop_nonmd_code_term()) |code| {
                     try self.appendToLine(n, code);
                     continue;
                 }
@@ -225,6 +234,7 @@ pub const Parser = struct {
                 break;
             }
 
+            // This point should only be reached when everything is parsed
             if (self.tokenizer.peek()) |token| {
                 std.debug.print("Unexpected token for nonmd '{s}'\n", .{token.word});
                 return Error.CouldNotParse;
@@ -352,6 +362,26 @@ pub const Parser = struct {
             }
 
             return comment;
+        }
+        return null;
+    }
+
+    fn pop_nonmd_whitespace_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (!is_whitespace(first_token))
+                return null;
+
+            var whitespace = Term{ .word = first_token.word, .kind = Term.Kind.Whitespace };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.peek()) |token| {
+                if (is_whitespace(token)) {
+                    self.tokenizer.commit_peek();
+                    whitespace.word.len += token.word.len;
+                } else break;
+            }
+
+            return whitespace;
         }
         return null;
     }

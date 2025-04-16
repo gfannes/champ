@@ -63,6 +63,7 @@ pub const Forest = struct {
         line_info: ?LineInfo = null,
         term_ix: usize = 0,
 
+        // &multiamp &todo Emit all seperate Amps on a line as one Value
         pub fn next(self: *Iter) ?Value {
             while (self.grove_ix < self.outer.groves.items.len) {
                 const grove: *const Grove = &self.outer.groves.items[self.grove_ix];

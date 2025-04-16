@@ -109,6 +109,7 @@ pub const Term = struct {
         Comment,
         Newline,
         Amp,
+        Whitespace,
     };
 
     word: []const u8,

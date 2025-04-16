@@ -13,8 +13,9 @@ const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
 const cfg = @import("cfg.zig");
 
-const Perf = @import("app/perf.zig").Perf;
 const Lsp = @import("app/lsp.zig").Lsp;
+const Search = @import("app/search.zig").Search;
+const Perf = @import("app/perf.zig").Perf;
 const Test = @import("app/test.zig").Test;
 
 pub const Error = error{
@@ -76,7 +77,8 @@ pub const App = struct {
     }
 
     pub fn parseOptions(self: *Self) !void {
-        self.options.parse() catch {
+        self.options.parse() catch |err| {
+            std.debug.print("{}\n", .{err});
             self.options.print_help = true;
         };
 
@@ -109,34 +111,44 @@ pub const App = struct {
             std.debug.print("{s}", .{self.options.help()});
         } else if (self.options.mode) |mode| {
             switch (mode) {
-                cli.Mode.Perf => {
-                    var perf = Perf{
-                        .config = &self.config,
-                        .options = &self.options,
-                        .log = &self.log,
-                        .a = self.a,
-                    };
-                    try perf.call();
-                },
                 cli.Mode.Lsp => {
-                    var lsp = Lsp{
+                    var obj = Lsp{
                         .config = &self.config,
                         .options = &self.options,
                         .log = &self.log,
                         .a = self.a,
                     };
-                    try lsp.init();
-                    try lsp.call();
+                    try obj.init();
+                    try obj.call();
+                },
+                cli.Mode.Search => {
+                    var obj = Search{
+                        .config = &self.config,
+                        .options = &self.options,
+                        .log = &self.log,
+                        .a = self.a,
+                    };
+                    try obj.init();
+                    try obj.call();
+                },
+                cli.Mode.Perf => {
+                    var obj = Perf{
+                        .config = &self.config,
+                        .options = &self.options,
+                        .log = &self.log,
+                        .a = self.a,
+                    };
+                    try obj.call();
                 },
                 cli.Mode.Test => {
-                    var tst = Test{
+                    var obj = Test{
                         .config = &self.config,
                         .options = &self.options,
                         .log = &self.log,
                         .a = self.a,
                     };
-                    try tst.init();
-                    try tst.call();
+                    try obj.init();
+                    try obj.call();
                 },
             }
         } else return Error.ModeNotSet;

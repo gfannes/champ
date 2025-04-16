@@ -4,13 +4,14 @@ const cli = @import("rubr").cli;
 
 const Error = error{
     CouldNotFindExeName,
-    UnknownArgument,
-    ModeAlreadySet,
+    UnknownMode,
+    ModeDoesNotSupportExtra,
 };
 
 pub const Mode = enum {
-    Perf,
+    Search,
     Lsp,
+    Perf,
     Test,
 };
 
@@ -26,6 +27,7 @@ pub const Options = struct {
     do_parse: bool = false,
     verbose: usize = 0,
     mode: ?Mode = null,
+    extra: Strings = undefined,
 
     args: cli.Args = undefined,
     aa: std.heap.ArenaAllocator = undefined,
@@ -36,6 +38,7 @@ pub const Options = struct {
 
         self.aa = std.heap.ArenaAllocator.init(ma);
         self.groves = Strings.init(self.aa.allocator());
+        self.extra = Strings.init(self.aa.allocator());
     }
     pub fn deinit(self: *Self) void {
         self.args.deinit();
@@ -65,21 +68,27 @@ pub const Options = struct {
                 self.do_scan = true;
             } else if (arg.is("-p", "--parse")) {
                 self.do_parse = true;
-            } else if (arg.is("perf", "perf")) {
-                if (self.mode != null)
-                    return Error.ModeAlreadySet;
-                self.mode = Mode.Perf;
-            } else if (arg.is("lsp", "lsp")) {
-                if (self.mode != null)
-                    return Error.ModeAlreadySet;
-                self.mode = Mode.Lsp;
-            } else if (arg.is("test", "test")) {
-                if (self.mode != null)
-                    return Error.ModeAlreadySet;
-                self.mode = Mode.Test;
             } else {
-                std.debug.print("Unknown argument '{s}'\n", .{arg.arg});
-                return error.UnknownArgument;
+                if (self.mode) |mode| {
+                    switch (mode) {
+                        Mode.Search => try self.extra.append(arg.arg),
+                        else => {
+                            std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
+                            return error.ModeDoesNotSupportExtra;
+                        },
+                    }
+                } else if (arg.is("lsp", "lsp")) {
+                    self.mode = Mode.Lsp;
+                } else if (arg.is("se", "search")) {
+                    self.mode = Mode.Search;
+                } else if (arg.is("perf", "perf")) {
+                    self.mode = Mode.Perf;
+                } else if (arg.is("test", "test")) {
+                    self.mode = Mode.Test;
+                } else {
+                    std.debug.print("Unknown mode '{s}'\n", .{arg.arg});
+                    return error.UnknownMode;
+                }
             }
         }
     }
@@ -95,8 +104,9 @@ pub const Options = struct {
             "    -s  --scan           Scan\n" ++
             "    -p  --parse          Parse\n" ++
             "  Commands:\n" ++
-            "    perf                 Performance tests\n" ++
             "    lsp                  Lsp server\n" ++
+            "    se/search            Search\n" ++
+            "    perf                 Performance tests\n" ++
             "    test                 Test\n" ++
             "Developed by Geert Fannes\n";
         return msg;
