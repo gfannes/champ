@@ -1,55 +1,80 @@
 require('fileutils')
 
 here_dir = File.dirname(__FILE__)
+gubg_dir = ENV['gubg']
+gubg_bin_dir = File.join(gubg_dir, 'bin')
 
 task :default do
     sh 'rake -T'
 end
 
 desc 'Install'
-task :install do
+task :install, :variant do |_task, args|
+    variant = args[:variant]&.to_sym || :zig
+
     mode = :safe
     # mode = :fast
-    # mode = nil
+    # mode = :debug
 
-    gubg_bin_dir = File.join(ENV['gubg'], 'bin')
-    mode_str = mode ? "--release=#{mode}" : ''
-    sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
+    case variant
+    when :zig
+        mode_str = mode ? "--release=#{mode}" : ''
+        sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
+    when :cpp
+        m = {safe: :release, fast: :release}[mode] || :release
+        sh("xmake f -m #{m}")
+        sh('xmake build -v champ')
+        fp = "build/linux/x86_64/#{m}/champ"
+        FileUtils.cp(fp, gubg_bin_dir)
+    when :rust
+        profile = {safe: 'release-with-debug', fast: 'release', debug: 'debug'}[mode]
+        sh "cargo install --path . --profile #{profile} --root #{gubg_dir}"
+        # sh "cargo package"
+        # sh "cargo publish"
+    else raise("Unknown variant #{variant}")
+    end
 end
 
 desc 'Run'
-task :run, %i[extra mode] do |task, args|
+task :run, %i[extra mode] do |_task, args|
     mode = args[:mode]&.to_sym || :release
     sh("xmake f -m #{mode}")
-    sh("xmake build -v ampp")
+    sh('xmake build -v ampp')
 
     sh("xmake run ampp #{args[:extra]}")
 end
 
 desc 'Run all UTs'
-task :ut, %i[filter] do |task, args|
-    filter = (args[:filter]||'').split(':').map{|e|"-Dtest-filter=#{e}"}*' '
+task :ut, %i[filter] do |_task, args|
+    filter = (args[:filter] || '').split(':').map { |e| "-Dtest-filter=#{e}" } * ' '
     sh "zig build test #{filter}"
 
     mode = :release
     # mode = :debug
     # sh("xmake f -c") # This was needed once to make xmake detect the local toolchains
     sh("xmake f -m #{mode}")
-    sh("xmake build -v amplib_ut")
-    sh("xmake run amplib_ut")
+    sh('xmake build -v amplib_ut')
+    sh('xmake run amplib_ut')
+
+    # sh 'cargo test -- --nocapture --test-threads 1 lex'
+    sh 'cargo test -- --nocapture --test-threads 1'
 end
 
-desc("Clean")
+desc('Clean')
 task :clean do
-    sh("xmake clean")
+    sh('xmake clean')
+    FileUtils.rm_rf('target')
 end
 
-desc("Generate .clangd file")
+desc('Generate .clangd file')
 task :clangd do
     File.open('.clangd', 'w') do |fo|
-        fo.puts("CompileFlags:")
+        fo.puts('CompileFlags:')
         # &shortcut: How can I get the include path for catch2 from xmake?
-        include_dirs = %w[src ext/rubr/src /home/geertf/.xmake/packages/c/catch2/v3.8.0/39d7db50b8e54e09ac555b3ca94b3a17/include].map{|dir|"-I#{dir[0] == '/' ? dir : File.join(here_dir, dir)}"}
-        fo.puts("    Add: [-std=c++23, #{include_dirs*', '}]")
+        include_dirs = %w[src ext/rubr/src
+                          /home/geertf/.xmake/packages/c/catch2/v3.8.0/39d7db50b8e54e09ac555b3ca94b3a17/include].map do |dir|
+            "-I#{dir[0] == '/' ? dir : File.join(here_dir, dir)}"
+        end
+        fo.puts("    Add: [-std=c++23, #{include_dirs * ', '}]")
     end
 end

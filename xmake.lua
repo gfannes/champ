@@ -30,7 +30,7 @@ target("amplib_ut")
     add_deps("rubr", "amplib")
     add_packages("catch2")
 
-target("ampp")
+target("champ")
     set_kind("binary")
     add_files("src/cli/main.cpp")
     add_deps("amplib")
