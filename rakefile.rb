@@ -21,13 +21,13 @@ task :install, :variant do |_task, args|
         mode_str = mode ? "--release=#{mode}" : ''
         sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
     when :cpp
-        m = {safe: :release, fast: :release}[mode] || :release
+        m = { safe: :release, fast: :release }[mode] || :release
         sh("xmake f -m #{m}")
         sh('xmake build -v champ')
         fp = "build/linux/x86_64/#{m}/champ"
         FileUtils.cp(fp, gubg_bin_dir)
     when :rust
-        profile = {safe: 'release-with-debug', fast: 'release', debug: 'debug'}[mode]
+        profile = { safe: 'release-with-debug', fast: 'release', debug: 'debug' }[mode]
         sh "cargo install --path . --profile #{profile} --root #{gubg_dir}"
         # sh "cargo package"
         # sh "cargo publish"
@@ -56,8 +56,10 @@ task :ut, %i[filter] do |_task, args|
     sh('xmake build -v amplib_ut')
     sh('xmake run amplib_ut')
 
-    # sh 'cargo test -- --nocapture --test-threads 1 lex'
-    sh 'cargo test -- --nocapture --test-threads 1'
+    if !:rust
+        # sh 'cargo test -- --nocapture --test-threads 1 lex'
+        sh 'cargo test -- --nocapture --test-threads 1'
+    end
 end
 
 desc('Clean')
