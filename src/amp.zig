@@ -29,11 +29,16 @@ pub const Path = struct {
         path.is_absolute = strange.popChar(':');
 
         while (strange.popTo(':')) |p|
-            if (p.len > 0)
-                try path.parts.append(Part.fromSlice(p));
+            if (p.len > 0) {
+                var s = Strange{ .content = p };
+                try path.parts.append(Part.init(&s));
+            };
+
         if (strange.popAll()) |p|
-            if (p.len > 0)
-                try path.parts.append(Part.fromSlice(p));
+            if (p.len > 0) {
+                var s = Strange{ .content = p };
+                try path.parts.append(Part.init(&s));
+            };
 
         return path;
     }
@@ -57,13 +62,9 @@ pub const Part = struct {
     content: []const u8,
     is_exclusive: bool = false,
 
-    pub fn fromSlice(slice: []const u8) Part {
-        return if (slice.len > 0 and slice[slice.len - 1] == '!') Part{
-            .content = slice[0 .. slice.len - 1],
-            .is_exclusive = true,
-        } else Part{
-            .content = slice,
-        };
+    pub fn init(strange: *Strange) Part {
+        const is_exclusive = strange.popCharBack('!');
+        return Part{ .content = strange.str(), .is_exclusive = is_exclusive };
     }
 };
 

@@ -3,6 +3,7 @@ const std = @import("std");
 const tkn = @import("../tkn.zig");
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
+const amp = @import("../amp.zig");
 const Parser = @import("parser.zig").Parser;
 
 const naft = @import("rubr").naft;
@@ -10,6 +11,7 @@ const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const Log = @import("rubr").log.Log;
 const index = @import("rubr").index;
+const Strange = @import("rubr").strange.Strange;
 
 pub const Grove = struct {
     const Self = @This();
@@ -30,7 +32,7 @@ pub const Grove = struct {
             self.a.free(name);
         if (self.path) |path|
             self.a.free(path);
-        for (self.files) |file|
+        for (self.files.items) |*file|
             file.deinit();
         self.files.deinit();
     }
@@ -151,20 +153,43 @@ pub const Line = struct {
 pub const Node = struct {
     const Self = @This();
     const Childs = std.ArrayList(Node);
+    const Amps = std.ArrayList(amp.Path);
     pub const Type = enum { Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
     line: Line = .{},
+
     childs: Childs,
+    orgs: Amps,
+    defs: Amps,
+
     a: std.mem.Allocator,
 
     pub fn init(a: std.mem.Allocator) Self {
-        return Self{ .childs = Childs.init(a), .a = a };
+        return Self{
+            .childs = Childs.init(a),
+            .orgs = Amps.init(a),
+            .defs = Amps.init(a),
+            .a = a,
+        };
     }
     pub fn deinit(self: *Self) void {
+        const array_lists = .{
+            &self.childs,
+            &self.orgs,
+            &self.defs,
+        };
+        inline for (array_lists) |al| {
+            for (al.items) |*e|
+                e.deinit();
+            al.deinit();
+        }
+    }
+
+    pub fn eachRoot2Leaf(self: *Self, parent: ?Node, cb: anytype) !void {
+        try cb.call(parent, self);
         for (self.childs.items) |*child|
-            child.deinit();
-        self.childs.deinit();
+            try child.eachRoot2Leaf(self.*, cb);
     }
 
     pub fn each_amp(self: Self, terms: []const Term, cb: anytype) !void {
@@ -219,6 +244,27 @@ pub const File = struct {
         self.a.free(self.path);
         self.a.free(self.content);
         self.terms.deinit();
+    }
+
+    pub fn initOrgsDefs(self: *Self) !void {
+        var cb = struct {
+            const My = @This();
+
+            terms: *const Terms,
+            a: std.mem.Allocator,
+
+            pub fn call(my: *My, _: ?Node, child: *Node) !void {
+                for (child.line.terms_ixr.begin..child.line.terms_ixr.end) |term_ix| {
+                    const term = &my.terms.items[term_ix];
+                    if (term.kind == Term.Kind.Amp) {
+                        var strange = Strange{ .content = term.word };
+                        if (try amp.Path.parse(&strange, my.a)) |path|
+                            try child.orgs.append(path);
+                    }
+                }
+            }
+        }{ .terms = &self.terms, .a = self.a };
+        try self.root.eachRoot2Leaf(null, &cb);
     }
 
     pub fn each_amp(self: Self, cb: anytype) !void {

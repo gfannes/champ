@@ -19,8 +19,7 @@ pub const Forest = struct {
         return Self{ .log = log, .groves = Groves.init(a), .a = a };
     }
     pub fn deinit(self: *Self) void {
-        self.parser.deinit();
-        for (self.groves) |*grove|
+        for (self.groves.items) |*grove|
             grove.deinit();
         self.groves.deinit();
     }
@@ -28,6 +27,9 @@ pub const Forest = struct {
     pub fn loadGrove(self: *Self, cfg_grove: *const cfg.Grove) !void {
         var grove = try Grove.init(self.log, self.a);
         try grove.load(cfg_grove);
+        for (grove.files.items) |*file| {
+            try file.initOrgsDefs();
+        }
         try self.groves.append(grove);
     }
 

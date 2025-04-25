@@ -32,13 +32,30 @@ pub const Test = struct {
                 continue;
             try self.forest.loadGrove(&cfg_grove);
         }
-        // for (self.forest.groves.items) |grove| {
-        //     std.debug.print("{any}\n", .{grove});
-        // }
 
-        var iter = self.forest.iter();
-        while (iter.next()) |e| {
-            std.debug.print("{s} {s}\n", .{ e.name, e.path });
+        if (true) {
+            for (self.forest.groves.items) |grove| {
+                std.debug.print("\n\n{?s}\n", .{grove.name});
+                for (grove.files.items) |*file| {
+                    const cb = struct {
+                        const My = @This();
+                        pub fn call(_: My, _: ?mero.Node, child: *mero.Node) !void {
+                            for (child.orgs.items) |org|
+                                std.debug.print("\torg {s}\n", .{org});
+                            for (child.defs.items) |def|
+                                std.debug.print("\tdef {s}\n", .{def});
+                        }
+                    }{};
+                    try file.root.eachRoot2Leaf(null, cb);
+                }
+            }
+        }
+
+        if (false) {
+            var iter = self.forest.iter();
+            while (iter.next()) |e| {
+                std.debug.print("{s} {s}\n", .{ e.name, e.path });
+            }
         }
     }
 };

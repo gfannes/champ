@@ -18,7 +18,8 @@ task :install, :variant do |_task, args|
 
     case variant
     when :zig
-        mode_str = mode ? "--release=#{mode}" : ''
+        m = {safe: :safe, fast: :fast}[mode]
+        mode_str = m ? "--release=#{m}" : ''
         sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
     when :cpp
         m = { safe: :release, fast: :release }[mode] || :release
