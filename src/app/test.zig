@@ -3,6 +3,7 @@ const std = @import("std");
 const Log = @import("rubr").log.Log;
 const lsp = @import("rubr").lsp;
 const strings = @import("rubr").strings;
+const Strange = @import("rubr").strange.Strange;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
@@ -33,20 +34,28 @@ pub const Test = struct {
             try self.forest.loadGrove(&cfg_grove);
         }
 
+        const p: []const u8 = if (self.options.extra.items.len > 0) self.options.extra.items[0] else "";
+        var pattern = Strange{ .content = p };
+        const only_def = pattern.popChar('!');
+
         if (true) {
             for (self.forest.groves.items) |grove| {
-                std.debug.print("\n\n{?s}\n", .{grove.name});
+                std.debug.print("{?s}\n", .{grove.name});
                 for (grove.files.items) |*file| {
                     const cb = struct {
                         const My = @This();
-                        pub fn call(_: My, _: ?mero.Node, child: *mero.Node) !void {
-                            for (child.orgs.items) |org|
-                                std.debug.print("\torg {s}\n", .{org});
+
+                        only_def: bool,
+
+                        pub fn call(my: My, child: *mero.Node, _: ?*mero.Node) !void {
+                            if (!my.only_def)
+                                for (child.orgs.items) |org|
+                                    std.debug.print("\torg {s}\n", .{org});
                             for (child.defs.items) |def|
                                 std.debug.print("\tdef {s}\n", .{def});
                         }
-                    }{};
-                    try file.root.eachRoot2Leaf(null, cb);
+                    }{ .only_def = only_def };
+                    try file.root.dfsNode(null, true, cb);
                 }
             }
         }

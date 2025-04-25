@@ -71,7 +71,7 @@ pub const Options = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        Mode.Search => try self.extra.append(arg.arg),
+                        Mode.Search, Mode.Test => try self.extra.append(arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;

@@ -154,6 +154,7 @@ pub const Node = struct {
     const Self = @This();
     const Childs = std.ArrayList(Node);
     const Amps = std.ArrayList(amp.Path);
+
     pub const Type = enum { Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
@@ -186,10 +187,15 @@ pub const Node = struct {
         }
     }
 
-    pub fn eachRoot2Leaf(self: *Self, parent: ?Node, cb: anytype) !void {
-        try cb.call(parent, self);
+    pub fn dfsNode(self: *Self, parent: ?*Self, call_before: bool, cb: anytype) !void {
+        if (call_before)
+            try cb.call(self, parent);
+
         for (self.childs.items) |*child|
-            try child.eachRoot2Leaf(self.*, cb);
+            try child.dfsNode(self, call_before, cb);
+
+        if (!call_before)
+            try cb.call(self, parent);
     }
 
     pub fn each_amp(self: Self, terms: []const Term, cb: anytype) !void {
@@ -253,18 +259,22 @@ pub const File = struct {
             terms: *const Terms,
             a: std.mem.Allocator,
 
-            pub fn call(my: *My, _: ?Node, child: *Node) !void {
+            pub fn call(my: *My, child: *Node, _: ?*Node) !void {
                 for (child.line.terms_ixr.begin..child.line.terms_ixr.end) |term_ix| {
                     const term = &my.terms.items[term_ix];
                     if (term.kind == Term.Kind.Amp) {
                         var strange = Strange{ .content = term.word };
                         if (try amp.Path.parse(&strange, my.a)) |path|
-                            try child.orgs.append(path);
+                            if (path.is_definition)
+                                try child.defs.append(path)
+                            else
+                                try child.orgs.append(path);
                     }
                 }
             }
         }{ .terms = &self.terms, .a = self.a };
-        try self.root.eachRoot2Leaf(null, &cb);
+
+        try self.root.dfsNode(null, true, &cb);
     }
 
     pub fn each_amp(self: Self, cb: anytype) !void {
@@ -341,7 +351,7 @@ pub const Language = enum {
         if (std.mem.eql(u8, ext, ".txt"))
             return Language.Text;
 
-        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai", ".zig" };
+        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai", ".zig", ".rs" };
         for (cish_exts) |el|
             if (std.mem.eql(u8, ext, el))
                 return Language.Cish;
