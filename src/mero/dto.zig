@@ -95,9 +95,15 @@ pub const Grove = struct {
         pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
             switch (kind) {
                 walker.Kind.Enter => {
+                    var name: []const u8 = undefined;
+                    if (maybe_offsets) |offsets| {
+                        name = path[offsets.name..];
+                    } else {
+                        name = "<ROOT>";
+                    }
+
                     try my.folder_ix_stack.append(my.outer.folders.items.len);
 
-                    const name = if (maybe_offsets) |offsets| path[offsets.name..] else "<ROOT>";
                     try my.outer.folders.append(try Folder.init(name, my.a));
                 },
                 walker.Kind.Leave => {
