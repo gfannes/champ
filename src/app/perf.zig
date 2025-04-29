@@ -46,9 +46,13 @@ pub const Perf = struct {
                 byte_count: usize = 0,
                 token_count: usize = 0,
 
-                pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, offsets: walker.Offsets) !void {
-                    // std.debug.print("Cb.call({s})\n", .{path});
+                pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+                    std.debug.print("Cb.call({s}, {?}, {})\n", .{ path, maybe_offsets, kind });
 
+                    if (kind != walker.Kind.File)
+                        return;
+
+                    const offsets = maybe_offsets orelse return;
                     const name = path[offsets.name..];
 
                     if (my.grove.include) |include| {
