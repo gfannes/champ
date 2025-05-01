@@ -50,16 +50,7 @@ pub const Parser = struct {
     pub fn parse(self: *Self) !void {
         switch (self.language) {
             Language.Markdown => while (true) {
-                if (try self.pop_section_node()) |el| {
-                    const entry = try self.tree.addChild(self.root_id);
-                    entry.data.* = el;
-                } else if (try self.pop_paragraph_node()) |el| {
-                    const entry = try self.tree.addChild(self.root_id);
-                    entry.data.* = el;
-                } else if (try self.pop_bullets_node()) |el| {
-                    const entry = try self.tree.addChild(self.root_id);
-                    entry.data.* = el;
-                } else {
+                if (try self.pop_section_node(self.root_id)) {} else if (try self.pop_paragraph_node(self.root_id)) {} else if (try self.pop_bullets_node(self.root_id)) {} else {
                     break;
                 }
             },
@@ -496,10 +487,12 @@ pub const Parser = struct {
         return null;
     }
 
-    fn pop_section_node(self: *Self) !?Node {
+    fn pop_section_node(self: *Self, parent_id: Tree.Id) !bool {
         if (self.tokenizer.peek()) |first_token| {
             if (is_title(first_token)) |my_depth| {
-                var n = try self.pop_line() orelse unreachable;
+                const entry = try self.tree.addChild(parent_id);
+                const n = entry.data;
+                n.* = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Section;
 
                 while (self.tokenizer.peek()) |token| {
@@ -507,39 +500,37 @@ pub const Parser = struct {
                         if (depth <= my_depth)
                             // This is the start of a section with a depth too low: we cannot nest
                             break;
-                        try n.push_child(try self.pop_section_node() orelse unreachable);
-                    } else if (try self.pop_paragraph_node()) |p| {
-                        try n.push_child(p);
-                    } else if (try self.pop_bullets_node()) |p| {
-                        try n.push_child(p);
-                    } else break;
+                        std.debug.assert(try self.pop_section_node(entry.id));
+                    } else if (try self.pop_paragraph_node(entry.id)) {} else if (try self.pop_bullets_node(entry.id)) {} else break;
                 }
 
-                return n;
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
-    fn pop_paragraph_node(self: *Self) !?Node {
+    fn pop_paragraph_node(self: *Self, parent_id: Tree.Id) !bool {
         if (self.tokenizer.peek()) |first_token| {
             if (is_line(first_token)) {
-                var n = try self.pop_line() orelse unreachable;
+                const entry = try self.tree.addChild(parent_id);
+                const n = entry.data;
+                n.* = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Paragraph;
 
-                while (try self.pop_bullets_node()) |p| {
-                    try n.push_child(p);
-                }
-                return n;
+                while (try self.pop_bullets_node(entry.id)) {}
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
-    fn pop_bullets_node(self: *Self) !?Node {
+    fn pop_bullets_node(self: *Self, parent_id: Tree.Id) !bool {
         if (self.tokenizer.peek()) |first_token| {
             if (is_bullet(first_token)) |my_depth| {
-                var n = try self.pop_line() orelse unreachable;
+                const entry = try self.tree.addChild(parent_id);
+                const n = entry.data;
+                n.* = try self.pop_line() orelse unreachable;
                 n.type = Node.Type.Bullets;
 
                 while (self.tokenizer.peek()) |token| {
@@ -547,13 +538,13 @@ pub const Parser = struct {
                         if (depth <= my_depth)
                             // This is the start of a section with a depth too low: we cannot nest
                             break;
-                        try n.push_child(try self.pop_bullets_node() orelse unreachable);
+                        std.debug.assert(try self.pop_bullets_node(entry.id));
                     } else break;
                 }
-                return n;
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
     fn is_title(t: tkn.Token) ?usize {
