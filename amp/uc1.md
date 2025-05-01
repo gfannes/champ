@@ -3,6 +3,10 @@
 # Create project breakdown &!breakdown
 - Must support defining a tree of subtasks as AMP tags
 	- [ ] Join relative defs into absolute defs
+		- [ ] Use rubr.tree.Tree to store Nodes
+		- [ ] Add parent backlinks
+		- [ ] Represent Folders, Files and Nodes in a tree
+		- [ ] Join Folders and Files
 - Describe these subtasks in Markdown
 - List project breakdown from CLI
 	- [ ] Filter-out tags that do not match
