@@ -8,13 +8,16 @@ const dto = @import("dto.zig");
 const Language = dto.Language;
 const File = dto.File;
 const Node = dto.Node;
+const Tree = dto.Tree;
 const Term = dto.Term;
 const Line = dto.Line;
+const Terms = dto.Terms;
 
 pub const Error = error{
     UnexpectedState,
     CouldNotParse,
     ExpectedFile,
+    ExpectedLanguage,
 };
 
 // &rework: Split pop_txt_X(), pop_md_X() and pop_nonmd_X() into different structs and maybe files
@@ -23,53 +26,50 @@ pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
-    file: ?File,
+    root_id: Tree.Id,
+    tree: *Tree,
     language: Language,
     tokenizer: tkn.Tokenizer,
     a: std.mem.Allocator,
 
-    pub fn init(path: []const u8, language: Language, content: []const u8, a: std.mem.Allocator) !Self {
-        const file = try File.init(path, content, a);
+    pub fn init(root_id: Tree.Id, tree: *Tree, a: std.mem.Allocator) !Self {
+        const r = tree.ptr(root_id);
+        const language = r.language orelse return Error.ExpectedLanguage;
         return Self{
-            .file = file,
+            .root_id = root_id,
+            .tree = tree,
             .language = language,
-            .tokenizer = tkn.Tokenizer.init(file.content),
+            .tokenizer = tkn.Tokenizer.init(r.content),
             .a = a,
         };
     }
     pub fn deinit(self: *Self) void {
-        if (self.file) |*file|
-            file.deinit();
+        _ = self;
     }
 
-    pub fn parse(self: *Self) !File {
-        if (self.file) |*file| {
-            switch (self.language) {
-                Language.Markdown => while (true) {
-                    if (try self.pop_section_node()) |el| {
-                        try file.root.push_child(el);
-                    } else if (try self.pop_paragraph_node()) |el| {
-                        try file.root.push_child(el);
-                    } else if (try self.pop_bullets_node()) |el| {
-                        try file.root.push_child(el);
-                    } else {
-                        break;
-                    }
-                },
-                else => while (true) {
-                    if (try self.pop_line()) |line|
-                        try file.root.push_child(line)
-                    else
-                        break;
-                },
-            }
+    pub fn parse(self: *Self) !void {
+        switch (self.language) {
+            Language.Markdown => while (true) {
+                if (try self.pop_section_node()) |el| {
+                    const entry = try self.tree.addChild(self.root_id);
+                    entry.data.* = el;
+                } else if (try self.pop_paragraph_node()) |el| {
+                    const entry = try self.tree.addChild(self.root_id);
+                    entry.data.* = el;
+                } else if (try self.pop_bullets_node()) |el| {
+                    const entry = try self.tree.addChild(self.root_id);
+                    entry.data.* = el;
+                } else {
+                    break;
+                }
+            },
+            else => while (true) {
+                if (try self.pop_line()) |line| {
+                    const entry = try self.tree.addChild(self.root_id);
+                    entry.data.* = line;
+                } else break;
+            },
         }
-
-        var file = self.file orelse return Error.ExpectedFile;
-        self.file = null;
-        file.root.type = Node.Type.Root;
-
-        return file;
     }
 
     fn pop_line(self: *Self) !?Node {
@@ -89,8 +89,7 @@ pub const Parser = struct {
     }
 
     fn appendToLine(self: *Self, n: *Node, term: Term) !void {
-        if (self.file) |*file|
-            try n.line.append(term, &file.terms);
+        try n.line.append(term, &self.root().terms);
     }
 
     fn pop_md_text(self: *Self, n: *Node) !void {
@@ -594,6 +593,10 @@ pub const Parser = struct {
     }
     fn is_newline(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Newline;
+    }
+
+    fn root(self: *Self) *Node {
+        return self.tree.ptr(self.root_id);
     }
 };
 

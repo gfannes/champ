@@ -34,37 +34,13 @@ pub const Test = struct {
             try self.forest.loadGrove(&cfg_grove);
         }
 
-        const p: []const u8 = if (self.options.extra.items.len > 0) self.options.extra.items[0] else "";
-        var pattern = Strange{ .content = p };
-        const only_def = pattern.popChar('!');
-
-        if (true) {
-            for (self.forest.groves.items) |grove| {
-                std.debug.print("{?s}\n", .{grove.name});
-                for (grove.files.items) |*file| {
-                    const cb = struct {
-                        const My = @This();
-
-                        only_def: bool,
-
-                        pub fn call(my: My, child: *mero.Node, _: ?*mero.Node) !void {
-                            if (!my.only_def)
-                                for (child.orgs.items) |org|
-                                    std.debug.print("\torg {s}\n", .{org});
-                            for (child.defs.items) |def|
-                                std.debug.print("\tdef {s}\n", .{def});
-                        }
-                    }{ .only_def = only_def };
-                    try file.root.dfsNode(null, true, cb);
-                }
+        const cb = struct {
+            const My = @This();
+            pub fn call(my: My, entry: mero.Tree.Entry) !void {
+                _ = my;
+                std.debug.print("{:<6}{?}\t{s}\n", .{ entry.id, entry.data.type, entry.data.path });
             }
-        }
-
-        if (false) {
-            var iter = self.forest.iter();
-            while (iter.next()) |e| {
-                std.debug.print("{s} {s}\n", .{ e.name, e.path });
-            }
-        }
+        }{};
+        try self.forest.tree.dfs(true, cb);
     }
 };

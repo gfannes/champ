@@ -88,12 +88,6 @@ pub const Lsp = struct {
                     var buffer: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
-                    for (self.forest.groves.items) |grove| {
-                        for (grove.files.items) |file| {
-                            try self.log.print("{s}\n", .{file.path});
-                        }
-                    }
-
                     if (self.forest.findFile(filename)) |file| {
                         var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
                         defer symbols.deinit();
@@ -129,22 +123,25 @@ pub const Lsp = struct {
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
-                    var iter = self.forest.iter();
-                    while (iter.next()) |e| {
-                        const score: f32 = @floatCast(fuzz.distance(query, e.name));
+                    // &fixme
+                    // var iter = self.forest.iter();
+                    // while (iter.next()) |e| {
+                    //     const score: f32 = @floatCast(fuzz.distance(query, e.name));
 
-                        try symbols.append(dto.WorkspaceSymbol{
-                            .name = e.name,
-                            .location = dto.Location{
-                                .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", e.path }),
-                                .range = dto.Range{
-                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                                },
-                            },
-                            .score = score,
-                        });
-                    }
+                    //     try symbols.append(dto.WorkspaceSymbol{
+                    //         .name = e.name,
+                    //         .location = dto.Location{
+                    //             .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", e.path }),
+                    //             .range = dto.Range{
+                    //                 .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                    //                 .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                    //             },
+                    //         },
+                    //         .score = score,
+                    //     });
+                    // }
+                    _ = query;
+                    _ = aaa;
 
                     const Fn = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {

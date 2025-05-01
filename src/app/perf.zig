@@ -101,31 +101,33 @@ pub const Perf = struct {
                     if (my.outer.options.do_parse) {
                         const my_ext = std.fs.path.extension(name);
                         if (mero.Language.from_extension(my_ext)) |language| {
-                            var parser = try mero.Parser.init(name, language, my.content.items, my.a);
-                            defer parser.deinit();
+                            // &fixme
+                            _ = language;
+                            // var parser = try mero.Parser.init(name, language, my.content.items, my.a);
+                            // defer parser.deinit();
 
-                            var mero_file = try parser.parse();
+                            // var mero_file = try parser.parse();
 
-                            if (my.outer.log.level(1)) |out| {
-                                var cb = struct {
-                                    path: []const u8,
-                                    o: @TypeOf(out),
-                                    did_log_filename: bool = false,
+                            // if (my.outer.log.level(1)) |out| {
+                            //     var cb = struct {
+                            //         path: []const u8,
+                            //         o: @TypeOf(out),
+                            //         did_log_filename: bool = false,
 
-                                    pub fn call(s: *@This(), amp: []const u8) !void {
-                                        if (!s.did_log_filename) {
-                                            try s.o.print("Filename: {s}\n", .{s.path});
-                                            s.did_log_filename = true;
-                                        }
-                                        try s.o.print("{s}\n", .{amp});
-                                    }
-                                }{ .path = path, .o = out };
-                                try mero_file.each_amp(&cb);
-                            }
-                            if (my.outer.log.level(4)) |out| {
-                                var n = naft.Node.init(out);
-                                mero_file.write(&n);
-                            }
+                            //         pub fn call(s: *@This(), amp: []const u8) !void {
+                            //             if (!s.did_log_filename) {
+                            //                 try s.o.print("Filename: {s}\n", .{s.path});
+                            //                 s.did_log_filename = true;
+                            //             }
+                            //             try s.o.print("{s}\n", .{amp});
+                            //         }
+                            //     }{ .path = path, .o = out };
+                            //     try mero_file.each_amp(&cb);
+                            // }
+                            // if (my.outer.log.level(4)) |out| {
+                            //     var n = naft.Node.init(out);
+                            //     mero_file.write(&n);
+                            // }
                         } else {
                             std.debug.print("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
                             // return Error.UnknownFileType;

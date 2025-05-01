@@ -44,44 +44,45 @@ pub const Search = struct {
             try self.forest.loadGrove(&cfg_grove);
         }
 
-        const Value = mero.Forest.Iter.Value;
+        // &fixme
+        // const Value = mero.Forest.Iter.Value;
 
-        var amps = std.ArrayList(Value).init(self.a);
-        defer amps.deinit();
+        // var amps = std.ArrayList(Value).init(self.a);
+        // defer amps.deinit();
 
-        var max = struct {
-            name: usize = 0,
-            path: usize = 0,
-        }{};
+        // var max = struct {
+        //     name: usize = 0,
+        //     path: usize = 0,
+        // }{};
 
-        var iter = self.forest.iter();
-        while (iter.next()) |e| {
-            max.name = @max(max.name, e.name.len);
-            max.path = @max(max.path, e.path.len);
-            try amps.append(e);
-        }
-        std.debug.print("{any}\n", .{max});
+        // var iter = self.forest.iter();
+        // while (iter.next()) |e| {
+        //     max.name = @max(max.name, e.name.len);
+        //     max.path = @max(max.path, e.path.len);
+        //     try amps.append(e);
+        // }
+        // std.debug.print("{any}\n", .{max});
 
-        const Fn = struct {
-            fn call(q: []const u8, a: Value, b: Value) bool {
-                const dist_a = fuzz.distance(q, a.name);
-                const dist_b = fuzz.distance(q, b.name);
-                return dist_a > dist_b;
-            }
-        };
-        std.sort.block(
-            Value,
-            amps.items,
-            query,
-            Fn.call,
-        );
+        // const Fn = struct {
+        //     fn call(q: []const u8, a: Value, b: Value) bool {
+        //         const dist_a = fuzz.distance(q, a.name);
+        //         const dist_b = fuzz.distance(q, b.name);
+        //         return dist_a > dist_b;
+        //     }
+        // };
+        // std.sort.block(
+        //     Value,
+        //     amps.items,
+        //     query,
+        //     Fn.call,
+        // );
 
-        const blank = try self.a.alloc(u8, @max(max.name, max.path));
-        defer self.a.free(blank);
-        for (blank) |*ch| ch.* = ' ';
+        // const blank = try self.a.alloc(u8, @max(max.name, max.path));
+        // defer self.a.free(blank);
+        // for (blank) |*ch| ch.* = ' ';
 
-        for (amps.items) |amp| {
-            std.debug.print("{s}{s}    {s}{s}\n", .{ amp.name, blank[0 .. max.name - amp.name.len], amp.path, blank[0 .. max.path - amp.path.len] });
-        }
+        // for (amps.items) |amp| {
+        //     std.debug.print("{s}{s}    {s}{s}\n", .{ amp.name, blank[0 .. max.name - amp.name.len], amp.path, blank[0 .. max.path - amp.path.len] });
+        // }
     }
 };

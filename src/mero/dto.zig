@@ -12,145 +12,13 @@ const walker = @import("rubr").walker;
 const Log = @import("rubr").log.Log;
 const index = @import("rubr").index;
 const Strange = @import("rubr").strange.Strange;
+const tree = @import("rubr").tree;
 
 pub const Error = error{
     ExpectedOffsets,
 };
 
-pub const Grove = struct {
-    const Self = @This();
-    const Buffer = std.ArrayList(u8);
-    const Folders = std.ArrayList(Folder);
-    const Files = std.ArrayList(File);
-
-    log: *const Log,
-    name: ?[]const u8 = null,
-    path: ?[]const u8 = null,
-    folders: Folders,
-    files: Files,
-    a: std.mem.Allocator,
-
-    pub fn init(log: *const Log, a: std.mem.Allocator) !Self {
-        return Self{
-            .log = log,
-            .folders = Folders.init(a),
-            .files = Files.init(a),
-            .a = a,
-        };
-    }
-    pub fn deinit(self: *Self) void {
-        if (self.name) |name|
-            self.a.free(name);
-        if (self.path) |path|
-            self.a.free(path);
-        for (self.folders.items) |*folder|
-            folder.deinit();
-        self.folders.deinit();
-        for (self.files.items) |*file|
-            file.deinit();
-        self.files.deinit();
-    }
-
-    pub fn load(self: *Self, cfg_grove: *const cfg.Grove) !void {
-        var buffer = Buffer.init(self.a);
-        defer buffer.deinit();
-
-        var cb = Cb.init(self, cfg_grove, &buffer, self.a);
-        defer cb.deinit();
-
-        const dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
-
-        var w = try walker.Walker.init(self.a);
-        defer w.deinit();
-        try w.walk(dir, &cb);
-
-        self.name = try self.a.dupe(u8, cfg_grove.name);
-        self.path = try self.a.dupe(u8, cfg_grove.path);
-    }
-
-    const Cb = struct {
-        const Stack = std.ArrayList(usize);
-
-        outer: *Self,
-        cfg_grove: *const cfg.Grove,
-        buffer: *Buffer,
-        folder_ix_stack: Stack,
-        a: std.mem.Allocator,
-
-        file_count: usize = 0,
-
-        pub fn init(outer: *Self, cfg_grove: *const cfg.Grove, buffer: *Buffer, a: std.mem.Allocator) Cb {
-            return Cb{
-                .outer = outer,
-                .cfg_grove = cfg_grove,
-                .buffer = buffer,
-                .folder_ix_stack = Stack.init(a),
-                .a = a,
-            };
-        }
-        pub fn deinit(my: *Cb) void {
-            my.folder_ix_stack.deinit();
-        }
-
-        pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
-            switch (kind) {
-                walker.Kind.Enter => {
-                    var name: []const u8 = undefined;
-                    if (maybe_offsets) |offsets| {
-                        name = path[offsets.name..];
-                    } else {
-                        name = "<ROOT>";
-                    }
-
-                    try my.folder_ix_stack.append(my.outer.folders.items.len);
-
-                    try my.outer.folders.append(try Folder.init(name, my.a));
-                },
-                walker.Kind.Leave => {
-                    _ = my.folder_ix_stack.pop();
-                },
-                walker.Kind.File => {
-                    const offsets = maybe_offsets orelse return Error.ExpectedOffsets;
-                    const name = path[offsets.name..];
-
-                    if (my.cfg_grove.include) |include| {
-                        const ext = std.fs.path.extension(name);
-                        if (!strings.contains(u8, include, ext))
-                            // Skip this extension
-                            return;
-                    }
-
-                    const file = try dir.openFile(name, .{});
-                    defer file.close();
-
-                    const stat = try file.stat();
-
-                    const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
-                    if (!size_is_ok)
-                        return;
-
-                    if (my.cfg_grove.max_count) |max_count|
-                        if (my.file_count >= max_count)
-                            return;
-                    my.file_count += 1;
-
-                    try my.buffer.resize(stat.size);
-                    _ = try file.readAll(my.buffer.items);
-
-                    const my_ext = std.fs.path.extension(name);
-                    if (mero.Language.from_extension(my_ext)) |language| {
-                        var parser = try mero.Parser.init(path, language, my.buffer.items, my.a);
-                        defer parser.deinit();
-
-                        try my.outer.files.append(try parser.parse());
-                    } else {
-                        try my.outer.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
-                    }
-                },
-            }
-        }
-    };
-};
+pub const Terms = std.ArrayList(Term);
 
 pub const Term = struct {
     const Self = @This();
@@ -168,6 +36,8 @@ pub const Term = struct {
     word: []const u8,
     kind: Kind,
 
+    pub fn deinit(_: Self) void {}
+
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Term");
         defer n.deinit();
@@ -182,7 +52,7 @@ pub const Line = struct {
 
     terms_ixr: index.Range = .{},
 
-    pub fn append(self: *Self, term: Term, terms: *File.Terms) !void {
+    pub fn append(self: *Self, term: Term, terms: *Terms) !void {
         if (term.word.len > 0) {
             if (self.terms_ixr.empty())
                 self.terms_ixr = .{ .begin = terms.items.len, .end = terms.items.len };
@@ -201,20 +71,27 @@ pub const Line = struct {
     }
 };
 
+pub const Tree = tree.Tree(Node);
+
 pub const Node = struct {
     const Self = @This();
     const Childs = std.ArrayList(Node);
     const Amps = std.ArrayList(amp.Path);
 
-    pub const Type = enum { Root, Section, Paragraph, Bullets, Code };
+    pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
     line: Line = .{},
+    language: ?Language = null,
 
     childs: Childs,
     parent: ?*Node = null,
     orgs: Amps,
     defs: Amps,
+
+    path: []const u8 = &.{},
+    content: []const u8 = &.{},
+    terms: Terms,
 
     a: std.mem.Allocator,
 
@@ -223,6 +100,7 @@ pub const Node = struct {
             .childs = Childs.init(a),
             .orgs = Amps.init(a),
             .defs = Amps.init(a),
+            .terms = Terms.init(a),
             .a = a,
         };
     }
@@ -231,12 +109,15 @@ pub const Node = struct {
             &self.childs,
             &self.orgs,
             &self.defs,
+            &self.terms,
         };
         inline for (array_lists) |al| {
             for (al.items) |*e|
                 e.deinit();
             al.deinit();
         }
+        self.a.free(self.path);
+        self.a.free(self.content);
     }
 
     pub fn dfsNode(self: *Self, parent: ?*Self, call_before: bool, cb: anytype) !void {
@@ -306,7 +187,6 @@ pub const Folder = struct {
 
 pub const File = struct {
     const Self = @This();
-    const Terms = std.ArrayList(Term);
 
     root: Node,
     path: []const u8,
