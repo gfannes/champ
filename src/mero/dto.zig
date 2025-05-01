@@ -84,8 +84,10 @@ pub const Node = struct {
     line: Line = .{},
     language: ?Language = null,
 
+    // &cleanup once tree is fully integrated: Node should only deal with data, rubr.tree.Tree will handle structure
     childs: Childs,
     parent: ?*Node = null,
+
     orgs: Amps,
     defs: Amps,
 
