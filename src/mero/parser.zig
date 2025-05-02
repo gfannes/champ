@@ -6,7 +6,6 @@ const tkn = @import("../tkn.zig");
 
 const dto = @import("dto.zig");
 const Language = dto.Language;
-const File = dto.File;
 const Node = dto.Node;
 const Tree = dto.Tree;
 const Term = dto.Term;
@@ -16,7 +15,6 @@ const Terms = dto.Terms;
 pub const Error = error{
     UnexpectedState,
     CouldNotParse,
-    ExpectedFile,
     ExpectedLanguage,
 };
 

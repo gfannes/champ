@@ -88,30 +88,32 @@ pub const Lsp = struct {
                     var buffer: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
-                    if (self.forest.findFile(filename)) |file| {
-                        var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
-                        defer symbols.deinit();
+                    // &impl
+                    _ = filename;
+                    // if (self.forest.findFile(filename)) |file| {
+                    //     var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
+                    //     defer symbols.deinit();
 
-                        var iter = file.iter();
-                        while (iter.next()) |e| {
-                            try symbols.append(dto.DocumentSymbol{
-                                .name = e.content,
-                                .range = dto.Range{
-                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                                },
-                                .selectionRange = dto.Range{
-                                    .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                                    .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                                },
-                            });
-                        }
-                        try server.send(symbols.items);
-                    } else {
-                        try self.log.print("Error: could not find file {s}\n", .{filename});
-                        // &todo: Send error or null
-                        try server.send(&[_]dto.DocumentSymbol{});
-                    }
+                    // var iter = file.iter();
+                    // while (iter.next()) |e| {
+                    //     try symbols.append(dto.DocumentSymbol{
+                    //         .name = e.content,
+                    //         .range = dto.Range{
+                    //             .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                    //             .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                    //         },
+                    //         .selectionRange = dto.Range{
+                    //             .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
+                    //             .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
+                    //         },
+                    //     });
+                    // }
+                    //     try server.send(symbols.items);
+                    // } else {
+                    //     try self.log.print("Error: could not find file {s}\n", .{filename});
+                    //     // &todo: Send error or null
+                    //     try server.send(&[_]dto.DocumentSymbol{});
+                    // }
                 } else if (request.is("workspace/symbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;

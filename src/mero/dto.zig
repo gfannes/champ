@@ -11,7 +11,6 @@ const strings = @import("rubr").strings;
 const walker = @import("rubr").walker;
 const Log = @import("rubr").log.Log;
 const index = @import("rubr").index;
-const Strange = @import("rubr").strange.Strange;
 const tree = @import("rubr").tree;
 
 pub const Error = error{
@@ -75,7 +74,6 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-    const Childs = std.ArrayList(Node);
     const Amps = std.ArrayList(amp.Path);
 
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullets, Code };
@@ -83,10 +81,6 @@ pub const Node = struct {
     type: ?Type = null,
     line: Line = .{},
     language: ?Language = null,
-
-    // &cleanup once tree is fully integrated: Node should only deal with data, rubr.tree.Tree will handle structure
-    childs: Childs,
-    parent: ?*Node = null,
 
     orgs: Amps,
     defs: Amps,
@@ -99,7 +93,6 @@ pub const Node = struct {
 
     pub fn init(a: std.mem.Allocator) Self {
         return Self{
-            .childs = Childs.init(a),
             .orgs = Amps.init(a),
             .defs = Amps.init(a),
             .terms = Terms.init(a),
@@ -108,7 +101,6 @@ pub const Node = struct {
     }
     pub fn deinit(self: *Self) void {
         const array_lists = .{
-            &self.childs,
             &self.orgs,
             &self.defs,
             &self.terms,
@@ -120,174 +112,6 @@ pub const Node = struct {
         }
         self.a.free(self.path);
         self.a.free(self.content);
-    }
-
-    pub fn dfsNode(self: *Self, parent: ?*Self, call_before: bool, cb: anytype) !void {
-        if (call_before)
-            try cb.call(self, parent);
-
-        for (self.childs.items) |*child|
-            try child.dfsNode(self, call_before, cb);
-
-        if (!call_before)
-            try cb.call(self, parent);
-    }
-
-    pub fn each_amp(self: Self, terms: []const Term, cb: anytype) !void {
-        for (self.line.terms_ixr.begin..self.line.terms_ixr.end) |ix| {
-            const term: *const Term = &terms[ix];
-            if (term.kind == Term.Kind.Amp)
-                try cb.call(term.word);
-        }
-        for (self.childs.items) |child| {
-            try child.each_amp(terms, cb);
-        }
-    }
-
-    pub fn goc_child(self: *Self, ix: usize) !*Node {
-        while (ix >= self.childs.items.len) {
-            try self.childs.append(Node.init(self.a));
-        }
-        return &self.childs.items[ix];
-    }
-
-    pub fn push_child(self: *Self, n: Node) !void {
-        return self.childs.append(n);
-    }
-
-    pub fn write(self: Self, terms: []const Term, parent: *naft.Node) void {
-        var n = parent.node("Node");
-        defer n.deinit();
-        if (self.type) |t| n.attr("type", t);
-
-        self.line.write(terms, &n);
-        for (self.childs.items) |child| {
-            child.write(terms, &n);
-        }
-    }
-};
-
-pub const Folder = struct {
-    const Self = @This();
-
-    root: Node,
-    path: []const u8,
-    a: std.mem.Allocator,
-
-    pub fn init(path: []const u8, a: std.mem.Allocator) !Self {
-        return Self{
-            .root = Node.init(a),
-            .path = try a.dupe(u8, path),
-            .a = a,
-        };
-    }
-    pub fn deinit(self: *Self) void {
-        self.root.deinit();
-        self.a.free(self.path);
-    }
-};
-
-pub const File = struct {
-    const Self = @This();
-
-    root: Node,
-    path: []const u8,
-    content: []const u8,
-    terms: Terms,
-    a: std.mem.Allocator,
-
-    pub fn init(path: []const u8, content: []const u8, a: std.mem.Allocator) !File {
-        return File{
-            .root = Node.init(a),
-            .path = try a.dupe(u8, path),
-            .content = try a.dupe(u8, content),
-            .terms = Terms.init(a),
-            .a = a,
-        };
-    }
-    pub fn deinit(self: *Self) void {
-        self.root.deinit();
-        self.a.free(self.path);
-        self.a.free(self.content);
-        self.terms.deinit();
-    }
-
-    pub fn initOrgsDefs(self: *Self) !void {
-        var cb = struct {
-            const My = @This();
-
-            terms: *const Terms,
-            a: std.mem.Allocator,
-
-            pub fn call(my: *My, child: *Node, _: ?*Node) !void {
-                for (child.line.terms_ixr.begin..child.line.terms_ixr.end) |term_ix| {
-                    const term = &my.terms.items[term_ix];
-                    if (term.kind == Term.Kind.Amp) {
-                        var strange = Strange{ .content = term.word };
-                        if (try amp.Path.parse(&strange, my.a)) |path|
-                            if (path.is_definition)
-                                try child.defs.append(path)
-                            else
-                                try child.orgs.append(path);
-                    }
-                }
-            }
-        }{ .terms = &self.terms, .a = self.a };
-
-        try self.root.dfsNode(null, true, &cb);
-    }
-
-    pub fn each_amp(self: Self, cb: anytype) !void {
-        try self.root.each_amp(self.terms.items, cb);
-    }
-
-    pub const Iter = struct {
-        pub const Value = struct {
-            content: []const u8,
-            line: usize,
-            start: usize,
-            end: usize,
-        };
-
-        outer: *const File,
-        term_ix: usize = 0,
-        line_ix: usize = 0,
-        line_start: [*]const u8,
-
-        pub fn next(self: *Iter) ?Value {
-            while (self.term_ix < self.outer.terms.items.len) {
-                const term = &self.outer.terms.items[self.term_ix];
-                defer self.term_ix += 1;
-                switch (term.kind) {
-                    Term.Kind.Amp => {
-                        const start = term.word.ptr - self.line_start;
-                        return Value{
-                            .content = term.word,
-                            .line = self.line_ix,
-                            .start = start,
-                            .end = start + term.word.len,
-                        };
-                    },
-                    Term.Kind.Newline => {
-                        self.line_ix += term.word.len;
-                        self.line_start = term.word.ptr + term.word.len;
-                    },
-                    else => {},
-                }
-            }
-            return null;
-        }
-    };
-    pub fn iter(self: *const Self) Iter {
-        return Iter{ .outer = self, .line_start = self.content.ptr };
-    }
-
-    pub fn write(self: Self, parent: *naft.Node) void {
-        var n = parent.node("File");
-        defer n.deinit();
-
-        n.attr("path", self.path);
-        self.root.write(self.terms.items, &n);
     }
 };
 

@@ -33,6 +33,7 @@ pub const Test = struct {
                 continue;
             try self.forest.loadGrove(&cfg_grove);
         }
+        try self.forest.initOrgsDefs();
 
         const cb = struct {
             const My = @This();

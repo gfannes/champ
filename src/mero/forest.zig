@@ -1,17 +1,18 @@
 const std = @import("std");
 
-const File = @import("dto.zig").File;
 const Term = @import("dto.zig").Term;
 const Terms = @import("dto.zig").Terms;
 const Tree = @import("dto.zig").Tree;
 const Node = @import("dto.zig").Node;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
+const amp = @import("../amp.zig");
 
 const Log = @import("rubr").log.Log;
 const walker = @import("rubr").walker;
 const slice = @import("rubr").slice;
 const strings = @import("rubr").strings;
+const Strange = @import("rubr").strange.Strange;
 
 pub const Error = error{
     ExpectedOffsets,
@@ -141,10 +142,40 @@ pub const Forest = struct {
         }
     };
 
-    pub fn findFile(self: Self, filename: []const u8) ?*const File {
-        // &impl
-        _ = self;
-        _ = filename;
-        return null;
+    pub fn initOrgsDefs(self: *Self) !void {
+        var cb = struct {
+            const My = @This();
+
+            terms: ?*const Terms = null,
+            a: std.mem.Allocator,
+
+            pub fn call(my: *My, entry: Tree.Entry) !void {
+                const n = entry.data;
+                if (n.type) |typ| {
+                    switch (typ) {
+                        Node.Type.Grove, Node.Type.Folder => {},
+                        Node.Type.File => {
+                            my.terms = &n.terms;
+                        },
+                        else => {
+                            for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                                const terms = my.terms orelse unreachable;
+                                const term = &terms.items[term_ix];
+                                if (term.kind == Term.Kind.Amp) {
+                                    var strange = Strange{ .content = term.word };
+                                    if (try amp.Path.parse(&strange, my.a)) |path|
+                                        if (path.is_definition)
+                                            try n.defs.append(path)
+                                        else
+                                            try n.orgs.append(path);
+                                }
+                            }
+                        },
+                    }
+                }
+            }
+        }{ .a = self.a };
+
+        try self.tree.dfs(true, &cb);
     }
 };
