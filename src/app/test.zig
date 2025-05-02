@@ -27,13 +27,7 @@ pub const Test = struct {
     }
 
     pub fn call(self: *Self) !void {
-        for (self.config.groves) |cfg_grove| {
-            if (!strings.contains(u8, self.options.groves.items, cfg_grove.name))
-                // Skip this grove
-                continue;
-            try self.forest.loadGrove(&cfg_grove);
-        }
-        try self.forest.initOrgsDefs();
+        try self.forest.load(self.config, self.options);
 
         const cb = struct {
             const My = @This();

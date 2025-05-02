@@ -5,6 +5,7 @@ const Terms = @import("dto.zig").Terms;
 const Tree = @import("dto.zig").Tree;
 const Node = @import("dto.zig").Node;
 const cfg = @import("../cfg.zig");
+const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 
@@ -36,6 +37,16 @@ pub const Forest = struct {
         }{};
         self.tree.each(&cb) catch {};
         self.tree.deinit();
+    }
+
+    pub fn load(self: *Self, config: *const cfg.Config, options: *const cli.Options) !void {
+        for (config.groves) |cfg_grove| {
+            if (!strings.contains(u8, options.groves.items, cfg_grove.name))
+                // Skip this grove
+                continue;
+            try self.loadGrove(&cfg_grove);
+        }
+        try self.initOrgsDefs();
     }
 
     pub fn loadGrove(self: *Self, cfg_grove: *const cfg.Grove) !void {
@@ -132,7 +143,6 @@ pub const Forest = struct {
                         var parser = try mero.Parser.init(entry.id, my.tree, my.tree.a);
                         defer parser.deinit();
 
-                        std.debug.print("Parsing '{s}'\n", .{path});
                         try parser.parse();
                     } else {
                         try my.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
@@ -177,5 +187,24 @@ pub const Forest = struct {
         }{ .a = self.a };
 
         try self.tree.dfs(true, &cb);
+    }
+
+    pub fn findFile(self: *Self, name: []const u8) ?*mero.Node {
+        for (self.tree.root_ids.items) |root_id| {
+            if (self.findFile_(name, root_id)) |file| return file;
+        }
+        return null;
+    }
+    fn findFile_(self: *Self, name: []const u8, parent_id: Tree.Id) ?*mero.Node {
+        const n = self.tree.ptr(parent_id);
+        if (n.type) |typ|
+            switch (typ) {
+                mero.Node.Type.File => if (std.mem.endsWith(u8, n.path, name)) return n,
+                mero.Node.Type.Folder, mero.Node.Type.Grove => for (self.tree.childIds(parent_id)) |child_id| {
+                    if (self.findFile_(name, child_id)) |file| return file;
+                },
+                else => {},
+            };
+        return null;
     }
 };

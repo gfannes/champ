@@ -88,62 +88,96 @@ pub const Lsp = struct {
                     var buffer: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
-                    // &impl
-                    _ = filename;
-                    // if (self.forest.findFile(filename)) |file| {
-                    //     var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
-                    //     defer symbols.deinit();
+                    if (self.forest.findFile(filename)) |file| {
+                        var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
+                        defer symbols.deinit();
 
-                    // var iter = file.iter();
-                    // while (iter.next()) |e| {
-                    //     try symbols.append(dto.DocumentSymbol{
-                    //         .name = e.content,
-                    //         .range = dto.Range{
-                    //             .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                    //             .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                    //         },
-                    //         .selectionRange = dto.Range{
-                    //             .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                    //             .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                    //         },
-                    //     });
-                    // }
-                    //     try server.send(symbols.items);
-                    // } else {
-                    //     try self.log.print("Error: could not find file {s}\n", .{filename});
-                    //     // &todo: Send error or null
-                    //     try server.send(&[_]dto.DocumentSymbol{});
-                    // }
+                        var line: usize = 0;
+                        for (file.terms.items) |term| {
+                            switch (term.kind) {
+                                mero.Term.Kind.Newline => line += term.word.len,
+                                mero.Term.Kind.Amp => {
+                                    const start = term.word.ptr - file.content.ptr;
+
+                                    try symbols.append(dto.DocumentSymbol{
+                                        .name = term.word,
+                                        .range = dto.Range{
+                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
+                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
+                                        },
+                                        .selectionRange = dto.Range{
+                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
+                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
+                                        },
+                                    });
+                                },
+                                else => {},
+                            }
+                        }
+                        try server.send(symbols.items);
+                    } else {
+                        try self.log.print("Error: could not find file {s}\n", .{filename});
+                        // &todo: Send error or null
+                        try server.send(&[_]dto.DocumentSymbol{});
+                    }
                 } else if (request.is("workspace/symbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;
 
-                    var symbols = std.ArrayList(dto.WorkspaceSymbol).init(self.a);
-                    defer symbols.deinit();
+                    var cb = struct {
+                        const Symbols = std.ArrayList(dto.WorkspaceSymbol);
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
-                    defer aa.deinit();
-                    const aaa = aa.allocator();
+                        query: []const u8,
+                        symbols: Symbols,
+                        aa: std.heap.ArenaAllocator,
 
-                    // &fixme
-                    // var iter = self.forest.iter();
-                    // while (iter.next()) |e| {
-                    //     const score: f32 = @floatCast(fuzz.distance(query, e.name));
+                        pub fn init(q: []const u8, a: std.mem.Allocator) @This() {
+                            return @This(){
+                                .query = q,
+                                .symbols = Symbols.init(a),
+                                .aa = std.heap.ArenaAllocator.init(a),
+                            };
+                        }
+                        pub fn deinit(my: *@This()) void {
+                            my.symbols.deinit();
+                            my.aa.deinit();
+                        }
 
-                    //     try symbols.append(dto.WorkspaceSymbol{
-                    //         .name = e.name,
-                    //         .location = dto.Location{
-                    //             .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", e.path }),
-                    //             .range = dto.Range{
-                    //                 .start = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.start) },
-                    //                 .end = dto.Position{ .line = @intCast(e.line), .character = @intCast(e.end) },
-                    //             },
-                    //         },
-                    //         .score = score,
-                    //     });
-                    // }
-                    _ = query;
-                    _ = aaa;
+                        pub fn call(my: *@This(), entry: mero.Tree.Entry) !void {
+                            const n = entry.data;
+                            if (n.type) |typ| {
+                                if (typ == mero.Node.Type.File) {
+                                    var line: usize = 0;
+                                    for (n.terms.items) |term| {
+                                        switch (term.kind) {
+                                            mero.Term.Kind.Newline => line += term.word.len,
+                                            mero.Term.Kind.Amp => {
+                                                const score: f32 = @floatCast(fuzz.distance(my.query, term.word));
+                                                const start = term.word.ptr - n.content.ptr;
+
+                                                const aaa = my.aa.allocator();
+                                                try my.symbols.append(dto.WorkspaceSymbol{
+                                                    .name = term.word,
+                                                    .location = dto.Location{
+                                                        .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", n.path }),
+                                                        .range = dto.Range{
+                                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
+                                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
+                                                        },
+                                                    },
+                                                    .score = score,
+                                                });
+                                            },
+                                            else => {},
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }.init(query, self.a);
+                    defer cb.deinit();
+
+                    try self.forest.tree.dfs(true, &cb);
 
                     const Fn = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {
@@ -152,9 +186,9 @@ pub const Lsp = struct {
                             return xx < yy;
                         }
                     };
-                    std.sort.block(dto.WorkspaceSymbol, symbols.items, {}, Fn.call);
+                    std.sort.block(dto.WorkspaceSymbol, cb.symbols.items, {}, Fn.call);
 
-                    try server.send(symbols.items);
+                    try server.send(cb.symbols.items);
                 } else {
                     try self.log.print("Unhandled request '{s}'\n", .{request.method});
                 }

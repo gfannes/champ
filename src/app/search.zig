@@ -31,58 +31,75 @@ pub const Search = struct {
     }
 
     pub fn call(self: *Self) !void {
+        try self.forest.load(self.config, self.options);
+
+        const Amp = struct {
+            name: []const u8,
+            path: []const u8,
+        };
+
+        var cb = struct {
+            const My = @This();
+            const Amps = std.ArrayList(Amp);
+            const Max = struct {
+                name: usize = 0,
+                path: usize = 0,
+            };
+
+            amps: Amps,
+            max: Max = .{},
+
+            pub fn init(a: std.mem.Allocator) My {
+                return My{ .amps = Amps.init(a) };
+            }
+            pub fn deinit(my: *My) void {
+                my.amps.deinit();
+            }
+
+            pub fn call(my: *My, entry: mero.Tree.Entry) !void {
+                const n = entry.data;
+                if (n.type == mero.Node.Type.File) {
+                    for (n.terms.items) |term| {
+                        if (term.kind == mero.Term.Kind.Amp) {
+                            try my.amps.append(Amp{ .name = term.word, .path = n.path });
+
+                            my.max.name = @max(my.max.name, term.word.len);
+                            my.max.path = @max(my.max.path, n.path.len);
+                        }
+                    }
+                }
+            }
+        }.init(self.a);
+        defer cb.deinit();
+
+        try self.forest.tree.dfs(true, &cb);
+
         if (self.options.extra.items.len == 0)
             return Error.ExpectedQueryArgument;
 
         const query = try std.mem.concat(self.a, u8, self.options.extra.items);
         defer self.a.free(query);
 
-        for (self.config.groves) |cfg_grove| {
-            if (!strings.contains(u8, self.options.groves.items, cfg_grove.name))
-                // Skip this grove
-                continue;
-            try self.forest.loadGrove(&cfg_grove);
+        const Fn = struct {
+            fn call(q: []const u8, a: Amp, b: Amp) bool {
+                const dist_a = fuzz.distance(q, a.name);
+                const dist_b = fuzz.distance(q, b.name);
+                return dist_a > dist_b;
+            }
+        };
+        std.sort.block(
+            Amp,
+            cb.amps.items,
+            query,
+            Fn.call,
+        );
+
+        const blank = try self.a.alloc(u8, @max(cb.max.name, cb.max.path));
+        defer self.a.free(blank);
+        for (blank) |*ch| ch.* = ' ';
+
+        for (cb.amps.items) |amp| {
+            std.debug.print("{s}{s}    {s}{s}\n", .{ amp.name, blank[0 .. cb.max.name - amp.name.len], amp.path, blank[0 .. cb.max.path - amp.path.len] });
         }
-
-        // &fixme
-        // const Value = mero.Forest.Iter.Value;
-
-        // var amps = std.ArrayList(Value).init(self.a);
-        // defer amps.deinit();
-
-        // var max = struct {
-        //     name: usize = 0,
-        //     path: usize = 0,
-        // }{};
-
-        // var iter = self.forest.iter();
-        // while (iter.next()) |e| {
-        //     max.name = @max(max.name, e.name.len);
-        //     max.path = @max(max.path, e.path.len);
-        //     try amps.append(e);
-        // }
-        // std.debug.print("{any}\n", .{max});
-
-        // const Fn = struct {
-        //     fn call(q: []const u8, a: Value, b: Value) bool {
-        //         const dist_a = fuzz.distance(q, a.name);
-        //         const dist_b = fuzz.distance(q, b.name);
-        //         return dist_a > dist_b;
-        //     }
-        // };
-        // std.sort.block(
-        //     Value,
-        //     amps.items,
-        //     query,
-        //     Fn.call,
-        // );
-
-        // const blank = try self.a.alloc(u8, @max(max.name, max.path));
-        // defer self.a.free(blank);
-        // for (blank) |*ch| ch.* = ' ';
-
-        // for (amps.items) |amp| {
-        //     std.debug.print("{s}{s}    {s}{s}\n", .{ amp.name, blank[0 .. max.name - amp.name.len], amp.path, blank[0 .. max.path - amp.path.len] });
-        // }
     }
 };
