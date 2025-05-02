@@ -83,7 +83,7 @@ pub const Node = struct {
     language: ?Language = null,
 
     orgs: Amps,
-    defs: Amps,
+    def: ?amp.Path = null,
 
     path: []const u8 = &.{},
     content: []const u8 = &.{},
@@ -94,7 +94,6 @@ pub const Node = struct {
     pub fn init(a: std.mem.Allocator) Self {
         return Self{
             .orgs = Amps.init(a),
-            .defs = Amps.init(a),
             .terms = Terms.init(a),
             .a = a,
         };
@@ -102,7 +101,6 @@ pub const Node = struct {
     pub fn deinit(self: *Self) void {
         const array_lists = .{
             &self.orgs,
-            &self.defs,
             &self.terms,
         };
         inline for (array_lists) |al| {
@@ -110,6 +108,8 @@ pub const Node = struct {
                 e.deinit();
             al.deinit();
         }
+        if (self.def) |*d|
+            d.deinit();
         self.a.free(self.path);
         self.a.free(self.content);
     }

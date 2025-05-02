@@ -43,6 +43,13 @@ pub const Path = struct {
         return path;
     }
 
+    pub fn prepend(self: *Self, prefix: Self) !void {
+        self.is_definition = prefix.is_definition;
+        self.is_absolute = prefix.is_absolute;
+        // Assumes Part is POD
+        try self.parts.insertSlice(0, prefix.parts.items);
+    }
+
     pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt;
         _ = options;
@@ -58,6 +65,7 @@ pub const Path = struct {
     }
 };
 
+// Part is assumed to be POD
 pub const Part = struct {
     content: []const u8,
     is_exclusive: bool = false,

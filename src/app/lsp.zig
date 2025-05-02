@@ -36,12 +36,7 @@ pub const Lsp = struct {
     pub fn call(self: *Self) !void {
         try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});
 
-        for (self.config.groves) |cfg_grove| {
-            if (!strings.contains(u8, self.options.groves.items, cfg_grove.name))
-                // Skip this grove
-                continue;
-            try self.forest.loadGrove(&cfg_grove);
-        }
+        try self.forest.load(self.config, self.options);
 
         var cin = std.io.getStdIn();
         var cout = std.io.getStdOut();

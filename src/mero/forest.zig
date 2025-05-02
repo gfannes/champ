@@ -17,6 +17,8 @@ const Strange = @import("rubr").strange.Strange;
 
 pub const Error = error{
     ExpectedOffsets,
+    ExpectedAbsoluteDef,
+    OnlyOneDefAllowed,
 };
 
 pub const Forest = struct {
@@ -47,9 +49,17 @@ pub const Forest = struct {
             try self.loadGrove(&cfg_grove);
         }
         try self.initOrgsDefs();
+        try self.joinDefs();
     }
 
-    pub fn loadGrove(self: *Self, cfg_grove: *const cfg.Grove) !void {
+    pub fn findFile(self: *Self, name: []const u8) ?*mero.Node {
+        for (self.tree.root_ids.items) |root_id| {
+            if (self.findFile_(name, root_id)) |file| return file;
+        }
+        return null;
+    }
+
+    fn loadGrove(self: *Self, cfg_grove: *const cfg.Grove) !void {
         var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a);
         defer cb.deinit();
 
@@ -152,7 +162,7 @@ pub const Forest = struct {
         }
     };
 
-    pub fn initOrgsDefs(self: *Self) !void {
+    fn initOrgsDefs(self: *Self) !void {
         var cb = struct {
             const My = @This();
 
@@ -174,10 +184,10 @@ pub const Forest = struct {
                                 if (term.kind == Term.Kind.Amp) {
                                     var strange = Strange{ .content = term.word };
                                     if (try amp.Path.parse(&strange, my.a)) |path|
-                                        if (path.is_definition)
-                                            try n.defs.append(path)
-                                        else
-                                            try n.orgs.append(path);
+                                        if (path.is_definition) {
+                                            if (n.def != null) return Error.OnlyOneDefAllowed;
+                                            n.def = path;
+                                        } else try n.orgs.append(path);
                                 }
                             }
                         },
@@ -189,12 +199,41 @@ pub const Forest = struct {
         try self.tree.dfs(true, &cb);
     }
 
-    pub fn findFile(self: *Self, name: []const u8) ?*mero.Node {
-        for (self.tree.root_ids.items) |root_id| {
-            if (self.findFile_(name, root_id)) |file| return file;
-        }
-        return null;
+    fn joinDefs(self: *Self) !void {
+        var cb = struct {
+            tree: *Tree,
+            path: []const u8 = &.{},
+
+            pub fn call(my: *@This(), entry: Tree.Entry) !void {
+                const n = entry.data;
+                if (n.type == mero.Node.Type.File or n.type == mero.Node.Type.Folder)
+                    my.path = n.path;
+                if (n.def) |*def| {
+                    if (!def.is_absolute) {
+                        var child_id = entry.id;
+                        const maybe_parent_def = block: while (true) {
+                            if (try my.tree.parent(child_id)) |parent| {
+                                if (parent.data.def) |pdef| {
+                                    if (!pdef.is_absolute) {
+                                        std.debug.print("Found non-absolute def '{}' in '{s}' while resolving '{}'\n", .{ pdef, my.path, def });
+                                        return Error.ExpectedAbsoluteDef;
+                                    }
+                                    break :block parent.data.def;
+                                } else {
+                                    child_id = parent.id;
+                                }
+                            }
+                            break :block null;
+                        };
+                        if (maybe_parent_def) |parent_def|
+                            try def.prepend(parent_def);
+                    }
+                }
+            }
+        }{ .tree = &self.tree };
+        try self.tree.dfs(true, &cb);
     }
+
     fn findFile_(self: *Self, name: []const u8, parent_id: Tree.Id) ?*mero.Node {
         const n = self.tree.ptr(parent_id);
         if (n.type) |typ|

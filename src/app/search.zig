@@ -58,6 +58,9 @@ pub const Search = struct {
 
             pub fn call(my: *My, entry: mero.Tree.Entry) !void {
                 const n = entry.data;
+                if (n.def) |d| {
+                    std.debug.print("def: '{}'\n", .{d});
+                }
                 if (n.type == mero.Node.Type.File) {
                     for (n.terms.items) |term| {
                         if (term.kind == mero.Term.Kind.Amp) {
