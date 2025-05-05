@@ -1,6 +1,5 @@
 const dto = @import("mero/dto.zig");
 pub const Language = dto.Language;
-pub const File = dto.File;
 pub const Term = dto.Term;
 pub const Node = dto.Node;
 pub const Tree = dto.Tree;

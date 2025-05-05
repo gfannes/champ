@@ -592,26 +592,32 @@ pub const Parser = struct {
 test "Parser.parse()" {
     const ut = std.testing;
 
-    {
-        const content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c";
-
-        var parser = try Parser.init("path", Language.Markdown, content, ut.allocator);
-
-        var file = try parser.parse();
-        defer file.deinit();
-
-        var n = naft.Node.init(null);
-        file.write(&n);
+    var tree = Tree.init(ut.allocator);
+    defer {
+        for (tree.nodes.items) |*node|
+            node.data.deinit();
+        tree.deinit();
     }
-    {
-        const content = "#include <iostream>\nint main(){\n  std::cout << \"Hello world.\" << std::endl; // &todo: place real program here\nreturn 0;\n}";
 
-        var parser = try Parser.init("path", Language.Cish, content, ut.allocator);
+    const Scn = struct { content: []const u8, language: Language };
+    for (&[_]Scn{
+        Scn{
+            .content = "# Title1\n\n## Section\n\nLine\n- Bullet\n# Title2\nLine\n# Title3\n - Bullet\nLine\n# Title 4\n- b\n - bb\n- c",
+            .language = Language.Markdown,
+        },
+        Scn{
+            .content = "#include <iostream>\nint main(){\n  std::cout << \"Hello world.\" << std::endl; // &todo: place real program here\nreturn 0;\n}",
+            .language = Language.Cish,
+        },
+    }) |scn| {
+        const f = try tree.addChild(null);
+        const n = f.data;
+        n.* = Node.init(ut.allocator);
+        n.content = try tree.a.dupe(u8, scn.content);
+        n.language = scn.language;
 
-        var file = try parser.parse();
-        defer file.deinit();
+        var parser = try Parser.init(f.id, &tree, ut.allocator);
 
-        var n = naft.Node.init(null);
-        file.write(&n);
+        try parser.parse();
     }
 }
