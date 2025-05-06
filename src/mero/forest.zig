@@ -196,7 +196,7 @@ pub const Forest = struct {
             }
         }{ .a = self.a };
 
-        try self.tree.dfs(true, &cb);
+        try self.tree.dfsAll(true, &cb);
     }
 
     fn joinDefs(self: *Self) !void {
@@ -231,7 +231,7 @@ pub const Forest = struct {
                 }
             }
         }{ .tree = &self.tree };
-        try self.tree.dfs(true, &cb);
+        try self.tree.dfsAll(true, &cb);
     }
 
     fn findFile_(self: *Self, name: []const u8, parent_id: Tree.Id) ?*mero.Node {

@@ -48,17 +48,57 @@ pub const Parser = struct {
     pub fn parse(self: *Self) !void {
         switch (self.language) {
             Language.Markdown => while (true) {
-                if (try self.pop_section_node(self.root_id)) {} else if (try self.pop_paragraph_node(self.root_id)) {} else if (try self.pop_bullets_node(self.root_id)) {} else {
-                    break;
-                }
+                if (try self.pop_section_node(self.root_id))
+                    continue;
+                if (try self.pop_paragraph_node(self.root_id))
+                    continue;
+                if (try self.pop_bullets_node(self.root_id))
+                    continue;
+
+                break;
             },
             else => while (true) {
                 if (try self.pop_line()) |line| {
                     const entry = try self.tree.addChild(self.root_id);
                     entry.data.* = line;
-                } else break;
+                    continue;
+                }
+
+                break;
             },
         }
+
+        var cb = struct {
+            const My = @This();
+
+            terms: []const Term,
+            row: usize = 0,
+            col: usize = 0,
+
+            pub fn call(my: *My, entry: Tree.Entry) !void {
+                const n = entry.data;
+                n.content_rows.begin = my.row;
+                n.content_cols.begin = my.col;
+                for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                    const term = &my.terms[term_ix];
+                    switch (term.kind) {
+                        Term.Kind.Newline => {
+                            my.row += term.word.len;
+                            my.col = 0;
+                        },
+                        else => {
+                            my.col += term.word.len;
+
+                            // We update content_rows/content_cols here and not after this for loop
+                            // to not include the last Newline
+                            n.content_rows.end = my.row;
+                            n.content_cols.end = my.col;
+                        },
+                    }
+                }
+            }
+        }{ .terms = self.root().terms.items };
+        try self.tree.dfs(self.root_id, true, &cb);
     }
 
     fn pop_line(self: *Self) !?Node {

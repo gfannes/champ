@@ -172,7 +172,7 @@ pub const Lsp = struct {
                     }.init(query, self.a);
                     defer cb.deinit();
 
-                    try self.forest.tree.dfs(true, &cb);
+                    try self.forest.tree.dfsAll(true, &cb);
 
                     const Fn = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {

@@ -75,7 +75,7 @@ pub const Search = struct {
         }.init(self.a);
         defer cb.deinit();
 
-        try self.forest.tree.dfs(true, &cb);
+        try self.forest.tree.dfsAll(true, &cb);
 
         if (self.options.extra.items.len == 0)
             return Error.ExpectedQueryArgument;

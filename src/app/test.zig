@@ -33,9 +33,9 @@ pub const Test = struct {
             const My = @This();
             pub fn call(my: My, entry: mero.Tree.Entry) !void {
                 _ = my;
-                std.debug.print("{:<6}{?}\t{s}\n", .{ entry.id, entry.data.type, entry.data.path });
+                std.debug.print("{:<6}{?}\t{s}\t{}{}\n", .{ entry.id, entry.data.type, entry.data.path, entry.data.content_rows, entry.data.content_cols });
             }
         }{};
-        try self.forest.tree.dfs(true, cb);
+        try self.forest.tree.dfsAll(true, cb);
     }
 };

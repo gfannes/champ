@@ -79,15 +79,19 @@ pub const Node = struct {
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullets, Code };
 
     type: ?Type = null,
-    line: Line = .{},
     language: ?Language = null,
 
     orgs: Amps,
     def: ?amp.Path = null,
 
+    // &perf: Only activate relevant fields depending on type
+    line: Line = .{},
     path: []const u8 = &.{},
     content: []const u8 = &.{},
     terms: Terms,
+
+    content_rows: index.Range = .{},
+    content_cols: index.Range = .{},
 
     a: std.mem.Allocator,
 

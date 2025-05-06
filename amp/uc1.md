@@ -33,7 +33,9 @@
 	- Rename existing `_.amp` and update Rust code
 
 # Find all references &!search
-- [ ] Resolve AMP tags against defs
+- [x] Collect content range per Node
+- [*] Convert Nodes with AMP info into Chores
+- [*] Resolve AMP tags against defs
 	- [ ] Report unresolved AMP tags in CLI
 - [ ] Must filter done items by default
 - [ ] Could support searching all references
