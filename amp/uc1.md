@@ -34,7 +34,7 @@
 
 # Find all references &!search
 - [x] Collect content range per Node
-- [*] Convert Nodes with AMP info into Chores
+- [/] Convert Nodes with AMP info into Chores
 - [*] Resolve AMP tags against defs
 	- [ ] Report unresolved AMP tags in CLI
 - [ ] Must filter done items by default
