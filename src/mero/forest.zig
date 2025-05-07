@@ -171,27 +171,25 @@ pub const Forest = struct {
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
-                if (n.type) |typ| {
-                    switch (typ) {
-                        Node.Type.Grove, Node.Type.Folder => {},
-                        Node.Type.File => {
-                            my.terms = &n.terms;
-                        },
-                        else => {
-                            for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
-                                const terms = my.terms orelse unreachable;
-                                const term = &terms.items[term_ix];
-                                if (term.kind == Term.Kind.Amp) {
-                                    var strange = Strange{ .content = term.word };
-                                    if (try amp.Path.parse(&strange, my.a)) |path|
-                                        if (path.is_definition) {
-                                            if (n.def != null) return Error.OnlyOneDefAllowed;
-                                            n.def = path;
-                                        } else try n.orgs.append(path);
-                                }
+                switch (n.type) {
+                    Node.Type.Grove, Node.Type.Folder => {},
+                    Node.Type.File => {
+                        my.terms = &n.terms;
+                    },
+                    else => {
+                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                            const terms = my.terms orelse unreachable;
+                            const term = &terms.items[term_ix];
+                            if (term.kind == Term.Kind.Amp) {
+                                var strange = Strange{ .content = term.word };
+                                if (try amp.Path.parse(&strange, my.a)) |path|
+                                    if (path.is_definition) {
+                                        if (n.def != null) return Error.OnlyOneDefAllowed;
+                                        n.def = path;
+                                    } else try n.orgs.append(path);
                             }
-                        },
-                    }
+                        }
+                    },
                 }
             }
         }{ .a = self.a };
@@ -236,14 +234,13 @@ pub const Forest = struct {
 
     fn findFile_(self: *Self, name: []const u8, parent_id: Tree.Id) ?*mero.Node {
         const n = self.tree.ptr(parent_id);
-        if (n.type) |typ|
-            switch (typ) {
-                mero.Node.Type.File => if (std.mem.endsWith(u8, n.path, name)) return n,
-                mero.Node.Type.Folder, mero.Node.Type.Grove => for (self.tree.childIds(parent_id)) |child_id| {
-                    if (self.findFile_(name, child_id)) |file| return file;
-                },
-                else => {},
-            };
+        switch (n.type) {
+            mero.Node.Type.File => if (std.mem.endsWith(u8, n.path, name)) return n,
+            mero.Node.Type.Folder, mero.Node.Type.Grove => for (self.tree.childIds(parent_id)) |child_id| {
+                if (self.findFile_(name, child_id)) |file| return file;
+            },
+            else => {},
+        }
         return null;
     }
 };

@@ -1,13 +1,16 @@
 const std = @import("std");
 
-const Log = @import("rubr").log.Log;
-const lsp = @import("rubr").lsp;
-const strings = @import("rubr").strings;
-const Strange = @import("rubr").strange.Strange;
+const rubr = @import("rubr");
+const Log = rubr.log.Log;
+const lsp = rubr.lsp;
+const strings = rubr.strings;
+const Strange = rubr.strange.Strange;
+const naft = rubr.naft;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
+const chore = @import("../chore.zig");
 
 pub const Test = struct {
     const Self = @This();
@@ -29,13 +32,31 @@ pub const Test = struct {
     pub fn call(self: *Self) !void {
         try self.forest.load(self.config, self.options);
 
-        const cb = struct {
+        var cb = struct {
             const My = @This();
-            pub fn call(my: My, entry: mero.Tree.Entry) !void {
-                _ = my;
-                std.debug.print("{:<6}{?}\t{s}\t{}{}\n", .{ entry.id, entry.data.type, entry.data.path, entry.data.content_rows, entry.data.content_cols });
+
+            tree: *const mero.Tree,
+            chorelist: chore.ChoreList,
+
+            pub fn init(tree: *const mero.Tree, a: std.mem.Allocator) My {
+                return My{ .tree = tree, .chorelist = chore.ChoreList.init(a) };
             }
-        }{};
-        try self.forest.tree.dfsAll(true, cb);
+            pub fn deinit(my: *My) void {
+                my.chorelist.deinit();
+            }
+
+            pub fn call(my: *My, entry: mero.Tree.Entry) !void {
+                // std.debug.print("{:<6}{?}\t{s}\t{}{}\n", .{ entry.id, entry.data.type, entry.data.path, entry.data.content_rows, entry.data.content_cols });
+                _ = try my.chorelist.add(entry.id, my.tree.*);
+            }
+        }.init(&self.forest.tree, self.a);
+        defer cb.deinit();
+
+        try self.forest.tree.dfsAll(true, &cb);
+
+        var root = naft.Node.init(null);
+        defer root.deinit();
+
+        cb.chorelist.write(&root);
     }
 };

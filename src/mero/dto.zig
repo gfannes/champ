@@ -6,12 +6,13 @@ const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Parser = @import("parser.zig").Parser;
 
-const naft = @import("rubr").naft;
-const strings = @import("rubr").strings;
-const walker = @import("rubr").walker;
-const Log = @import("rubr").log.Log;
-const index = @import("rubr").index;
-const tree = @import("rubr").tree;
+const rubr = @import("rubr");
+const naft = rubr.naft;
+const strings = rubr.strings;
+const walker = rubr.walker;
+const Log = rubr.log.Log;
+const index = rubr.index;
+const tree = rubr.tree;
 
 pub const Error = error{
     ExpectedOffsets,
@@ -76,9 +77,9 @@ pub const Node = struct {
     const Self = @This();
     const Amps = std.ArrayList(amp.Path);
 
-    pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullets, Code };
+    pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
 
-    type: ?Type = null,
+    type: Type = Type.Unknown,
     language: ?Language = null,
 
     orgs: Amps,

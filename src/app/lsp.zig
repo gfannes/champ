@@ -140,31 +140,29 @@ pub const Lsp = struct {
 
                         pub fn call(my: *@This(), entry: mero.Tree.Entry) !void {
                             const n = entry.data;
-                            if (n.type) |typ| {
-                                if (typ == mero.Node.Type.File) {
-                                    var line: usize = 0;
-                                    for (n.terms.items) |term| {
-                                        switch (term.kind) {
-                                            mero.Term.Kind.Newline => line += term.word.len,
-                                            mero.Term.Kind.Amp => {
-                                                const score: f32 = @floatCast(fuzz.distance(my.query, term.word));
-                                                const start = term.word.ptr - n.content.ptr;
+                            if (n.type == mero.Node.Type.File) {
+                                var line: usize = 0;
+                                for (n.terms.items) |term| {
+                                    switch (term.kind) {
+                                        mero.Term.Kind.Newline => line += term.word.len,
+                                        mero.Term.Kind.Amp => {
+                                            const score: f32 = @floatCast(fuzz.distance(my.query, term.word));
+                                            const start = term.word.ptr - n.content.ptr;
 
-                                                const aaa = my.aa.allocator();
-                                                try my.symbols.append(dto.WorkspaceSymbol{
-                                                    .name = term.word,
-                                                    .location = dto.Location{
-                                                        .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", n.path }),
-                                                        .range = dto.Range{
-                                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
-                                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
-                                                        },
+                                            const aaa = my.aa.allocator();
+                                            try my.symbols.append(dto.WorkspaceSymbol{
+                                                .name = term.word,
+                                                .location = dto.Location{
+                                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", n.path }),
+                                                    .range = dto.Range{
+                                                        .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
+                                                        .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
                                                     },
-                                                    .score = score,
-                                                });
-                                            },
-                                            else => {},
-                                        }
+                                                },
+                                                .score = score,
+                                            });
+                                        },
+                                        else => {},
                                     }
                                 }
                             }

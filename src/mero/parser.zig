@@ -107,6 +107,7 @@ pub const Parser = struct {
 
         var n = Node.init(self.a);
         errdefer n.deinit();
+        n.type = Node.Type.Line;
 
         switch (self.language) {
             Language.Markdown => try self.pop_md_text(&n),
@@ -569,7 +570,7 @@ pub const Parser = struct {
                 const entry = try self.tree.addChild(parent_id);
                 const n = entry.data;
                 n.* = try self.pop_line() orelse unreachable;
-                n.type = Node.Type.Bullets;
+                n.type = Node.Type.Bullet;
 
                 while (self.tokenizer.peek()) |token| {
                     if (is_bullet(token)) |depth| {
