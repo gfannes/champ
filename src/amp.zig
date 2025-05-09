@@ -2,6 +2,10 @@ const std = @import("std");
 
 const Strange = @import("rubr").strange.Strange;
 
+pub const Error = error{
+    ExpectedAmpersand,
+};
+
 pub const Path = struct {
     const Self = @This();
     const Parts = std.ArrayList(Part);
@@ -18,9 +22,9 @@ pub const Path = struct {
     }
 
     // Assumes strange outlives Path
-    pub fn parse(strange: *Strange, a: std.mem.Allocator) !?Path {
+    pub fn parse(strange: *Strange, a: std.mem.Allocator) !Path {
         if (!strange.popChar('&'))
-            return null;
+            return Error.ExpectedAmpersand;
 
         var path = Path.init(a);
         errdefer path.deinit();
@@ -97,12 +101,10 @@ test "amp" {
 
     for (scns) |scn| {
         var strange = Strange{ .content = scn.repr };
-        var maybe_path = try Path.parse(&strange, ut.allocator);
-        if (maybe_path) |*path| {
-            defer path.deinit();
-            const act = try std.fmt.allocPrint(ut.allocator, "{s}", .{path});
-            try ut.expectEqualSlices(u8, scn.exp, act);
-            defer ut.allocator.free(act);
-        } else unreachable;
+        var path = try Path.parse(&strange, ut.allocator);
+        defer path.deinit();
+        const act = try std.fmt.allocPrint(ut.allocator, "{s}", .{path});
+        try ut.expectEqualSlices(u8, scn.exp, act);
+        defer ut.allocator.free(act);
     }
 }

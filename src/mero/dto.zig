@@ -82,8 +82,8 @@ pub const Node = struct {
     type: Type = Type.Unknown,
     language: ?Language = null,
 
+    // Will contain resolved Amps, only the first can be a definition
     orgs: Amps,
-    def: ?amp.Path = null,
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
@@ -113,8 +113,6 @@ pub const Node = struct {
                 e.deinit();
             al.deinit();
         }
-        if (self.def) |*d|
-            d.deinit();
         self.a.free(self.path);
         self.a.free(self.content);
     }

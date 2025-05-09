@@ -1,5 +1,17 @@
 &!:uc1
 
+- Node.orgs should always be resolved
+	- [x] First might be def
+	- [x] Remove Node.def
+	- Def is also an org and should be used in aggregation etc
+		- Only for tags, not for templates or numbers etc.
+- Add fix mode
+- Trailing ! indicates current Chore _uses_ AMP
+	- Default behavior is that current Chore _is part of_ AMP
+	- Is this the same as a reverse tag?
+- Distribute AMPs
+	- Tag distribution
+
 # Create project breakdown &!breakdown
 - Must support defining a tree of subtasks as AMP tags
 	- [x] Join relative defs into absolute defs

@@ -53,6 +53,7 @@ pub const ChoreList = struct {
         self.tmp.deinit();
     }
 
+    // Return true if tree[node_id] is an actual Chore and was thus added
     pub fn add(self: *Self, node_id: usize, tree: mero.Tree) !bool {
         const node = tree.cptr(node_id);
 
@@ -60,10 +61,6 @@ pub const ChoreList = struct {
 
         try self.tmp.resize(0);
         var sep: []const u8 = "";
-        if (node.def) |def| {
-            try self.tmp.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, def }));
-            sep = " ";
-        }
         for (node.orgs.items) |org| {
             try self.tmp.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, org }));
             sep = " ";
@@ -114,11 +111,16 @@ test "chore" {
     var tree = mero.Tree.init(ut.allocator);
     defer tree.deinit();
 
-    try tree.addChild(null);
-    try tree.addChild(null);
-    try tree.addChild(null);
+    const ch0 = try tree.addChild(null);
+    ch0.data.* = mero.Node.init(ut.allocator);
 
-    try cl.add(0, tree);
-    try cl.add(1, tree);
-    try cl.add(2, tree);
+    const ch1 = try tree.addChild(null);
+    ch1.data.* = mero.Node.init(ut.allocator);
+
+    const ch2 = try tree.addChild(null);
+    ch2.data.* = mero.Node.init(ut.allocator);
+
+    _ = try cl.add(0, tree);
+    _ = try cl.add(1, tree);
+    _ = try cl.add(2, tree);
 }
