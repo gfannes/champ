@@ -6,3 +6,6 @@
 - Rename link
 
 # Compute remaining effort
+
+# Create overview in temporary text file
+- [[File UI]], similar to [Magit](https://magit.vc/)

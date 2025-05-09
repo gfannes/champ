@@ -38,6 +38,7 @@
 	- [ ] Reload when changed, check from time to time
 - Support searching for next Chore to execute
 	- [ ] Interpret `[?]` as AMP
+		- Discriminate between Markdown and Wiki links
 	- Create DSL for `todo`, `wip` and `next`
 
 # Annotate parts of source code with project and status tags &!annotate
