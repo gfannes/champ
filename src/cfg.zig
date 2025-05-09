@@ -64,6 +64,7 @@ pub const Grove = struct {
 pub const Config = struct {
     groves: []Grove = &.{},
     max_memsize: ?usize = null,
+    default: ?[][]const u8 = null,
 };
 
 test "cfg" {

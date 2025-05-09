@@ -1,17 +1,5 @@
 &!:uc1
 
-- Node.orgs should always be resolved
-	- [x] First might be def
-	- [x] Remove Node.def
-	- Def is also an org and should be used in aggregation etc
-		- Only for tags, not for templates or numbers etc.
-- Add fix mode
-- Trailing ! indicates current Chore _uses_ AMP
-	- Default behavior is that current Chore _is part of_ AMP
-	- Is this the same as a reverse tag?
-- Distribute AMPs
-	- Tag distribution
-
 # Create project breakdown &!breakdown
 - Must support defining a tree of subtasks as AMP tags
 	- [x] Join relative defs into absolute defs
@@ -25,20 +13,45 @@
 	- [x] Sort by fuzzy match score
 	- [ ] Support selecting defs
 	- [ ] Could document the DSL for searching
+- [ ] Add `fix` mode to champ
+	- [ ] Warn on amps without definition
 
-# Search for AMP definitions &!define
-- Must support [[Helix]] via [[Language Server Protocol (LSP)]]
-	- Use workspace symbols
-- [ ] Search in amp.Path, not in terms
+# Search for AMP defs and tags from editor &!define
+- [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
+	- [x] Use workspace symbols
+- [/] Search in amp.Path, not in terms
+	- [/] Resolve AMP tags against defs
+		- Node.orgs must always be resolved
+		- [x] First might be def
+		- [x] Remove Node.def
+		- [*] Resolve amps into Node.orgs
+			- [ ] Create flat list of defs
+				- [ ] Report doubles via log
+			- Parse each amp
+				- [ ] Rename amp.Path.parse into amp.Path.fromStr() not it does not return an ? anymore
+					- Is there still need for optional-style parsing?
+			- Dfs over tree, resolve non-defs and append
+				- Report relative amps that cannot be resolved
 - [ ] Reload when file is changed/created
 - [ ] Reload from time to time
-- [ ] Must support specification of defaults in `~/.config/champ/default.zon`
+- [x] Must support specification of defaults in `~/.config/champ/config.zon#default`
 	- [ ] Reload when changed, check from time to time
+- Support searching for next Chore to execute
+	- [ ] Interpret `[?]` as AMP
+	- Create DSL for `todo`, `wip` and `next`
 
 # Annotate parts of source code with project and status tags &!annotate
-- Could replace `org` with `champ`
+- Could replace `org` with `champ` &prio:low
 	- Improved Markdown parsing, consistent with `champ`
 - [ ] Support aggregation of AMP tags
+	- [ ] Tag distribution from root to leaf
+		- Def is also an org and should be used in aggregation etc
+			- Only for tags, not for templates or numbers etc.
+	- [ ] Trailing ! indicates current Chore _uses_ AMP
+		- Default behavior is that current Chore _is part of_ AMP
+		- Is this the same as a reverse tag?
+	- [ ] Support Markdown and Wiki links to other files
+		- [?] Do we need some marker to take them into account
 - [ ] Support specification of AMP tags for a folder
 	- Use `_tree.md`
 		- Only aggregate AMP tags specified at the top
@@ -47,10 +60,7 @@
 # Find all references &!search
 - [x] Collect content range per Node
 - [/] Convert Nodes with AMP info into Chores
-- [*] Resolve AMP tags against defs
-	- [ ] Report unresolved AMP tags in CLI
 - [ ] Must filter done items by default
 - [ ] Could support searching all references
 - [ ] Must only report nodes with an AMP tag
 - [ ] Must support identifying next subtasks to work on
-

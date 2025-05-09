@@ -19,6 +19,7 @@ pub const Error = error{
     ExpectedOffsets,
     ExpectedAbsoluteDef,
     OnlyOneDefAllowed,
+    ExpectedAtLeastOneGrove,
 };
 
 pub const Forest = struct {
@@ -42,12 +43,19 @@ pub const Forest = struct {
     }
 
     pub fn load(self: *Self, config: *const cfg.Config, options: *const cli.Options) !void {
-        for (config.groves) |cfg_grove| {
-            if (!strings.contains(u8, options.groves.items, cfg_grove.name))
-                // Skip this grove
-                continue;
-            try self.loadGrove(&cfg_grove);
+        var wanted_groves: [][]const u8 = options.groves.items;
+        if (slice.is_empty(wanted_groves)) {
+            if (config.default) |default|
+                wanted_groves = default;
         }
+        if (slice.is_empty(wanted_groves))
+            return Error.ExpectedAtLeastOneGrove;
+
+        for (config.groves) |cfg_grove| {
+            if (strings.contains(u8, wanted_groves, cfg_grove.name))
+                try self.loadGrove(&cfg_grove);
+        }
+
         try self.collectDefs();
     }
 
