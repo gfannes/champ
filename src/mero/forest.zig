@@ -181,7 +181,53 @@ pub const Forest = struct {
     };
 
     fn resolveAmps(self: *Self) !void {
-        _ = self;
+        var cb = struct {
+            const My = @This();
+
+            defs_sc: *const Defs,
+            log: *const Log,
+            a: std.mem.Allocator,
+
+            terms: *const Terms = undefined,
+            path: []const u8 = &.{},
+
+            pub fn call(my: *My, entry: Tree.Entry) !void {
+                const n = entry.data;
+                switch (n.type) {
+                    Node.Type.Grove => {},
+                    Node.Type.Folder => {
+                        my.path = n.path;
+                    },
+                    Node.Type.File => {
+                        my.path = n.path;
+                        my.terms = &n.terms;
+                    },
+                    else => {
+                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                            const term = &my.terms.items[term_ix];
+                            if (term.kind == Term.Kind.Amp) {
+                                var strange = Strange{ .content = term.word };
+                                var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                if (!path.is_definition) {
+                                    if (try my.defs_sc.resolve(&path)) {
+                                        try my.log.info("Could resolve '{}'\n", .{path});
+                                        try n.orgs.append(path);
+                                    } else {
+                                        try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
+                                        path.deinit();
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+        }{
+            .defs_sc = &self.defs_sc,
+            .log = self.log,
+            .a = self.a,
+        };
+        try self.tree.dfsAll(true, &cb);
     }
 
     fn collectDefs(self: *Self) !void {
@@ -276,11 +322,15 @@ const Defs = struct {
     const Self = @This();
     const List = std.ArrayList(amp.Path);
 
-    list: List,
     log: *const Log,
 
+    list: List,
+
     fn init(log: *const Log, a: std.mem.Allocator) Defs {
-        return Defs{ .list = List.init(a), .log = log };
+        return Defs{
+            .log = log,
+            .list = List.init(a),
+        };
     }
     fn deinit(self: *Self) void {
         // Do not deinit() the elements: these are shallow copies
@@ -302,5 +352,44 @@ const Defs = struct {
         // Shallow copy
         try self.list.append(def);
         return true;
+    }
+
+    fn resolve(self: Self, path: *amp.Path) !bool {
+        var maybe_fit_ix: ?usize = null;
+        var is_ambiguous = false;
+        for (self.list.items, 0..) |def, ix| {
+            if (def.is_fit(path.*)) {
+                if (maybe_fit_ix) |fit_ix| {
+                    if (!is_ambiguous)
+                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, self.list.items[fit_ix] });
+                    is_ambiguous = true;
+
+                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def });
+                }
+                maybe_fit_ix = ix;
+            }
+        }
+
+        if (is_ambiguous)
+            return false;
+
+        if (maybe_fit_ix) |fit_ix| {
+            const def = self.list.items[fit_ix];
+            if (path.is_absolute) {
+                if (path.parts.items.len != def.parts.items.len) {
+                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def });
+                    return false;
+                }
+                return true;
+            } else {
+                const count_to_add = def.parts.items.len - path.parts.items.len;
+                const new_parts = try path.parts.addManyAt(0, count_to_add);
+                std.mem.copyForwards(amp.Part, new_parts, def.parts.items[0..count_to_add]);
+                return true;
+            }
+        } else {
+            try self.log.warning("Could not resolve AMP '{}'\n", .{path});
+            return false;
+        }
     }
 };

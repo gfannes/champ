@@ -20,18 +20,21 @@
 - [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
 	- [x] Use workspace symbols
 - [/] Search in amp.Path, not in terms
-	- [/] Resolve AMP tags against defs
+	- [x] Resolve AMP tags against defs
 		- Node.orgs must always be resolved
 		- [x] First might be def
 		- [x] Remove Node.def
-		- [/] Resolve amps into Node.orgs
+		- [x] Resolve amps into Node.orgs
 			- [x] Create flat list of defs as part of joinDefs()
 			- [x] Report doubles via log
 				- [x] Impl `amp.Path.is_fit()`
-			- [ ] Parse each amp
-			- [ ] Dfs over tree, resolve non-defs and append
-				- [ ] Report relative amps that cannot be resolved
-				- [ ] Report ambiguous fits
+			- [x] Dfs over tree
+				- [x] Parse each amp
+				- [x] Resolve non-defs and append
+				- [x] Report relative amps that cannot be resolved
+				- [x] Report ambiguous fits
+	- [*] Make LSP search in Node.orgs
+		- [*] Create string repr
 - [ ] Reload when file is changed/created
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in `~/.config/champ/config.zon#default`
