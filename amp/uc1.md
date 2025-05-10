@@ -20,7 +20,7 @@
 # Search for AMP defs and tags from editor &!define
 - [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
 	- [x] Use workspace symbols
-- [/] Search in amp.Path, not in terms
+- [x] Search in amp.Path, not in terms
 	- [x] Resolve AMP tags against defs
 		- Node.orgs must always be resolved
 		- [x] First might be def
@@ -34,10 +34,12 @@
 				- [x] Resolve non-defs and append
 				- [x] Report relative amps that cannot be resolved
 				- [x] Report ambiguous fits
-	- [/] Make LSP search in Node.orgs
+	- [x] Make LSP search in Node.orgs
 		- [x] Document symbols
 			- [x] Create string repr
-		- [*] Workspace symbols
+		- [x] Workspace symbols
+- [x] Search smart-case
+	- Impl in rubr.fuzz based on casing of needle
 - [ ] Reload when file is changed/created
 - Support searching for next Chore to execute
 	- [ ] Interpret '[?]' as AMP

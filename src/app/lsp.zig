@@ -149,66 +149,77 @@ pub const Lsp = struct {
                     const query = params.query orelse return Error.ExpectedQuery;
 
                     var cb = struct {
+                        const My = @This();
                         const Symbols = std.ArrayList(dto.WorkspaceSymbol);
 
                         query: []const u8,
-                        symbols: Symbols,
                         aa: std.heap.ArenaAllocator,
 
-                        pub fn init(q: []const u8, a: std.mem.Allocator) @This() {
-                            return @This(){
-                                .query = q,
-                                .symbols = Symbols.init(a),
-                                .aa = std.heap.ArenaAllocator.init(a),
-                            };
+                        aaa: std.mem.Allocator = undefined,
+                        symbols: Symbols = undefined,
+                        path: []const u8 = &.{},
+
+                        pub fn init(my: *My) void {
+                            my.aaa = my.aa.allocator();
+                            my.symbols = Symbols.init(my.aaa);
                         }
                         pub fn deinit(my: *@This()) void {
-                            my.symbols.deinit();
                             my.aa.deinit();
                         }
 
                         pub fn call(my: *@This(), entry: mero.Tree.Entry) !void {
                             const n = entry.data;
-                            if (n.type == mero.Node.Type.File) {
-                                var line: usize = 0;
-                                for (n.terms.items) |term| {
-                                    switch (term.kind) {
-                                        mero.Term.Kind.Newline => line += term.word.len,
-                                        mero.Term.Kind.Amp => {
-                                            const score: f32 = @floatCast(fuzz.distance(my.query, term.word));
-                                            const start = term.word.ptr - n.content.ptr;
+                            switch (n.type) {
+                                mero.Node.Type.Grove => {},
+                                mero.Node.Type.Folder => {},
+                                mero.Node.Type.File => {
+                                    my.path = n.path;
+                                },
+                                else => {
+                                    if (!rubr.slice.is_empty(n.orgs.items)) {
+                                        var name_parts = std.ArrayList([]const u8).init(my.aaa);
+                                        var sep: []const u8 = "";
+                                        for (n.orgs.items) |org| {
+                                            try name_parts.append(try std.fmt.allocPrint(my.aaa, "{s}{}", .{ sep, org }));
+                                            sep = " ";
+                                        }
+                                        const name = try std.mem.concat(my.aaa, u8, name_parts.items);
 
-                                            const aaa = my.aa.allocator();
-                                            try my.symbols.append(dto.WorkspaceSymbol{
-                                                .name = term.word,
-                                                .location = dto.Location{
-                                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", n.path }),
-                                                    .range = dto.Range{
-                                                        .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
-                                                        .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
-                                                    },
-                                                },
-                                                .score = score,
-                                            });
-                                        },
-                                        else => {},
+                                        const score: f32 = @floatCast(fuzz.distance(my.query, name));
+
+                                        const range = dto.Range{
+                                            .start = dto.Position{ .line = @intCast(n.content_rows.begin), .character = @intCast(n.content_cols.begin) },
+                                            .end = dto.Position{ .line = @intCast(n.content_rows.end), .character = @intCast(n.content_cols.end) },
+                                        };
+                                        try my.symbols.append(dto.WorkspaceSymbol{
+                                            .name = name,
+                                            .location = dto.Location{
+                                                .uri = try std.mem.concat(my.aaa, u8, &[_][]const u8{ "file://", "/", my.path }),
+                                                .range = range,
+                                            },
+                                            .score = score,
+                                        });
                                     }
-                                }
+                                },
                             }
                         }
-                    }.init(query, self.a);
+                    }{
+                        .query = query,
+                        .aa = std.heap.ArenaAllocator.init(self.a),
+                    };
+                    cb.init();
                     defer cb.deinit();
 
                     try self.forest.tree.dfsAll(true, &cb);
 
-                    const Fn = struct {
+                    const ByScore = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {
                             const xx = x.score orelse unreachable;
                             const yy = y.score orelse unreachable;
                             return xx < yy;
                         }
                     };
-                    std.sort.block(dto.WorkspaceSymbol, cb.symbols.items, {}, Fn.call);
+                    std.sort.block(dto.WorkspaceSymbol, cb.symbols.items, {}, ByScore.call);
 
                     try server.send(cb.symbols.items);
                 } else {
