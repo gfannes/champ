@@ -73,7 +73,7 @@ pub const ChoreList = struct {
         var chore = Chore{ .node_id = node_id };
         chore.str = try std.mem.concat(aaa, u8, self.tmp.items);
 
-        var maybe_id = rubr.optional(node_id);
+        var maybe_id = rubr.opt.value(node_id);
         while (maybe_id) |id| {
             const n = tree.cptr(id);
             switch (n.type) {

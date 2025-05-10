@@ -9,17 +9,19 @@ const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 
-const Log = @import("rubr").log.Log;
-const walker = @import("rubr").walker;
-const slice = @import("rubr").slice;
-const strings = @import("rubr").strings;
-const Strange = @import("rubr").strange.Strange;
+const rubr = @import("rubr");
+const Log = rubr.log.Log;
+const walker = rubr.walker;
+const slice = rubr.slice;
+const strings = rubr.strings;
+const Strange = rubr.strange.Strange;
 
 pub const Error = error{
     ExpectedOffsets,
     ExpectedAbsoluteDef,
     OnlyOneDefAllowed,
     ExpectedAtLeastOneGrove,
+    CouldNotParseAmp,
 };
 
 pub const Forest = struct {
@@ -27,10 +29,17 @@ pub const Forest = struct {
 
     log: *const Log,
     tree: Tree,
+    // Shallow copies of all defs created during joinDefs()
+    defs_sc: Defs,
     a: std.mem.Allocator,
 
     pub fn init(log: *const Log, a: std.mem.Allocator) Self {
-        return Self{ .log = log, .tree = Tree.init(a), .a = a };
+        return Self{
+            .log = log,
+            .tree = Tree.init(a),
+            .defs_sc = Defs.init(log, a),
+            .a = a,
+        };
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
@@ -40,6 +49,7 @@ pub const Forest = struct {
         }{};
         self.tree.each(&cb) catch {};
         self.tree.deinit();
+        self.defs_sc.deinit();
     }
 
     pub fn load(self: *Self, config: *const cfg.Config, options: *const cli.Options) !void {
@@ -57,6 +67,7 @@ pub const Forest = struct {
         }
 
         try self.collectDefs();
+        try self.resolveAmps();
     }
 
     pub fn findFile(self: *Self, name: []const u8) ?*mero.Node {
@@ -169,12 +180,17 @@ pub const Forest = struct {
         }
     };
 
+    fn resolveAmps(self: *Self) !void {
+        _ = self;
+    }
+
     fn collectDefs(self: *Self) !void {
         // Expects Node.orgs to still be empty
         var cb = struct {
             const My = @This();
 
             tree: *Tree,
+            defs_sc: *Defs,
             log: *const Log,
             a: std.mem.Allocator,
 
@@ -202,12 +218,15 @@ pub const Forest = struct {
                             if (term.kind == Term.Kind.Amp) {
                                 var strange = Strange{ .content = term.word };
 
-                                var path = try amp.Path.parse(&strange, my.a);
+                                var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (path.is_definition) {
                                     if (n.orgs.items.len > 0)
                                         return Error.OnlyOneDefAllowed;
                                     std.debug.print("Found def '{}'\n", .{path});
                                     try n.orgs.append(path);
+                                    if (!try my.defs_sc.append(path)) {
+                                        try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                                    }
                                 } else {
                                     path.deinit();
                                 }
@@ -236,7 +255,7 @@ pub const Forest = struct {
                     },
                 }
             }
-        }{ .tree = &self.tree, .log = self.log, .a = self.a };
+        }{ .tree = &self.tree, .defs_sc = &self.defs_sc, .log = self.log, .a = self.a };
         try self.tree.dfsAll(true, &cb);
     }
 
@@ -250,5 +269,38 @@ pub const Forest = struct {
             else => {},
         }
         return null;
+    }
+};
+
+const Defs = struct {
+    const Self = @This();
+    const List = std.ArrayList(amp.Path);
+
+    list: List,
+    log: *const Log,
+
+    fn init(log: *const Log, a: std.mem.Allocator) Defs {
+        return Defs{ .list = List.init(a), .log = log };
+    }
+    fn deinit(self: *Self) void {
+        // Do not deinit() the elements: these are shallow copies
+        self.list.deinit();
+    }
+
+    fn append(self: *Self, def: amp.Path) !bool {
+        const check_fit = struct {
+            needle: *const amp.Path,
+            pub fn call(my: @This(), other: amp.Path) bool {
+                return other.is_fit(my.needle.*);
+            }
+        }{ .needle = &def };
+        if (rubr.algo.anyOf(amp.Path, self.list.items, check_fit)) {
+            try self.log.warning("Definition '{}' is already present.\n", .{def});
+            return false;
+        }
+
+        // Shallow copy
+        try self.list.append(def);
+        return true;
     }
 };

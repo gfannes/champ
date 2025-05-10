@@ -24,14 +24,14 @@
 		- Node.orgs must always be resolved
 		- [x] First might be def
 		- [x] Remove Node.def
-		- [*] Resolve amps into Node.orgs
-			- [ ] Create flat list of defs
-				- [ ] Report doubles via log
-			- Parse each amp
-				- [ ] Rename amp.Path.parse into amp.Path.fromStr() not it does not return an ? anymore
-					- Is there still need for optional-style parsing?
-			- Dfs over tree, resolve non-defs and append
-				- Report relative amps that cannot be resolved
+		- [/] Resolve amps into Node.orgs
+			- [x] Create flat list of defs as part of joinDefs()
+			- [x] Report doubles via log
+				- [x] Impl `amp.Path.is_fit()`
+			- [ ] Parse each amp
+			- [ ] Dfs over tree, resolve non-defs and append
+				- [ ] Report relative amps that cannot be resolved
+				- [ ] Report ambiguous fits
 - [ ] Reload when file is changed/created
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in `~/.config/champ/config.zon#default`

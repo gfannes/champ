@@ -1,10 +1,7 @@
 const std = @import("std");
 
-const Strange = @import("rubr").strange.Strange;
-
-pub const Error = error{
-    ExpectedAmpersand,
-};
+const rubr = @import("rubr");
+const Strange = rubr.strange.Strange;
 
 pub const Path = struct {
     const Self = @This();
@@ -21,10 +18,25 @@ pub const Path = struct {
         self.parts.deinit();
     }
 
+    pub fn is_fit(self: Self, rhs: Self) bool {
+        var rhs_it = std.mem.reverseIterator(rhs.parts.items);
+        var self_it = std.mem.reverseIterator(self.parts.items);
+        while (rhs_it.nextPtr()) |rhs_part| {
+            const self_part = self_it.nextPtr() orelse return false;
+            if (!std.mem.eql(u8, rhs_part.content, self_part.content))
+                return false;
+        }
+
+        if (rhs.is_absolute and self_it.nextPtr() != null)
+            return false;
+
+        return true;
+    }
+
     // Assumes strange outlives Path
-    pub fn parse(strange: *Strange, a: std.mem.Allocator) !Path {
+    pub fn parse(strange: *Strange, a: std.mem.Allocator) !?Path {
         if (!strange.popChar('&'))
-            return Error.ExpectedAmpersand;
+            return null;
 
         var path = Path.init(a);
         errdefer path.deinit();
@@ -101,7 +113,7 @@ test "amp" {
 
     for (scns) |scn| {
         var strange = Strange{ .content = scn.repr };
-        var path = try Path.parse(&strange, ut.allocator);
+        var path = try Path.parse(&strange, ut.allocator) orelse unreachable;
         defer path.deinit();
         const act = try std.fmt.allocPrint(ut.allocator, "{s}", .{path});
         try ut.expectEqualSlices(u8, scn.exp, act);
