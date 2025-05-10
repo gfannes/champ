@@ -67,12 +67,14 @@ pub const Forest = struct {
         }
 
         try self.collectDefs();
+
         try self.resolveAmps();
     }
 
-    pub fn findFile(self: *Self, name: []const u8) ?*mero.Node {
+    pub fn findFile(self: *Self, name: []const u8) ?Tree.Entry {
         for (self.tree.root_ids.items) |root_id| {
-            if (self.findFile_(name, root_id)) |file| return file;
+            if (self.findFile_(name, root_id)) |file|
+                return file;
         }
         return null;
     }
@@ -242,6 +244,7 @@ pub const Forest = struct {
 
             terms: ?*const Terms = null,
             path: []const u8 = &.{},
+            is_new_file: bool = false,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
@@ -255,9 +258,13 @@ pub const Forest = struct {
                     Node.Type.File => {
                         my.path = n.path;
                         my.terms = &n.terms;
+                        my.is_new_file = true;
+                        std.debug.print("\nStarted new file {s}\n", .{my.path});
                     },
                     else => {
-                        // Search n.line for a def amp
+                        defer my.is_new_file = false;
+
+                        // Search n.line for a def AMP
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const terms = my.terms orelse unreachable;
                             const term = &terms.items[term_ix];
@@ -268,34 +275,68 @@ pub const Forest = struct {
                                 if (path.is_definition) {
                                     if (n.orgs.items.len > 0)
                                         return Error.OnlyOneDefAllowed;
-                                    std.debug.print("Found def '{}'\n", .{path});
+                                    try my.log.info("Found def '{}'\n", .{path});
                                     try n.orgs.append(path);
-                                    if (!try my.defs_sc.append(path)) {
-                                        try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
-                                    }
                                 } else {
                                     path.deinit();
                                 }
                             }
                         }
 
-                        // Make the def amp absolute, if necessary
-                        if (slice.first_ptr(n.orgs.items)) |def| {
+                        // Process the def:
+                        // - Make it absolute
+                        // - Check for duplicates
+                        // - Store in defs_sc for later use
+                        if (slice.firstPtr(n.orgs.items)) |def| {
+                            // Make the def amp absolute, if necessary
                             if (!def.is_absolute) {
+                                try my.log.info("Making def '{}' absolute\n", .{def});
                                 var child_id = entry.id;
+                                std.debug.print("Start child_id {}\n", .{child_id});
                                 const maybe_parent_def: ?amp.Path = block: while (true) {
+                                    std.debug.print("\tLoop child_id {}\n", .{child_id});
                                     if (try my.tree.parent(child_id)) |parent| {
+                                        std.debug.print("\thas parent\n", .{});
                                         if (slice.first(parent.data.orgs.items)) |pdef| {
+                                            std.debug.print("\tparent has def\n", .{});
+                                            // We are still collecting def info. If anything is present, it should be a def.
                                             std.debug.assert(pdef.is_absolute);
                                             break :block pdef;
                                         } else {
+                                            std.debug.print("\tparent has no def\n", .{});
                                             child_id = parent.id;
                                         }
+                                    } else {
+                                        std.debug.print("\thas no parent\n", .{});
+                                        break :block null;
                                     }
-                                    break :block null;
                                 };
-                                if (maybe_parent_def) |parent_def|
+                                if (maybe_parent_def) |parent_def| {
                                     try def.prepend(parent_def);
+                                    try my.log.info("done '{}' '{}'\n", .{ def, n.orgs.items[0] });
+                                } else {
+                                    try my.log.warning("Could not find parent def for '{}'\n", .{def});
+                                }
+                            }
+
+                            // Collect all defs in a separate struct
+                            if (!try my.defs_sc.append(def.*)) {
+                                try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                            }
+                        }
+
+                        if (my.is_new_file) {
+                            switch (n.type) {
+                                Node.Type.Paragraph => {
+                                    std.debug.print("Trying to copy APMs to File\n", .{});
+                                    // AMPs on the first line are copied to the File as well
+                                    if (try my.tree.parent(entry.id)) |parent|
+                                        for (n.orgs.items) |org|
+                                            try parent.data.orgs.append(try org.copy());
+                                },
+                                else => {
+                                    std.debug.print("Not copying data to File for {}\n", .{n.type});
+                                },
                             }
                         }
                     },
@@ -305,12 +346,18 @@ pub const Forest = struct {
         try self.tree.dfsAll(true, &cb);
     }
 
-    fn findFile_(self: *Self, name: []const u8, parent_id: Tree.Id) ?*mero.Node {
-        const n = self.tree.ptr(parent_id);
+    fn findFile_(self: *Self, name: []const u8, id: Tree.Id) ?Tree.Entry {
+        const n = self.tree.ptr(id);
         switch (n.type) {
-            mero.Node.Type.File => if (std.mem.endsWith(u8, n.path, name)) return n,
-            mero.Node.Type.Folder, mero.Node.Type.Grove => for (self.tree.childIds(parent_id)) |child_id| {
-                if (self.findFile_(name, child_id)) |file| return file;
+            mero.Node.Type.File => {
+                if (std.mem.endsWith(u8, n.path, name))
+                    return Tree.Entry{ .id = id, .data = n };
+            },
+            mero.Node.Type.Folder, mero.Node.Type.Grove => {
+                for (self.tree.childIds(id)) |child_id| {
+                    if (self.findFile_(name, child_id)) |file|
+                        return file;
+                }
             },
             else => {},
         }
@@ -385,6 +432,7 @@ const Defs = struct {
                 const count_to_add = def.parts.items.len - path.parts.items.len;
                 const new_parts = try path.parts.addManyAt(0, count_to_add);
                 std.mem.copyForwards(amp.Part, new_parts, def.parts.items[0..count_to_add]);
+                path.is_absolute = true;
                 return true;
             }
         } else {

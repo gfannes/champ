@@ -17,6 +17,15 @@ pub const Path = struct {
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
     }
+    pub fn copy(self: Path) !Path {
+        var res = Path.init(self.parts.allocator);
+        res.is_definition = self.is_definition;
+        res.is_absolute = self.is_absolute;
+        for (self.parts.items) |part|
+            // Assumes part is POD
+            try res.parts.append(part);
+        return res;
+    }
 
     pub fn is_fit(self: Self, rhs: Self) bool {
         var rhs_it = std.mem.reverseIterator(rhs.parts.items);

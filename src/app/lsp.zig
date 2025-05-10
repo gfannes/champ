@@ -1,9 +1,10 @@
 const std = @import("std");
 
-const Log = @import("rubr").log.Log;
-const lsp = @import("rubr").lsp;
-const strings = @import("rubr").strings;
-const fuzz = @import("rubr").fuzz;
+const rubr = @import("rubr");
+const Log = rubr.log.Log;
+const lsp = rubr.lsp;
+const strings = rubr.strings;
+const fuzz = rubr.fuzz;
 
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
@@ -34,7 +35,7 @@ pub const Lsp = struct {
     }
 
     pub fn call(self: *Self) !void {
-        try self.log.print("Lsp server started {}\n", .{std.time.timestamp()});
+        try self.log.info("Lsp server started {}\n", .{std.time.timestamp()});
 
         try self.forest.load(self.config, self.options);
 
@@ -48,7 +49,7 @@ pub const Lsp = struct {
         var do_continue = true;
         var init_ok = false;
         while (do_continue) : (count += 1) {
-            try self.log.print("[Iteration](count:{})\n", .{count});
+            try self.log.info("[Iteration](count:{})\n", .{count});
 
             const request = try server.receive();
             const dto = lsp.dto;
@@ -84,34 +85,62 @@ pub const Lsp = struct {
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
                     if (self.forest.findFile(filename)) |file| {
-                        var symbols = std.ArrayList(dto.DocumentSymbol).init(self.a);
-                        defer symbols.deinit();
+                        var cb = struct {
+                            const My = @This();
+                            const Symbols = std.ArrayList(dto.DocumentSymbol);
 
-                        var line: usize = 0;
-                        for (file.terms.items) |term| {
-                            switch (term.kind) {
-                                mero.Term.Kind.Newline => line += term.word.len,
-                                mero.Term.Kind.Amp => {
-                                    const start = term.word.ptr - file.content.ptr;
+                            aa: std.heap.ArenaAllocator,
 
-                                    try symbols.append(dto.DocumentSymbol{
-                                        .name = term.word,
-                                        .range = dto.Range{
-                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
-                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
-                                        },
-                                        .selectionRange = dto.Range{
-                                            .start = dto.Position{ .line = @intCast(line), .character = @intCast(start) },
-                                            .end = dto.Position{ .line = @intCast(line), .character = @intCast(start + term.word.len) },
-                                        },
-                                    });
-                                },
-                                else => {},
+                            aaa: std.mem.Allocator = undefined,
+                            symbols: Symbols = undefined,
+                            is_first: bool = true,
+
+                            fn init(my: *My) void {
+                                my.aaa = my.aa.allocator();
+                                my.symbols = Symbols.init(my.aaa);
                             }
-                        }
-                        try server.send(symbols.items);
+                            fn deinit(my: *My) void {
+                                my.aa.deinit();
+                            }
+
+                            pub fn call(my: *My, entry: mero.Tree.Entry) !void {
+                                if (my.is_first) {
+                                    // Skip first node: this is the File itself, which might contain copied AMPs from the first line.
+                                    my.is_first = false;
+                                    return;
+                                }
+
+                                const n = entry.data;
+                                if (!rubr.slice.is_empty(n.orgs.items)) {
+                                    // Concat all the orgs into a single 'name'
+                                    var name_parts = std.ArrayList([]const u8).init(my.aaa);
+                                    var sep: []const u8 = "";
+                                    for (n.orgs.items) |org| {
+                                        try name_parts.append(try std.fmt.allocPrint(my.aaa, "{s}{}", .{ sep, org }));
+                                        sep = " ";
+                                    }
+                                    const name = try std.mem.concat(my.aaa, u8, name_parts.items);
+
+                                    const range = dto.Range{
+                                        .start = dto.Position{ .line = @intCast(n.content_rows.begin), .character = @intCast(n.content_cols.begin) },
+                                        .end = dto.Position{ .line = @intCast(n.content_rows.end), .character = @intCast(n.content_cols.end) },
+                                    };
+                                    try my.symbols.append(dto.DocumentSymbol{
+                                        .name = name,
+                                        .range = range,
+                                        .selectionRange = range,
+                                    });
+                                }
+                            }
+                        }{ .aa = std.heap.ArenaAllocator.init(self.a) };
+                        cb.init();
+                        defer cb.deinit();
+
+                        try self.forest.tree.dfs(file.id, true, &cb);
+
+                        try server.send(cb.symbols.items);
                     } else {
-                        try self.log.print("Error: could not find file {s}\n", .{filename});
+                        try self.log.err("Could not find file {s}\n", .{filename});
                         // &todo: Send error or null
                         try server.send(&[_]dto.DocumentSymbol{});
                     }
@@ -183,7 +212,7 @@ pub const Lsp = struct {
 
                     try server.send(cb.symbols.items);
                 } else {
-                    try self.log.print("Unhandled request '{s}'\n", .{request.method});
+                    try self.log.warning("Unhandled request '{s}'\n", .{request.method});
                 }
             } else {
                 if (request.is("textDocument/didOpen")) {
@@ -193,7 +222,7 @@ pub const Lsp = struct {
                 } else if (request.is("exit")) {
                     do_continue = false;
                 } else {
-                    try self.log.print("Unhandled notification '{s}'\n", .{request.method});
+                    try self.log.warning("Unhandled notification '{s}'\n", .{request.method});
                 }
             }
         }

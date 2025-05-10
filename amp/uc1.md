@@ -7,13 +7,14 @@
 		- [x] Add parent backlinks
 		- [x] Represent Folders, Files and Nodes in a tree
 		- [x] Join Folders and Files
+		- [x] Add AMPs from first line to File
 - Describe these subtasks in Markdown
 - List project breakdown from CLI
 	- [ ] Filter-out tags that do not match
 	- [x] Sort by fuzzy match score
 	- [ ] Support selecting defs
 	- [ ] Could document the DSL for searching
-- [ ] Add `fix` mode to champ
+- [ ] Add 'fix' mode to champ
 	- [ ] Warn on amps without definition
 
 # Search for AMP defs and tags from editor &!define
@@ -27,26 +28,29 @@
 		- [x] Resolve amps into Node.orgs
 			- [x] Create flat list of defs as part of joinDefs()
 			- [x] Report doubles via log
-				- [x] Impl `amp.Path.is_fit()`
+				- [x] Impl 'amp.Path.is_fit()'
 			- [x] Dfs over tree
 				- [x] Parse each amp
 				- [x] Resolve non-defs and append
 				- [x] Report relative amps that cannot be resolved
 				- [x] Report ambiguous fits
-	- [*] Make LSP search in Node.orgs
-		- [*] Create string repr
+	- [/] Make LSP search in Node.orgs
+		- [x] Document symbols
+			- [x] Create string repr
+		- [*] Workspace symbols
 - [ ] Reload when file is changed/created
-- [ ] Reload from time to time
-- [x] Must support specification of defaults in `~/.config/champ/config.zon#default`
-	- [ ] Reload when changed, check from time to time
 - Support searching for next Chore to execute
-	- [ ] Interpret `[?]` as AMP
+	- [ ] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
-	- Create DSL for `todo`, `wip` and `next`
+	- [ ] Create DSL for 'todo', 'wip' and 'next'
+- [?] Support searching for unresolved AMPs
+- [ ] Reload from time to time
+- [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
+	- [ ] Reload when changed, check from time to time
 
 # Annotate parts of source code with project and status tags &!annotate
-- Could replace `org` with `champ` &prio:low
-	- Improved Markdown parsing, consistent with `champ`
+- Could replace 'org' with 'champ' &prio:low
+	- Improved Markdown parsing, consistent with 'champ'
 - [ ] Support aggregation of AMP tags
 	- [ ] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
@@ -57,13 +61,13 @@
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
 - [ ] Support specification of AMP tags for a folder
-	- Use `_tree.md`
+	- Use '_tree.md'
 		- Only aggregate AMP tags specified at the top
-	- Rename existing `_.amp` and update Rust code
+	- Rename existing '_.amp' and update Rust code
 
 # Find all references &!search
 - [x] Collect content range per Node
-- [/] Convert Nodes with AMP info into Chores
+- [x] Convert Nodes with AMP info into Chores
 - [ ] Must filter done items by default
 - [ ] Could support searching all references
 - [ ] Must only report nodes with an AMP tag
