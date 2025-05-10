@@ -94,8 +94,9 @@ pub const Options = struct {
     }
 
     pub fn help(_: Self) []const u8 {
+        // &:zig:build:info Couple this with info from build.zig.zon
         const msg = "" ++
-            "chimp <options> <command>\n" ++
+            "champ <options> <command>\n" ++
             "  Options:\n" ++
             "    -h  --help           Print this help\n" ++
             "    -v  --verbose LEVEL  Verbosity LEVEL [optional, default 0]\n" ++

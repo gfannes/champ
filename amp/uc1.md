@@ -11,9 +11,8 @@
 - Describe these subtasks in Markdown
 - List project breakdown from CLI
 	- [ ] Filter-out tags that do not match
+		- Update rubr.fuzz
 	- [x] Sort by fuzzy match score
-	- [ ] Support selecting defs
-	- [ ] Could document the DSL for searching
 - [ ] Add 'fix' mode to champ
 	- [ ] Warn on amps without definition
 
@@ -21,6 +20,7 @@
 - [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
 	- [x] Use workspace symbols
 - [x] Search in amp.Path, not in terms
+	- [*] Create seperate AMPs
 	- [x] Resolve AMP tags against defs
 		- Node.orgs must always be resolved
 		- [x] First might be def

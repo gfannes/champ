@@ -85,7 +85,8 @@ pub const App = struct {
         if (self.options.logfile) |logfile| {
             try self.log.toFile(logfile);
         } else if (self.options.mode == cli.Mode.Lsp) {
-            try self.log.toFile("/tmp/chimp.log");
+            // &:zig:build:info Couple filename with build.zig.zon#name
+            try self.log.toFile("/tmp/champ.log");
         }
     }
 
@@ -93,6 +94,7 @@ pub const App = struct {
         self.config_loader = try cfg.Loader.init(self.gpaa);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
+        // &:zig:build:info Couple filename with build.zig.zon#name
         const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
         try cfg_loader.loadFromFile(config_fp);
 

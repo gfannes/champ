@@ -66,8 +66,9 @@ pub const Lsp = struct {
                             },
                         },
                         .serverInfo = dto.ServerInfo{
-                            .name = "chimp",
-                            .version = "1.2.3",
+                            // &:zig:build:info Couple this with info from build.zig.zon
+                            .name = "champ",
+                            .version = "0.0.1",
                         },
                     };
                     try server.send(result);
