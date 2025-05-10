@@ -43,7 +43,9 @@
 	- [ ] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
 	- [ ] Create DSL for 'todo', 'wip' and 'next'
-- [?] Support searching for unresolved AMPs
+- [x] Support searching for unresolved AMPs
+	- [x] Add catch-all AMP UNRESOLVED
+	- [ ] Make this configurable
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
 	- [ ] Reload when changed, check from time to time

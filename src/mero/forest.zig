@@ -22,6 +22,7 @@ pub const Error = error{
     OnlyOneDefAllowed,
     ExpectedAtLeastOneGrove,
     CouldNotParseAmp,
+    CatchAllAmpAlreadyExists,
 };
 
 pub const Forest = struct {
@@ -183,6 +184,8 @@ pub const Forest = struct {
     };
 
     fn resolveAmps(self: *Self) !void {
+        try self.defs_sc.appendCatchAll("UNRESOLVED");
+
         var cb = struct {
             const My = @This();
 
@@ -218,6 +221,8 @@ pub const Forest = struct {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
                                         path.deinit();
                                     }
+                                } else {
+                                    path.deinit();
                                 }
                             }
                         }
@@ -370,18 +375,38 @@ const Defs = struct {
     const List = std.ArrayList(amp.Path);
 
     log: *const Log,
+    a: std.mem.Allocator,
 
     list: List,
+    catchall_amp: ?amp.Path = null,
+    catchall_str: []const u8 = &.{},
 
     fn init(log: *const Log, a: std.mem.Allocator) Defs {
         return Defs{
             .log = log,
+            .a = a,
             .list = List.init(a),
         };
     }
     fn deinit(self: *Self) void {
         // Do not deinit() the elements: these are shallow copies
         self.list.deinit();
+        self.a.free(self.catchall_str);
+    }
+
+    fn appendCatchAll(self: *Self, name: []const u8) !void {
+        if (self.catchall_amp != null)
+            return Error.CatchAllAmpAlreadyExists;
+
+        const content = try std.mem.concat(self.a, u8, &[_][]const u8{ "&!:", name });
+        errdefer self.a.free(content);
+
+        var strange = Strange{ .content = content };
+        self.catchall_amp = try amp.Path.parse(&strange, self.a);
+
+        if (self.catchall_amp == null)
+            return Error.CouldNotParseAmp;
+        self.catchall_str = content;
     }
 
     fn append(self: *Self, def: amp.Path) !bool {
@@ -436,8 +461,15 @@ const Defs = struct {
                 return true;
             }
         } else {
-            try self.log.warning("Could not resolve AMP '{}'\n", .{path});
-            return false;
+            if (self.catchall_amp) |ca_def| {
+                const new_parts = try path.parts.addManyAt(0, ca_def.parts.items.len);
+                std.mem.copyForwards(amp.Part, new_parts, ca_def.parts.items);
+                path.is_absolute = true;
+                return true;
+            } else {
+                try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{path});
+                return false;
+            }
         }
     }
 };
