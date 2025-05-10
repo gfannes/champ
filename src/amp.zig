@@ -44,28 +44,51 @@ pub const Path = struct {
 
     // Assumes strange outlives Path
     pub fn parse(strange: *Strange, a: std.mem.Allocator) !?Path {
-        if (!strange.popChar('&'))
-            return null;
+        if (strange.popChar('&')) {
+            var path = Path.init(a);
+            errdefer path.deinit();
 
-        var path = Path.init(a);
-        errdefer path.deinit();
+            path.is_definition = strange.popChar('!');
+            path.is_absolute = strange.popChar(':');
 
-        path.is_definition = strange.popChar('!');
-        path.is_absolute = strange.popChar(':');
+            while (strange.popTo(':')) |p|
+                if (p.len > 0) {
+                    var s = Strange{ .content = p };
+                    try path.parts.append(Part.init(&s));
+                };
 
-        while (strange.popTo(':')) |p|
-            if (p.len > 0) {
-                var s = Strange{ .content = p };
+            if (strange.popAll()) |p|
+                if (p.len > 0) {
+                    var s = Strange{ .content = p };
+                    try path.parts.append(Part.init(&s));
+                };
+
+            return path;
+        } else if (strange.popChar('[')) {
+            var path = Path.init(a);
+            errdefer path.deinit();
+
+            if (strange.popOne()) |ch| {
+                const content: []const u8 = switch (ch) {
+                    ' ' => "todo",
+                    '*' => "next",
+                    '/' => "wip",
+                    'x' => "done",
+                    '?' => "question",
+                    '!' => "callout",
+                    else => "unknown",
+                };
+                var s = Strange{ .content = content };
                 try path.parts.append(Part.init(&s));
-            };
 
-        if (strange.popAll()) |p|
-            if (p.len > 0) {
-                var s = Strange{ .content = p };
-                try path.parts.append(Part.init(&s));
-            };
+                if (strange.popChar(']'))
+                    return path;
+            }
 
-        return path;
+            path.deinit();
+        }
+
+        return null;
     }
 
     pub fn prepend(self: *Self, prefix: Self) !void {

@@ -25,6 +25,8 @@ pub const Term = struct {
     pub const Kind = enum {
         Text,
         Link,
+        Bullet,
+        Checkbox,
         Code,
         Formula,
         Comment,

@@ -115,6 +115,7 @@ pub const Symbol = enum(u8) {
     Word,
 
     Space,
+    Tab,
     Exclamation,
     Questionmark,
     Pipe,
@@ -159,6 +160,7 @@ const ch__symbol: [256]Symbol = blk: {
     var t = [_]Symbol{Symbol.Word} ** 256;
 
     t[' '] = Symbol.Space;
+    t['\t'] = Symbol.Tab;
     t['!'] = Symbol.Exclamation;
     t['?'] = Symbol.Questionmark;
     t['|'] = Symbol.Pipe;

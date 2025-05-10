@@ -37,13 +37,13 @@ pub const Lsp = struct {
     pub fn call(self: *Self) !void {
         try self.log.info("Lsp server started {}\n", .{std.time.timestamp()});
 
-        try self.forest.load(self.config, self.options);
-
         var cin = std.io.getStdIn();
         var cout = std.io.getStdOut();
 
         var server = lsp.Server.init(cin.reader(), cout.writer(), self.log.writer(), self.a);
         defer server.deinit();
+
+        var reloadForest: bool = true;
 
         var count: usize = 0;
         var do_continue = true;
@@ -55,8 +55,12 @@ pub const Lsp = struct {
             const dto = lsp.dto;
             if (request.id) |_| {
                 if (request.is("initialize")) {
+                    try self.forest.load(self.config, self.options);
+                    reloadForest = false;
+
                     const result = dto.InitializeResult{
                         .capabilities = dto.ServerCapabilities{
+                            .textDocumentSync = dto.ServerCapabilities.TextDocumentSyncOptions{},
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
                             .workspace = dto.ServerCapabilities.Workspace{
@@ -85,6 +89,11 @@ pub const Lsp = struct {
                     var buffer: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
+                    if (reloadForest) {
+                        self.forest.reinit();
+                        try self.forest.load(self.config, self.options);
+                        reloadForest = false;
+                    }
                     if (self.forest.findFile(filename)) |file| {
                         var cb = struct {
                             const My = @This();
@@ -211,6 +220,11 @@ pub const Lsp = struct {
                     cb.init();
                     defer cb.deinit();
 
+                    if (reloadForest) {
+                        self.forest.reinit();
+                        try self.forest.load(self.config, self.options);
+                        reloadForest = false;
+                    }
                     try self.forest.tree.dfsAll(true, &cb);
 
                     const ByScore = struct {
@@ -229,6 +243,8 @@ pub const Lsp = struct {
             } else {
                 if (request.is("textDocument/didOpen")) {
                     //
+                } else if (request.is("textDocument/didChange")) {
+                    reloadForest = true;
                 } else if (request.is("initialized")) {
                     init_ok = true;
                 } else if (request.is("exit")) {

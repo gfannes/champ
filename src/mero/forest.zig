@@ -52,6 +52,12 @@ pub const Forest = struct {
         self.tree.deinit();
         self.defs_sc.deinit();
     }
+    pub fn reinit(self: *Self) void {
+        const log = self.log;
+        const a = self.a;
+        self.deinit();
+        self.* = Self.init(log, a);
+    }
 
     pub fn load(self: *Self, config: *const cfg.Config, options: *const cli.Options) !void {
         var wanted_groves: [][]const u8 = options.groves.items;
@@ -210,7 +216,7 @@ pub const Forest = struct {
                     else => {
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const term = &my.terms.items[term_ix];
-                            if (term.kind == Term.Kind.Amp) {
+                            if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox) {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (!path.is_definition) {

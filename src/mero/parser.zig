@@ -144,6 +144,8 @@ pub const Parser = struct {
             }
         }{ .outer = self, .n = n };
 
+        var check_for_bullet: bool = true;
+
         while (self.tokenizer.peek()) |token| {
             if (is_newline(token)) {
                 try text.commit();
@@ -155,6 +157,18 @@ pub const Parser = struct {
                 if (self.pop_amp_term()) |amp| {
                     try text.commit();
                     try self.appendToLine(n, amp);
+                    continue;
+                }
+            }
+            if (check_for_bullet) {
+                check_for_bullet = false;
+                if (self.pop_md_bullet_term()) |bullet| {
+                    try text.commit();
+                    try self.appendToLine(n, bullet);
+                    if (self.pop_md_checkbox_term()) |checkbox| {
+                        try text.commit();
+                        try self.appendToLine(n, checkbox);
+                    }
                     continue;
                 }
             }
@@ -230,22 +244,12 @@ pub const Parser = struct {
                     try self.appendToLine(n, comment);
                     found_comment = true;
 
-                    // For now, we merge all Amps and Whitespaces
-                    // &multiamp &todo Add seperate Amps
-                    var maybe_term: ?dto.Term = null;
                     while (self.pop_amp_term()) |amp| {
-                        if (maybe_term) |*term| {
-                            term.word.len += amp.word.len;
-                        } else {
-                            maybe_term = amp;
-                        }
+                        try self.appendToLine(n, amp);
 
                         if (self.pop_nonmd_whitespace_term()) |whitespace|
-                            (maybe_term orelse unreachable).word.len += whitespace.word.len;
+                            try self.appendToLine(n, whitespace);
                     }
-
-                    if (maybe_term) |term|
-                        try self.appendToLine(n, term);
 
                     continue;
                 }
@@ -435,6 +439,55 @@ pub const Parser = struct {
         return null;
     }
 
+    fn pop_md_bullet_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (is_bullet(first_token) == null)
+                return null;
+
+            var bullet = Term{ .word = first_token.word, .kind = Term.Kind.Bullet };
+            self.tokenizer.commit_peek();
+
+            while (self.tokenizer.peek()) |token| {
+                switch (token.symbol) {
+                    tkn.Symbol.Space, tkn.Symbol.Tab, tkn.Symbol.Minus, tkn.Symbol.Star => {
+                        bullet.word.len += token.word.len;
+                        self.tokenizer.commit_peek();
+                    },
+                    else => break,
+                }
+            }
+
+            return bullet;
+        }
+        return null;
+    }
+    fn pop_md_checkbox_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |first_token| {
+            if (first_token.symbol != tkn.Symbol.OpenSquare or first_token.word.len != 1)
+                return null;
+
+            // Popping this checkbox might still fail if it contains more or less that 1 char
+            const sp = self.tokenizer;
+
+            var checkbox = Term{ .word = first_token.word, .kind = Term.Kind.Checkbox };
+            self.tokenizer.commit_peek();
+
+            if (self.tokenizer.next()) |middle_tkn| {
+                if (middle_tkn.symbol != tkn.Symbol.CloseSquare and middle_tkn.word.len == 1) {
+                    checkbox.word.len += middle_tkn.word.len;
+                    if (self.tokenizer.next()) |last_tkn| {
+                        if (last_tkn.symbol == tkn.Symbol.CloseSquare and last_tkn.word.len == 1) {
+                            checkbox.word.len += last_tkn.word.len;
+                            return checkbox;
+                        }
+                    }
+                }
+            }
+
+            self.tokenizer = sp;
+        }
+        return null;
+    }
     fn pop_md_code_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |first_token| {
             if (first_token.symbol != tkn.Symbol.Backtick)
@@ -593,7 +646,7 @@ pub const Parser = struct {
         return t.symbol != tkn.Symbol.Hashtag and t.symbol != tkn.Symbol.Space and t.symbol != tkn.Symbol.Minus and t.symbol != tkn.Symbol.Star;
     }
     fn is_bullet(t: tkn.Token) ?usize {
-        return if (t.symbol == tkn.Symbol.Space)
+        return if (t.symbol == tkn.Symbol.Space or t.symbol == tkn.Symbol.Tab)
             t.word.len
         else if (t.symbol == tkn.Symbol.Minus or t.symbol == tkn.Symbol.Star)
             0

@@ -13,14 +13,14 @@
 	- [ ] Filter-out tags that do not match
 		- Update rubr.fuzz
 	- [x] Sort by fuzzy match score
-- [ ] Add 'fix' mode to champ
+- [*] Add 'fix' mode to champ
 	- [ ] Warn on amps without definition
 
 # Search for AMP defs and tags from editor &!define
 - [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
 	- [x] Use workspace symbols
 - [x] Search in amp.Path, not in terms
-	- [*] Create seperate AMPs
+	- [x] Create seperate AMPs
 	- [x] Resolve AMP tags against defs
 		- Node.orgs must always be resolved
 		- [x] First might be def
@@ -40,9 +40,9 @@
 		- [x] Workspace symbols
 - [x] Search smart-case
 	- Impl in rubr.fuzz based on casing of needle
-- [ ] Reload when file is changed/created
+- [x] Reload when file is changed/created
 - Support searching for next Chore to execute
-	- [ ] Interpret '[?]' as AMP
+	- [x] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
 	- [ ] Create DSL for 'todo', 'wip' and 'next'
 - [x] Support searching for unresolved AMPs
@@ -50,12 +50,10 @@
 	- [ ] Make this configurable
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
-	- [ ] Reload when changed, check from time to time
+	- [*] Reload when changed, check from time to time
 
 # Annotate parts of source code with project and status tags &!annotate
-- Could replace 'org' with 'champ' &prio:low
-	- Improved Markdown parsing, consistent with 'champ'
-- [ ] Support aggregation of AMP tags
+- [*] Support aggregation of AMP tags
 	- [ ] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
@@ -73,6 +71,6 @@
 - [x] Collect content range per Node
 - [x] Convert Nodes with AMP info into Chores
 - [ ] Must filter done items by default
-- [ ] Could support searching all references
-- [ ] Must only report nodes with an AMP tag
-- [ ] Must support identifying next subtasks to work on
+	- [ ] Could support searching all references
+- [x] Must only report nodes with an AMP tag
+- [x] Must support identifying next subtasks to work on
