@@ -63,6 +63,7 @@ pub const Lsp = struct {
                             .textDocumentSync = dto.ServerCapabilities.TextDocumentSyncOptions{},
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
+                            .definitionProvider = true,
                             .workspace = dto.ServerCapabilities.Workspace{
                                 .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
                                     .supported = true,
@@ -78,6 +79,23 @@ pub const Lsp = struct {
                     try server.send(result);
                 } else if (request.is("shutdown")) {
                     try server.send(null);
+                } else if (request.is("textDocument/definition")) {
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+
+                    const prefix = "file://";
+                    const filename = "/home/geertf/gubg/rakefile.rb";
+                    const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, filename });
+
+                    const range = dto.Range{
+                        .start = dto.Position{ .line = 0, .character = 0 },
+                        .end = dto.Position{ .line = 1, .character = 0 },
+                    };
+
+                    const location = dto.Location{ .uri = uri, .range = range };
+
+                    try server.send(location);
                 } else if (request.is("textDocument/documentSymbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
