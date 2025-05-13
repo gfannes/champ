@@ -47,7 +47,7 @@ pub const Test = struct {
 
             pub fn call(my: *My, entry: mero.Tree.Entry) !void {
                 // std.debug.print("{:<6}{?}\t{s}\t{}{}\n", .{ entry.id, entry.data.type, entry.data.path, entry.data.content_rows, entry.data.content_cols });
-                _ = try my.chores.add(entry.id, my.tree.*);
+                _ = try my.chores.add(entry.id, my.tree);
             }
         }.init(&self.forest.tree, self.log, self.a);
         defer cb.deinit();

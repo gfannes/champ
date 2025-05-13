@@ -71,7 +71,8 @@
 - [x] Collect content range per Node
 - [/] Convert Nodes with AMP info into Chores
 	- [x] Merge Defs into chore.Chores
-	- [*] Make app.Lsp work with this
+	- [*] Make app.Lsp symbols work with this
+		- [x] Add nodes during setup of Forest
 - [*] Support 'goto definition'
 - [*] Support 'find references'
 - [ ] Must filter done items by default

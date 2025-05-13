@@ -195,7 +195,8 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
-            chores: *const chore.Chores,
+            tree: *const Tree,
+            chores: *chore.Chores,
             log: *const Log,
             a: std.mem.Allocator,
 
@@ -232,10 +233,13 @@ pub const Forest = struct {
                                 }
                             }
                         }
+
+                        _ = try my.chores.add(entry.id, my.tree);
                     },
                 }
             }
         }{
+            .tree = &self.tree,
             .chores = &self.chores,
             .log = self.log,
             .a = self.a,

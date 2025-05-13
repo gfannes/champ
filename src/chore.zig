@@ -163,7 +163,7 @@ pub const Chores = struct {
     }
 
     // Return true if tree[node_id] is an actual Chore and was thus added
-    pub fn add(self: *Self, node_id: usize, tree: mero.Tree) !bool {
+    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree) !bool {
         const node = tree.cptr(node_id);
 
         const aaa = self.aa.allocator();
@@ -182,6 +182,20 @@ pub const Chores = struct {
         var chore = Chore.init(node_id, aaa);
         chore.str = try std.mem.concat(aaa, u8, self.tmp_concat.items);
 
+        var offset: usize = 0;
+        for (node.orgs.items, 0..) |org, ix| {
+            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
+            offset += str.len;
+            if (ix > 0)
+                // Drop the sep
+                str.ptr += 1;
+
+            // &fixme: .row and .cols are not correct and should be based on node.line.terms
+            // This info should be prepared where the Amp parsing happens: there, we know what Terms are actually take into account (Amp, Checkbox, maybe others?)
+            try chore.amps.append(Chore.Amp{ .path = org, .str = str, .row = node.content_rows.begin, .cols = node.content_cols });
+        }
+
+        // Lookup path
         var maybe_id = rubr.opt.value(node_id);
         while (maybe_id) |id| {
             const n = tree.cptr(id);
