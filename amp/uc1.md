@@ -13,7 +13,7 @@
 	- [ ] Filter-out tags that do not match
 		- Update rubr.fuzz
 	- [x] Sort by fuzzy match score
-- [*] Add 'fix' mode to champ
+- [ ] Add 'fix' mode to champ
 	- [ ] Warn on amps without definition
 
 # Search for AMP defs and tags from editor &!define
@@ -50,10 +50,10 @@
 	- [ ] Make this configurable
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
-	- [*] Reload when changed, check from time to time
+	- [ ] Reload when changed, check from time to time
 
 # Annotate parts of source code with project and status tags &!annotate
-- [*] Support aggregation of AMP tags
+- [ ] Support aggregation of AMP tags
 	- [ ] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
@@ -69,7 +69,11 @@
 
 # Find all references &!search
 - [x] Collect content range per Node
-- [x] Convert Nodes with AMP info into Chores
+- [/] Convert Nodes with AMP info into Chores
+	- [x] Merge Defs into chore.Chores
+	- [*] Make app.Lsp work with this
+- [*] Support 'goto definition'
+- [*] Support 'find references'
 - [ ] Must filter done items by default
 	- [ ] Could support searching all references
 - [x] Must only report nodes with an AMP tag

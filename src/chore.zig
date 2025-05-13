@@ -1,22 +1,40 @@
 const std = @import("std");
 
+const amp = @import("amp.zig");
+
 const rubr = @import("rubr");
 const naft = rubr.naft;
+const Log = rubr.log.Log;
+const Strange = rubr.strange.Strange;
 
 const mero = @import("mero.zig");
 
+pub const Error = error{
+    CouldNotParseAmp,
+};
+
+// A Tree node that contains AMP info (both def and non-defs)
 pub const Chore = struct {
     const Self = @This();
+    const Amp = struct {
+        path: amp.Path,
+        str: []const u8,
+        row: usize,
+        cols: rubr.index.Range,
+    };
+    const Amps = std.ArrayList(Amp);
 
     node_id: usize,
-    str: []const u8 = &.{},
     path: []const u8 = &.{},
+    str: []const u8 = &.{},
+    amps: Amps,
 
-    pub fn init(node_id: usize) Self {
-        return Self{ .node_id = node_id };
+    pub fn init(node_id: usize, a: std.mem.Allocator) Self {
+        return Self{ .node_id = node_id, .amps = Amps.init(a) };
     }
     pub fn deinit(self: *Self) void {
-        _ = self;
+        self.amps.deinit();
+        self.defs.deinit();
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {
@@ -30,27 +48,118 @@ pub const Chore = struct {
     }
 };
 
-pub const ChoreList = struct {
+// Keeps track of all AMP info and its string repr without the need for tree traversal
+pub const Chores = struct {
     const Self = @This();
     const List = std.ArrayList(Chore);
-    const Tmp = std.ArrayList([]const u8);
+    const Defs = std.ArrayList(amp.Path);
+    const TmpConcat = std.ArrayList([]const u8);
 
-    list: List,
+    log: *const Log,
+
     aa: std.heap.ArenaAllocator,
-    tmp: Tmp,
+    list: List,
+    defs: Defs,
+    def_catchall_amp: ?amp.Path = null,
+    def_catchall_str: []const u8 = &.{},
+    tmp_concat: TmpConcat,
 
-    pub fn init(a: std.mem.Allocator) Self {
+    pub fn init(log: *const Log, a: std.mem.Allocator) Self {
         return Self{
-            // Do not use the arena allocator since Self will still be moved
-            .list = List.init(a),
+            .log = log,
+            // Do not use the arena allocator here since Self will still be moved
             .aa = std.heap.ArenaAllocator.init(a),
-            .tmp = Tmp.init(a),
+            .list = List.init(a),
+            .defs = Defs.init(a),
+            .tmp_concat = TmpConcat.init(a),
         };
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
         self.list.deinit();
-        self.tmp.deinit();
+        self.defs.deinit();
+        self.tmp_concat.deinit();
+    }
+
+    pub fn setupCatchAll(self: *Self, name: []const u8) !void {
+        if (self.def_catchall_amp) |*e|
+            e.deinit();
+
+        const aaa = self.aa.allocator();
+
+        const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&!:", name });
+
+        var strange = Strange{ .content = content };
+        self.def_catchall_amp = try amp.Path.parse(&strange, aaa);
+
+        if (self.def_catchall_amp == null)
+            return Error.CouldNotParseAmp;
+        self.def_catchall_str = content;
+    }
+
+    // Keeps a shallow copy of 'def'
+    pub fn appendDef(self: *Self, def: amp.Path) !bool {
+        const check_fit = struct {
+            needle: *const amp.Path,
+            pub fn call(my: @This(), other: amp.Path) bool {
+                return other.is_fit(my.needle.*);
+            }
+        }{ .needle = &def };
+        if (rubr.algo.anyOf(amp.Path, self.defs.items, check_fit)) {
+            try self.log.warning("Definition '{}' is already present.\n", .{def});
+            return false;
+        }
+
+        // Shallow copy
+        try self.defs.append(def);
+        return true;
+    }
+
+    pub fn resolve(self: Self, path: *amp.Path) !bool {
+        var maybe_fit_ix: ?usize = null;
+        var is_ambiguous = false;
+        for (self.defs.items, 0..) |def, ix| {
+            if (def.is_fit(path.*)) {
+                if (maybe_fit_ix) |fit_ix| {
+                    if (!is_ambiguous)
+                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, self.defs.items[fit_ix] });
+                    is_ambiguous = true;
+
+                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def });
+                }
+                maybe_fit_ix = ix;
+            }
+        }
+
+        if (is_ambiguous)
+            return false;
+
+        if (maybe_fit_ix) |fit_ix| {
+            const def = self.defs.items[fit_ix];
+            if (path.is_absolute) {
+                if (path.parts.items.len != def.parts.items.len) {
+                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def });
+                    return false;
+                }
+                return true;
+            } else {
+                const count_to_add = def.parts.items.len - path.parts.items.len;
+                const new_parts = try path.parts.addManyAt(0, count_to_add);
+                std.mem.copyForwards(amp.Part, new_parts, def.parts.items[0..count_to_add]);
+                path.is_absolute = true;
+                return true;
+            }
+        } else {
+            if (self.def_catchall_amp) |ca_def| {
+                const new_parts = try path.parts.addManyAt(0, ca_def.parts.items.len);
+                std.mem.copyForwards(amp.Part, new_parts, ca_def.parts.items);
+                path.is_absolute = true;
+                return true;
+            } else {
+                try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{path});
+                return false;
+            }
+        }
     }
 
     // Return true if tree[node_id] is an actual Chore and was thus added
@@ -59,19 +168,19 @@ pub const ChoreList = struct {
 
         const aaa = self.aa.allocator();
 
-        try self.tmp.resize(0);
+        try self.tmp_concat.resize(0);
         var sep: []const u8 = "";
         for (node.orgs.items) |org| {
-            try self.tmp.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, org }));
+            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, org }));
             sep = " ";
         }
 
-        if (self.tmp.items.len == 0)
+        if (self.tmp_concat.items.len == 0)
             // This is not a Chore
             return false;
 
-        var chore = Chore{ .node_id = node_id };
-        chore.str = try std.mem.concat(aaa, u8, self.tmp.items);
+        var chore = Chore.init(node_id, aaa);
+        chore.str = try std.mem.concat(aaa, u8, self.tmp_concat.items);
 
         var maybe_id = rubr.opt.value(node_id);
         while (maybe_id) |id| {
@@ -105,7 +214,11 @@ pub const ChoreList = struct {
 test "chore" {
     const ut = std.testing;
 
-    var cl = ChoreList.init(ut.allocator);
+    var log = Log{};
+    log.init();
+    defer log.deinit();
+
+    var cl = Chores.init(&log, ut.allocator);
     defer cl.deinit();
 
     var tree = mero.Tree.init(ut.allocator);

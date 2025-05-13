@@ -8,6 +8,7 @@ const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
+const chore = @import("../chore.zig");
 
 const rubr = @import("rubr");
 const Log = rubr.log.Log;
@@ -30,15 +31,14 @@ pub const Forest = struct {
 
     log: *const Log,
     tree: Tree,
-    // Shallow copies of all defs created during joinDefs()
-    defs_sc: Defs,
+    chores: chore.Chores,
     a: std.mem.Allocator,
 
     pub fn init(log: *const Log, a: std.mem.Allocator) Self {
         return Self{
             .log = log,
             .tree = Tree.init(a),
-            .defs_sc = Defs.init(log, a),
+            .chores = chore.Chores.init(log, a),
             .a = a,
         };
     }
@@ -50,7 +50,7 @@ pub const Forest = struct {
         }{};
         self.tree.each(&cb) catch {};
         self.tree.deinit();
-        self.defs_sc.deinit();
+        self.chores.deinit();
     }
     pub fn reinit(self: *Self) void {
         const log = self.log;
@@ -190,12 +190,12 @@ pub const Forest = struct {
     };
 
     fn resolveAmps(self: *Self) !void {
-        try self.defs_sc.appendCatchAll("UNRESOLVED");
+        try self.chores.setupCatchAll("UNRESOLVED");
 
         var cb = struct {
             const My = @This();
 
-            defs_sc: *const Defs,
+            chores: *const chore.Chores,
             log: *const Log,
             a: std.mem.Allocator,
 
@@ -220,7 +220,7 @@ pub const Forest = struct {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (!path.is_definition) {
-                                    if (try my.defs_sc.resolve(&path)) {
+                                    if (try my.chores.resolve(&path)) {
                                         try my.log.info("Could resolve '{}'\n", .{path});
                                         try n.orgs.append(path);
                                     } else {
@@ -236,7 +236,7 @@ pub const Forest = struct {
                 }
             }
         }{
-            .defs_sc = &self.defs_sc,
+            .chores = &self.chores,
             .log = self.log,
             .a = self.a,
         };
@@ -249,7 +249,7 @@ pub const Forest = struct {
             const My = @This();
 
             tree: *Tree,
-            defs_sc: *Defs,
+            chores: *chore.Chores,
             log: *const Log,
             a: std.mem.Allocator,
 
@@ -297,7 +297,7 @@ pub const Forest = struct {
                         // Process the def:
                         // - Make it absolute
                         // - Check for duplicates
-                        // - Store in defs_sc for later use
+                        // - Store in chores for later use
                         if (slice.firstPtr(n.orgs.items)) |def| {
                             // Make the def amp absolute, if necessary
                             if (!def.is_absolute) {
@@ -331,7 +331,7 @@ pub const Forest = struct {
                             }
 
                             // Collect all defs in a separate struct
-                            if (!try my.defs_sc.append(def.*)) {
+                            if (!try my.chores.appendDef(def.*)) {
                                 try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
@@ -353,7 +353,7 @@ pub const Forest = struct {
                     },
                 }
             }
-        }{ .tree = &self.tree, .defs_sc = &self.defs_sc, .log = self.log, .a = self.a };
+        }{ .tree = &self.tree, .chores = &self.chores, .log = self.log, .a = self.a };
         try self.tree.dfsAll(true, &cb);
     }
 
@@ -373,109 +373,5 @@ pub const Forest = struct {
             else => {},
         }
         return null;
-    }
-};
-
-const Defs = struct {
-    const Self = @This();
-    const List = std.ArrayList(amp.Path);
-
-    log: *const Log,
-    a: std.mem.Allocator,
-
-    list: List,
-    catchall_amp: ?amp.Path = null,
-    catchall_str: []const u8 = &.{},
-
-    fn init(log: *const Log, a: std.mem.Allocator) Defs {
-        return Defs{
-            .log = log,
-            .a = a,
-            .list = List.init(a),
-        };
-    }
-    fn deinit(self: *Self) void {
-        // Do not deinit() the elements: these are shallow copies
-        self.list.deinit();
-        self.a.free(self.catchall_str);
-    }
-
-    fn appendCatchAll(self: *Self, name: []const u8) !void {
-        if (self.catchall_amp != null)
-            return Error.CatchAllAmpAlreadyExists;
-
-        const content = try std.mem.concat(self.a, u8, &[_][]const u8{ "&!:", name });
-        errdefer self.a.free(content);
-
-        var strange = Strange{ .content = content };
-        self.catchall_amp = try amp.Path.parse(&strange, self.a);
-
-        if (self.catchall_amp == null)
-            return Error.CouldNotParseAmp;
-        self.catchall_str = content;
-    }
-
-    fn append(self: *Self, def: amp.Path) !bool {
-        const check_fit = struct {
-            needle: *const amp.Path,
-            pub fn call(my: @This(), other: amp.Path) bool {
-                return other.is_fit(my.needle.*);
-            }
-        }{ .needle = &def };
-        if (rubr.algo.anyOf(amp.Path, self.list.items, check_fit)) {
-            try self.log.warning("Definition '{}' is already present.\n", .{def});
-            return false;
-        }
-
-        // Shallow copy
-        try self.list.append(def);
-        return true;
-    }
-
-    fn resolve(self: Self, path: *amp.Path) !bool {
-        var maybe_fit_ix: ?usize = null;
-        var is_ambiguous = false;
-        for (self.list.items, 0..) |def, ix| {
-            if (def.is_fit(path.*)) {
-                if (maybe_fit_ix) |fit_ix| {
-                    if (!is_ambiguous)
-                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, self.list.items[fit_ix] });
-                    is_ambiguous = true;
-
-                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def });
-                }
-                maybe_fit_ix = ix;
-            }
-        }
-
-        if (is_ambiguous)
-            return false;
-
-        if (maybe_fit_ix) |fit_ix| {
-            const def = self.list.items[fit_ix];
-            if (path.is_absolute) {
-                if (path.parts.items.len != def.parts.items.len) {
-                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def });
-                    return false;
-                }
-                return true;
-            } else {
-                const count_to_add = def.parts.items.len - path.parts.items.len;
-                const new_parts = try path.parts.addManyAt(0, count_to_add);
-                std.mem.copyForwards(amp.Part, new_parts, def.parts.items[0..count_to_add]);
-                path.is_absolute = true;
-                return true;
-            }
-        } else {
-            if (self.catchall_amp) |ca_def| {
-                const new_parts = try path.parts.addManyAt(0, ca_def.parts.items.len);
-                std.mem.copyForwards(amp.Part, new_parts, ca_def.parts.items);
-                path.is_absolute = true;
-                return true;
-            } else {
-                try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{path});
-                return false;
-            }
-        }
     }
 };
