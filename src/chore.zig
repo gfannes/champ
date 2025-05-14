@@ -21,6 +21,11 @@ pub const Chore = struct {
         str: []const u8,
         row: usize,
         cols: rubr.index.Range,
+        pub fn write(self: Amp, parent: *naft.Node) void {
+            var n = parent.node("Amp");
+            defer n.deinit();
+            n.attr("str", self.str);
+        }
     };
     const Amps = std.ArrayList(Amp);
 
@@ -41,10 +46,10 @@ pub const Chore = struct {
         var n = parent.node("Chore");
         defer n.deinit();
         n.attr("id", self.node_id);
-        if (self.str.len > 0)
-            n.attr("str", self.str);
         if (self.path.len > 0)
             n.attr("path", self.path);
+        for (self.amps.items) |e|
+            e.write(&n);
     }
 };
 
@@ -216,7 +221,7 @@ pub const Chores = struct {
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {
-        var n = parent.node("ChoreList");
+        var n = parent.node("Chores");
         defer n.deinit();
         n.attr("count", self.list.items.len);
         for (self.list.items) |chore| {
