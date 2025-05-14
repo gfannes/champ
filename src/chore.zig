@@ -25,6 +25,9 @@ pub const Chore = struct {
             var n = parent.node("Amp");
             defer n.deinit();
             n.attr("str", self.str);
+            n.attr("row", self.row);
+            n.attr("cols.begin", self.cols.begin);
+            n.attr("cols.end", self.cols.end);
         }
     };
     const Amps = std.ArrayList(Amp);
@@ -176,7 +179,7 @@ pub const Chores = struct {
         try self.tmp_concat.resize(0);
         var sep: []const u8 = "";
         for (node.orgs.items) |org| {
-            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, org }));
+            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, org.amp }));
             sep = " ";
         }
 
@@ -195,9 +198,7 @@ pub const Chores = struct {
                 // Drop the sep
                 str.ptr += 1;
 
-            // &fixme: .row and .cols are not correct and should be based on node.line.terms
-            // This info should be prepared where the Amp parsing happens: there, we know what Terms are actually take into account (Amp, Checkbox, maybe others?)
-            try chore.amps.append(Chore.Amp{ .path = org, .str = str, .row = node.content_rows.begin, .cols = node.content_cols });
+            try chore.amps.append(Chore.Amp{ .path = org.amp, .str = str, .row = org.pos.row, .cols = org.pos.cols });
         }
 
         // Lookup path
@@ -252,7 +253,7 @@ test "chore" {
     const ch2 = try tree.addChild(null);
     ch2.data.* = mero.Node.init(ut.allocator);
 
-    _ = try cl.add(0, tree);
-    _ = try cl.add(1, tree);
-    _ = try cl.add(2, tree);
+    _ = try cl.add(0, &tree);
+    _ = try cl.add(1, &tree);
+    _ = try cl.add(2, &tree);
 }

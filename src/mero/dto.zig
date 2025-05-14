@@ -77,7 +77,21 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-    const Amps = std.ArrayList(amp.Path);
+    pub const Pos = struct {
+        row: usize,
+        cols: rubr.index.Range,
+    };
+    pub const Org = struct {
+        amp: amp.Path,
+        pos: Pos,
+        pub fn deinit(org: *Org) void {
+            org.amp.deinit();
+        }
+        pub fn copy(org: Org) !Org {
+            return Org{ .amp = try org.amp.copy(), .pos = org.pos };
+        }
+    };
+    const Orgs = std.ArrayList(Org);
 
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
 
@@ -85,7 +99,7 @@ pub const Node = struct {
     language: ?Language = null,
 
     // Will contain resolved Amps, only the first can be a definition
-    orgs: Amps,
+    orgs: Orgs,
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
@@ -100,7 +114,7 @@ pub const Node = struct {
 
     pub fn init(a: std.mem.Allocator) Self {
         return Self{
-            .orgs = Amps.init(a),
+            .orgs = Orgs.init(a),
             .terms = Terms.init(a),
             .a = a,
         };

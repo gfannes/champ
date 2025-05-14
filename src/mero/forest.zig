@@ -215,15 +215,21 @@ pub const Forest = struct {
                         my.terms = &n.terms;
                     },
                     else => {
+                        var line: usize = n.content_rows.begin;
+                        var cols: rubr.index.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const term = &my.terms.items[term_ix];
+
+                            cols.begin = cols.end;
+                            cols.end += term.word.len;
+
                             if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox) {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (!path.is_definition) {
                                     if (try my.chores.resolve(&path)) {
                                         try my.log.info("Could resolve '{}'\n", .{path});
-                                        try n.orgs.append(path);
+                                        try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
                                         path.deinit();
@@ -231,6 +237,9 @@ pub const Forest = struct {
                                 } else {
                                     path.deinit();
                                 }
+                            } else if (term.kind == Term.Kind.Newline) {
+                                line += term.word.len;
+                                cols = .{};
                             }
                         }
 
@@ -279,9 +288,15 @@ pub const Forest = struct {
                         defer my.is_new_file = false;
 
                         // Search n.line for a def AMP
+                        var line: usize = n.content_rows.begin;
+                        var cols: rubr.index.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const terms = my.terms orelse unreachable;
                             const term = &terms.items[term_ix];
+
+                            cols.begin = cols.end;
+                            cols.end += term.word.len;
+
                             if (term.kind == Term.Kind.Amp) {
                                 var strange = Strange{ .content = term.word };
 
@@ -290,10 +305,13 @@ pub const Forest = struct {
                                     if (n.orgs.items.len > 0)
                                         return Error.OnlyOneDefAllowed;
                                     try my.log.info("Found def '{}'\n", .{path});
-                                    try n.orgs.append(path);
+                                    try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                 } else {
                                     path.deinit();
                                 }
+                            } else if (term.kind == Term.Kind.Newline) {
+                                line += term.word.len;
+                                cols = .{};
                             }
                         }
 
@@ -303,15 +321,15 @@ pub const Forest = struct {
                         // - Store in chores for later use
                         if (slice.firstPtr(n.orgs.items)) |def| {
                             // Make the def amp absolute, if necessary
-                            if (!def.is_absolute) {
-                                try my.log.info("Making def '{}' absolute\n", .{def});
+                            if (!def.amp.is_absolute) {
+                                try my.log.info("Making def '{}' absolute\n", .{def.amp});
                                 var child_id = entry.id;
                                 const maybe_parent_def: ?amp.Path = block: while (true) {
                                     if (try my.tree.parent(child_id)) |parent| {
                                         if (slice.first(parent.data.orgs.items)) |pdef| {
                                             // We are still collecting def info. If anything is present, it should be a def.
-                                            std.debug.assert(pdef.is_absolute);
-                                            break :block pdef;
+                                            std.debug.assert(pdef.amp.is_absolute);
+                                            break :block pdef.amp;
                                         } else {
                                             child_id = parent.id;
                                         }
@@ -320,15 +338,15 @@ pub const Forest = struct {
                                     }
                                 };
                                 if (maybe_parent_def) |parent_def| {
-                                    try def.prepend(parent_def);
-                                    try my.log.info("done '{}' '{}'\n", .{ def, n.orgs.items[0] });
+                                    try def.amp.prepend(parent_def);
+                                    try my.log.info("done '{}' '{}'\n", .{ def.amp, n.orgs.items[0] });
                                 } else {
-                                    try my.log.warning("Could not find parent def for '{}'\n", .{def});
+                                    try my.log.warning("Could not find parent def for '{}'\n", .{def.amp});
                                 }
                             }
 
                             // Collect all defs in a separate struct
-                            if (!try my.chores.appendDef(def.*)) {
+                            if (!try my.chores.appendDef(def.amp)) {
                                 try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
