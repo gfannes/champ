@@ -27,16 +27,17 @@ pub const Path = struct {
         return res;
     }
 
+    // rhs is the smaller one
     pub fn is_fit(self: Self, rhs: Self) bool {
-        var rhs_it = std.mem.reverseIterator(rhs.parts.items);
-        var self_it = std.mem.reverseIterator(self.parts.items);
-        while (rhs_it.nextPtr()) |rhs_part| {
-            const self_part = self_it.nextPtr() orelse return false;
+        var rhs_rit = std.mem.reverseIterator(rhs.parts.items);
+        var self_rit = std.mem.reverseIterator(self.parts.items);
+        while (rhs_rit.nextPtr()) |rhs_part| {
+            const self_part = self_rit.nextPtr() orelse return false;
             if (!std.mem.eql(u8, rhs_part.content, self_part.content))
                 return false;
         }
 
-        if (rhs.is_absolute and self_it.nextPtr() != null)
+        if (rhs.is_absolute and self_rit.nextPtr() != null)
             return false;
 
         return true;

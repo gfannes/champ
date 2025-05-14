@@ -56,11 +56,28 @@ pub const Chore = struct {
     }
 };
 
+pub const Def = struct {
+    amp: amp.Path,
+    str: []const u8,
+    path: []const u8,
+    row: usize,
+    cols: rubr.index.Range,
+    pub fn write(self: Def, parent: *naft.Node) void {
+        var n = parent.node("Def");
+        defer n.deinit();
+        n.attr("str", self.str);
+        n.attr("path", self.path);
+        n.attr("row", self.row);
+        n.attr("cols.begin", self.cols.begin);
+        n.attr("cols.end", self.cols.end);
+    }
+};
+
 // Keeps track of all AMP info and its string repr without the need for tree traversal
 pub const Chores = struct {
     const Self = @This();
     const List = std.ArrayList(Chore);
-    const Defs = std.ArrayList(amp.Path);
+    const Defs = std.ArrayList(Def);
     const TmpConcat = std.ArrayList([]const u8);
 
     log: *const Log,
@@ -106,20 +123,27 @@ pub const Chores = struct {
     }
 
     // Keeps a shallow copy of 'def'
-    pub fn appendDef(self: *Self, def: amp.Path) !bool {
+    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, row: usize, cols: rubr.index.Range) !bool {
         const check_fit = struct {
             needle: *const amp.Path,
-            pub fn call(my: @This(), other: amp.Path) bool {
-                return other.is_fit(my.needle.*);
+            pub fn call(my: @This(), other: Def) bool {
+                return other.amp.is_fit(my.needle.*);
             }
         }{ .needle = &def };
-        if (rubr.algo.anyOf(amp.Path, self.defs.items, check_fit)) {
+        if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
             try self.log.warning("Definition '{}' is already present.\n", .{def});
             return false;
         }
 
         // Shallow copy
-        try self.defs.append(def);
+        const aaa = self.aa.allocator();
+        try self.defs.append(Def{
+            .amp = def,
+            .str = try std.fmt.allocPrint(aaa, "{}", .{def}),
+            .path = path,
+            .row = row,
+            .cols = cols,
+        });
         return true;
     }
 
@@ -127,13 +151,13 @@ pub const Chores = struct {
         var maybe_fit_ix: ?usize = null;
         var is_ambiguous = false;
         for (self.defs.items, 0..) |def, ix| {
-            if (def.is_fit(path.*)) {
+            if (def.amp.is_fit(path.*)) {
                 if (maybe_fit_ix) |fit_ix| {
                     if (!is_ambiguous)
                         try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, self.defs.items[fit_ix] });
                     is_ambiguous = true;
 
-                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def });
+                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def.amp });
                 }
                 maybe_fit_ix = ix;
             }
@@ -145,15 +169,15 @@ pub const Chores = struct {
         if (maybe_fit_ix) |fit_ix| {
             const def = self.defs.items[fit_ix];
             if (path.is_absolute) {
-                if (path.parts.items.len != def.parts.items.len) {
-                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def });
+                if (path.parts.items.len != def.amp.parts.items.len) {
+                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def.amp });
                     return false;
                 }
                 return true;
             } else {
-                const count_to_add = def.parts.items.len - path.parts.items.len;
+                const count_to_add = def.amp.parts.items.len - path.parts.items.len;
                 const new_parts = try path.parts.addManyAt(0, count_to_add);
-                std.mem.copyForwards(amp.Part, new_parts, def.parts.items[0..count_to_add]);
+                std.mem.copyForwards(amp.Part, new_parts, def.amp.parts.items[0..count_to_add]);
                 path.is_absolute = true;
                 return true;
             }
@@ -224,7 +248,9 @@ pub const Chores = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chores");
         defer n.deinit();
-        n.attr("count", self.list.items.len);
+        for (self.defs.items) |def| {
+            def.write(&n);
+        }
         for (self.list.items) |chore| {
             chore.write(&n);
         }

@@ -9,12 +9,14 @@ const fuzz = rubr.fuzz;
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
+const amp = @import("../amp.zig");
 
 pub const Error = error{
     ExpectedParams,
     ExpectedQuery,
     ExpectedTextDocument,
     UnexpectedFilenameFormat,
+    ExpectedPosition,
 };
 
 pub const Lsp = struct {
@@ -80,22 +82,62 @@ pub const Lsp = struct {
                 } else if (request.is("shutdown")) {
                     try server.send(null);
                 } else if (request.is("textDocument/definition")) {
+                    if (reloadForest) {
+                        self.forest.reinit();
+                        try self.forest.load(self.config, self.options);
+                        reloadForest = false;
+                    }
+
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+                    const position = params.position orelse return Error.ExpectedPosition;
+
                     var aa = std.heap.ArenaAllocator.init(self.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
                     const prefix = "file://";
-                    const filename = "/home/geertf/gubg/rakefile.rb";
-                    const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, filename });
 
-                    const range = dto.Range{
-                        .start = dto.Position{ .line = 0, .character = 0 },
-                        .end = dto.Position{ .line = 1, .character = 0 },
-                    };
+                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
+                        return Error.UnexpectedFilenameFormat;
+                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+                    const src_filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
-                    const location = dto.Location{ .uri = uri, .range = range };
+                    // Find Amp
+                    var maybe_amp: ?amp.Path = null;
+                    for (self.forest.chores.list.items) |chore| {
+                        if (!std.mem.endsWith(u8, src_filename, chore.path))
+                            continue;
 
-                    try server.send(location);
+                        for (chore.amps.items) |e| {
+                            if (e.row == position.line and (e.cols.begin <= position.character and position.character <= e.cols.end)) {
+                                maybe_amp = e.path;
+                            }
+                        }
+                    }
+
+                    // Find filename and location of definition
+                    var dst_filename: ?[]const u8 = null;
+                    var range = dto.Range{};
+                    if (maybe_amp) |e| {
+                        for (self.forest.chores.defs.items) |def| {
+                            if (def.amp.is_fit(e)) {
+                                dst_filename = def.path;
+                                range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
+                                range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
+                            }
+                        }
+                    }
+
+                    if (dst_filename) |filename| {
+                        const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, filename });
+
+                        const location = dto.Location{ .uri = uri, .range = range };
+
+                        try server.send(location);
+                    } else {
+                        try server.send(null);
+                    }
                 } else if (request.is("textDocument/documentSymbol")) {
                     if (reloadForest) {
                         self.forest.reinit();

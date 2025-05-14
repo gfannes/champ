@@ -346,7 +346,7 @@ pub const Forest = struct {
                             }
 
                             // Collect all defs in a separate struct
-                            if (!try my.chores.appendDef(def.amp)) {
+                            if (!try my.chores.appendDef(def.amp, my.path, def.pos.row, def.pos.cols)) {
                                 try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
