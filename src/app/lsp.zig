@@ -97,6 +97,12 @@ pub const Lsp = struct {
 
                     try server.send(location);
                 } else if (request.is("textDocument/documentSymbol")) {
+                    if (reloadForest) {
+                        self.forest.reinit();
+                        try self.forest.load(self.config, self.options);
+                        reloadForest = false;
+                    }
+
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
 
@@ -107,143 +113,72 @@ pub const Lsp = struct {
                     var buffer: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
 
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+                    var document_symbols = std.ArrayList(dto.DocumentSymbol).init(aaa);
+
+                    for (self.forest.chores.list.items) |chore| {
+                        if (!std.mem.endsWith(u8, filename, chore.path))
+                            continue;
+
+                        if (rubr.slice.is_empty(chore.amps.items)) {
+                            try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
+                            continue;
+                        }
+
+                        const first_amp = &chore.amps.items[0];
+                        const last_amp = &chore.amps.items[chore.amps.items.len - 1];
+                        const range = dto.Range{
+                            .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
+                            .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
+                        };
+                        try document_symbols.append(dto.DocumentSymbol{
+                            .name = chore.str,
+                            .range = range,
+                            .selectionRange = range,
+                        });
+                    }
+
+                    try server.send(document_symbols.items);
+                } else if (request.is("workspace/symbol")) {
                     if (reloadForest) {
                         self.forest.reinit();
                         try self.forest.load(self.config, self.options);
                         reloadForest = false;
                     }
-                    if (self.forest.findFile(filename)) |file| {
-                        var cb = struct {
-                            const My = @This();
-                            const Symbols = std.ArrayList(dto.DocumentSymbol);
 
-                            aa: std.heap.ArenaAllocator,
-
-                            aaa: std.mem.Allocator = undefined,
-                            symbols: Symbols = undefined,
-                            is_first: bool = true,
-
-                            fn init(my: *My) void {
-                                my.aaa = my.aa.allocator();
-                                my.symbols = Symbols.init(my.aaa);
-                            }
-                            fn deinit(my: *My) void {
-                                my.aa.deinit();
-                            }
-
-                            pub fn call(my: *My, entry: mero.Tree.Entry) !void {
-                                if (my.is_first) {
-                                    // Skip first node: this is the File itself, which might contain copied AMPs from the first line.
-                                    my.is_first = false;
-                                    return;
-                                }
-
-                                const n = entry.data;
-                                if (!rubr.slice.is_empty(n.orgs.items)) {
-                                    // Concat all the orgs into a single 'name'
-                                    var name_parts = std.ArrayList([]const u8).init(my.aaa);
-                                    var sep: []const u8 = "";
-                                    for (n.orgs.items) |org| {
-                                        try name_parts.append(try std.fmt.allocPrint(my.aaa, "{s}{}", .{ sep, org }));
-                                        sep = " ";
-                                    }
-                                    const name = try std.mem.concat(my.aaa, u8, name_parts.items);
-
-                                    const range = dto.Range{
-                                        .start = dto.Position{ .line = @intCast(n.content_rows.begin), .character = @intCast(n.content_cols.begin) },
-                                        .end = dto.Position{ .line = @intCast(n.content_rows.end), .character = @intCast(n.content_cols.end) },
-                                    };
-                                    try my.symbols.append(dto.DocumentSymbol{
-                                        .name = name,
-                                        .range = range,
-                                        .selectionRange = range,
-                                    });
-                                }
-                            }
-                        }{ .aa = std.heap.ArenaAllocator.init(self.a) };
-                        cb.init();
-                        defer cb.deinit();
-
-                        try self.forest.tree.dfs(file.id, true, &cb);
-
-                        try server.send(cb.symbols.items);
-                    } else {
-                        try self.log.err("Could not find file {s}\n", .{filename});
-                        // &todo: Send error or null
-                        try server.send(&[_]dto.DocumentSymbol{});
-                    }
-                } else if (request.is("workspace/symbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;
 
-                    var cb = struct {
-                        const My = @This();
-                        const Symbols = std.ArrayList(dto.WorkspaceSymbol);
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+                    var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).init(aaa);
 
-                        query: []const u8,
-                        aa: std.heap.ArenaAllocator,
-
-                        aaa: std.mem.Allocator = undefined,
-                        symbols: Symbols = undefined,
-                        path: []const u8 = &.{},
-
-                        pub fn init(my: *My) void {
-                            my.aaa = my.aa.allocator();
-                            my.symbols = Symbols.init(my.aaa);
-                        }
-                        pub fn deinit(my: *@This()) void {
-                            my.aa.deinit();
+                    for (self.forest.chores.list.items) |chore| {
+                        if (rubr.slice.is_empty(chore.amps.items)) {
+                            try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
+                            continue;
                         }
 
-                        pub fn call(my: *@This(), entry: mero.Tree.Entry) !void {
-                            const n = entry.data;
-                            switch (n.type) {
-                                mero.Node.Type.Grove => {},
-                                mero.Node.Type.Folder => {},
-                                mero.Node.Type.File => {
-                                    my.path = n.path;
-                                },
-                                else => {
-                                    if (!rubr.slice.is_empty(n.orgs.items)) {
-                                        var name_parts = std.ArrayList([]const u8).init(my.aaa);
-                                        var sep: []const u8 = "";
-                                        for (n.orgs.items) |org| {
-                                            try name_parts.append(try std.fmt.allocPrint(my.aaa, "{s}{}", .{ sep, org }));
-                                            sep = " ";
-                                        }
-                                        const name = try std.mem.concat(my.aaa, u8, name_parts.items);
+                        const score: f32 = @floatCast(fuzz.distance(query, chore.str));
 
-                                        const score: f32 = @floatCast(fuzz.distance(my.query, name));
-
-                                        const range = dto.Range{
-                                            .start = dto.Position{ .line = @intCast(n.content_rows.begin), .character = @intCast(n.content_cols.begin) },
-                                            .end = dto.Position{ .line = @intCast(n.content_rows.end), .character = @intCast(n.content_cols.end) },
-                                        };
-                                        try my.symbols.append(dto.WorkspaceSymbol{
-                                            .name = name,
-                                            .location = dto.Location{
-                                                .uri = try std.mem.concat(my.aaa, u8, &[_][]const u8{ "file://", "/", my.path }),
-                                                .range = range,
-                                            },
-                                            .score = score,
-                                        });
-                                    }
-                                },
-                            }
-                        }
-                    }{
-                        .query = query,
-                        .aa = std.heap.ArenaAllocator.init(self.a),
-                    };
-                    cb.init();
-                    defer cb.deinit();
-
-                    if (reloadForest) {
-                        self.forest.reinit();
-                        try self.forest.load(self.config, self.options);
-                        reloadForest = false;
+                        const first_amp = &chore.amps.items[0];
+                        const last_amp = &chore.amps.items[chore.amps.items.len - 1];
+                        const range = dto.Range{
+                            .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
+                            .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
+                        };
+                        try workspace_symbols.append(dto.WorkspaceSymbol{
+                            .name = chore.str,
+                            .location = dto.Location{
+                                .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
+                                .range = range,
+                            },
+                            .score = score,
+                        });
                     }
-                    try self.forest.tree.dfsAll(true, &cb);
 
                     const ByScore = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {
@@ -252,9 +187,9 @@ pub const Lsp = struct {
                             return xx < yy;
                         }
                     };
-                    std.sort.block(dto.WorkspaceSymbol, cb.symbols.items, {}, ByScore.call);
+                    std.sort.block(dto.WorkspaceSymbol, workspace_symbols.items, {}, ByScore.call);
 
-                    try server.send(cb.symbols.items);
+                    try server.send(workspace_symbols.items);
                 } else {
                     try self.log.warning("Unhandled request '{s}'\n", .{request.method});
                 }

@@ -274,7 +274,6 @@ pub const Forest = struct {
                         my.path = n.path;
                         my.terms = &n.terms;
                         my.is_new_file = true;
-                        std.debug.print("\nStarted new file {s}\n", .{my.path});
                     },
                     else => {
                         defer my.is_new_file = false;
@@ -307,22 +306,16 @@ pub const Forest = struct {
                             if (!def.is_absolute) {
                                 try my.log.info("Making def '{}' absolute\n", .{def});
                                 var child_id = entry.id;
-                                std.debug.print("Start child_id {}\n", .{child_id});
                                 const maybe_parent_def: ?amp.Path = block: while (true) {
-                                    std.debug.print("\tLoop child_id {}\n", .{child_id});
                                     if (try my.tree.parent(child_id)) |parent| {
-                                        std.debug.print("\thas parent\n", .{});
                                         if (slice.first(parent.data.orgs.items)) |pdef| {
-                                            std.debug.print("\tparent has def\n", .{});
                                             // We are still collecting def info. If anything is present, it should be a def.
                                             std.debug.assert(pdef.is_absolute);
                                             break :block pdef;
                                         } else {
-                                            std.debug.print("\tparent has no def\n", .{});
                                             child_id = parent.id;
                                         }
                                     } else {
-                                        std.debug.print("\thas no parent\n", .{});
                                         break :block null;
                                     }
                                 };
@@ -343,15 +336,12 @@ pub const Forest = struct {
                         if (my.is_new_file) {
                             switch (n.type) {
                                 Node.Type.Paragraph => {
-                                    std.debug.print("Trying to copy APMs to File\n", .{});
                                     // AMPs on the first line are copied to the File as well
                                     if (try my.tree.parent(entry.id)) |parent|
                                         for (n.orgs.items) |org|
                                             try parent.data.orgs.append(try org.copy());
                                 },
-                                else => {
-                                    std.debug.print("Not copying data to File for {}\n", .{n.type});
-                                },
+                                else => {},
                             }
                         }
                     },
