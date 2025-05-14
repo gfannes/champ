@@ -66,6 +66,7 @@ pub const Lsp = struct {
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
                             .definitionProvider = true,
+                            .referencesProvider = true,
                             .workspace = dto.ServerCapabilities.Workspace{
                                 .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
                                     .supported = true,
@@ -82,6 +83,9 @@ pub const Lsp = struct {
                 } else if (request.is("shutdown")) {
                     try server.send(null);
                 } else if (request.is("textDocument/definition")) {
+                    // &cleanup common func between textDocument/definition and textDocument/references
+                    // &cleanup by moving some func to Chores
+
                     if (reloadForest) {
                         self.forest.reinit();
                         try self.forest.load(self.config, self.options);
@@ -135,6 +139,61 @@ pub const Lsp = struct {
                         const location = dto.Location{ .uri = uri, .range = range };
 
                         try server.send(location);
+                    } else {
+                        try server.send(null);
+                    }
+                } else if (request.is("textDocument/references")) {
+                    if (reloadForest) {
+                        self.forest.reinit();
+                        try self.forest.load(self.config, self.options);
+                        reloadForest = false;
+                    }
+
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+                    const position = params.position orelse return Error.ExpectedPosition;
+
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+
+                    const prefix = "file://";
+
+                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
+                        return Error.UnexpectedFilenameFormat;
+                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+                    const src_filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
+
+                    // Find Amp
+                    var maybe_amp: ?amp.Path = null;
+                    for (self.forest.chores.list.items) |chore| {
+                        if (!std.mem.endsWith(u8, src_filename, chore.path))
+                            continue;
+
+                        for (chore.amps.items) |e| {
+                            if (e.row == position.line and (e.cols.begin <= position.character and position.character <= e.cols.end)) {
+                                maybe_amp = e.path;
+                            }
+                        }
+                    }
+
+                    // Find all usage locations
+                    if (maybe_amp) |a| {
+                        var locations = std.ArrayList(dto.Location).init(aaa);
+                        for (self.forest.chores.list.items) |e| {
+                            for (e.amps.items) |ee| {
+                                if (a.is_fit(ee.path)) {
+                                    const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, e.path });
+                                    const range = dto.Range{
+                                        .start = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.begin) },
+                                        .end = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.end) },
+                                    };
+                                    const location = dto.Location{ .uri = uri, .range = range };
+                                    try locations.append(location);
+                                }
+                            }
+                        }
+                        try server.send(locations.items);
                     } else {
                         try server.send(null);
                     }

@@ -14,6 +14,7 @@ pub const Error = error{
 };
 
 // A Tree node that contains AMP info (both def and non-defs)
+// &cleanup naming conventions
 pub const Chore = struct {
     const Self = @This();
     const Amp = struct {
