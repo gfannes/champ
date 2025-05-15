@@ -148,6 +148,17 @@ pub const Chores = struct {
         return true;
     }
 
+    pub fn sortDefs(self: *Self) void {
+        const cmp = struct {
+            fn call(_: void, lhs: Def, rhs: Def) bool {
+                const lhs_is_template = lhs.amp.is_template();
+                const rhs_is_template = rhs.amp.is_template();
+                return if (lhs_is_template != rhs_is_template) lhs_is_template == false else std.mem.order(u8, lhs.str, rhs.str) == std.math.Order.lt;
+            }
+        }.call;
+        std.sort.block(Def, self.defs.items, {}, cmp);
+    }
+
     pub fn resolve(self: Self, path: *amp.Path) !bool {
         var maybe_fit_ix: ?usize = null;
         var is_ambiguous = false;

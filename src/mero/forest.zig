@@ -75,6 +75,8 @@ pub const Forest = struct {
 
         try self.collectDefs();
 
+        self.chores.sortDefs();
+
         try self.resolveAmps();
     }
 

@@ -131,6 +131,8 @@ pub const Lsp = struct {
                                 range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
                             }
                         }
+                    } else {
+                        std.debug.print("Could not find AMP at {s} {}\n", .{ src_filename, position });
                     }
 
                     if (dst_filename) |filename| {

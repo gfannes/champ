@@ -5,7 +5,7 @@
 
 Most agile projects should use only 3 statuses: `todo`, `wip` and `done`. All other labels should be additional aspects (tbd, dev, test, onhold, ...).
 
-### Next &!next!
+### Next
 Can be directly executed
 
 ### Blocked &!blocked

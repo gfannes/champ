@@ -32,15 +32,32 @@ pub const Path = struct {
         var rhs_rit = std.mem.reverseIterator(rhs.parts.items);
         var self_rit = std.mem.reverseIterator(self.parts.items);
         while (rhs_rit.nextPtr()) |rhs_part| {
-            const self_part = self_rit.nextPtr() orelse return false;
-            if (!std.mem.eql(u8, rhs_part.content, self_part.content))
-                return false;
+            const self_part: *const Part = self_rit.nextPtr() orelse return false;
+            if (self_part.is_template) {
+                if (std.mem.eql(u8, self_part.content, "status")) {
+                    if (std.mem.indexOf(u8, "(question)(todo)(next)(wip)(done)(callout)(forward)", rhs_part.content) == null)
+                        return false;
+                } else {
+                    // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
+                    return false;
+                }
+            } else {
+                if (!std.mem.eql(u8, rhs_part.content, self_part.content))
+                    return false;
+            }
         }
 
         if (rhs.is_absolute and self_rit.nextPtr() != null)
             return false;
 
         return true;
+    }
+
+    pub fn is_template(self: Self) bool {
+        for (self.parts.items) |part|
+            if (part.is_template)
+                return true;
+        return false;
     }
 
     // Assumes strange outlives Path
@@ -108,7 +125,8 @@ pub const Path = struct {
         var prefix: []const u8 = if (self.is_absolute) ":" else "";
         for (self.parts.items) |part| {
             const exclusive_str = if (part.is_exclusive) "!" else "";
-            try writer.print("{s}{s}{s}", .{ prefix, part.content, exclusive_str });
+            const template_str = if (part.is_template) "~" else "";
+            try writer.print("{s}{s}{s}{s}", .{ prefix, template_str, part.content, exclusive_str });
             prefix = ":";
         }
     }
@@ -118,10 +136,16 @@ pub const Path = struct {
 pub const Part = struct {
     content: []const u8,
     is_exclusive: bool = false,
+    is_template: bool = false,
 
     pub fn init(strange: *Strange) Part {
         const is_exclusive = strange.popCharBack('!');
-        return Part{ .content = strange.str(), .is_exclusive = is_exclusive };
+        const is_template = strange.popChar('~');
+        return Part{
+            .content = strange.str(),
+            .is_exclusive = is_exclusive,
+            .is_template = is_template,
+        };
     }
 };
 
@@ -142,6 +166,7 @@ test "amp" {
         .{ .repr = "&!:abc!:", .exp = "&!:abc!" },
         .{ .repr = "&!:a:b!:c", .exp = "&!:a:b!:c" },
         .{ .repr = "&!:a:b!:c:", .exp = "&!:a:b!:c" },
+        .{ .repr = "&!:status:~status", .exp = "&!:status:~status" },
     };
 
     for (scns) |scn| {

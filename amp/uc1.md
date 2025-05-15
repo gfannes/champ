@@ -38,6 +38,11 @@
 		- [x] Document symbols
 			- [x] Create string repr
 		- [x] Workspace symbols
+	- [*] Open Jira URL
+		- Support `~id` template
+			- `&!:~id=a3denc$,url=https://auro-3d.atlassian.net/browse/A3DENC-$`
+			- LSP's 'goto definition' must open the URL as well
+			- Match against templates after other matches fail
 - [x] Search smart-case
 	- Impl in rubr.fuzz based on casing of needle
 - [x] Reload when file is changed/created
@@ -45,6 +50,14 @@
 	- [x] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
 	- [ ] Create DSL for 'todo', 'wip' and 'next'
+		- Use the same marker as for Checkbox AMPs
+			- `.`: all
+			- ` `: todo
+			- `x`: done
+			- `/`: wip
+			- `*`: next
+			- `>`: fwd
+		- [x] Support `~status` template
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP UNRESOLVED
 	- [ ] Make this configurable
@@ -77,7 +90,10 @@
 	- [x] Find exact AMP that is meant
 		- [x] Inject AMP location from Node.line into Chores
 - [x] Support 'find references'
-- [ ] Must filter done items by default
-	- [ ] Could support searching all references
+- [*] Must filter done items by default
+	- [ ] Support searching all references with `.`
 - [x] Must only report nodes with an AMP tag
 - [x] Must support identifying next subtasks to work on
+- [ ] Support 'goto definition' for languages where an other LSP provides this func as well
+	- Relay requests from champ to this other LSP if champ does not find a reference
+	- Configure this in `~/.config/champ/config.zon` &done
