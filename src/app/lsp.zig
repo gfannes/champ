@@ -100,12 +100,8 @@ pub const Lsp = struct {
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
-                    const prefix = "file://";
-
-                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
-                        return Error.UnexpectedFilenameFormat;
-                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-                    const src_filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
+                    var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
 
                     // Find Amp
                     var maybe_amp: ?amp.Path = null;
@@ -136,7 +132,7 @@ pub const Lsp = struct {
                     }
 
                     if (dst_filename) |filename| {
-                        const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, filename });
+                        const uri = try pathToUri_(filename, aaa);
 
                         const location = dto.Location{ .uri = uri, .range = range };
 
@@ -159,12 +155,8 @@ pub const Lsp = struct {
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
-                    const prefix = "file://";
-
-                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
-                        return Error.UnexpectedFilenameFormat;
-                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-                    const src_filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
+                    var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
 
                     // Find Amp
                     var maybe_amp: ?amp.Path = null;
@@ -185,7 +177,7 @@ pub const Lsp = struct {
                         for (self.forest.chores.list.items) |e| {
                             for (e.amps.items) |ee| {
                                 if (a.is_fit(ee.path)) {
-                                    const uri = try std.mem.concat(aaa, u8, &[_][]const u8{ prefix, e.path });
+                                    const uri = try pathToUri_(e.path, aaa);
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.begin) },
                                         .end = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.end) },
@@ -209,16 +201,13 @@ pub const Lsp = struct {
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
 
-                    const prefix = "file://";
-                    if (!std.mem.startsWith(u8, textdoc.uri, prefix))
-                        return Error.UnexpectedFilenameFormat;
-
-                    var buffer: [std.fs.max_path_bytes]u8 = undefined;
-                    const filename = try std.fs.realpath(textdoc.uri[prefix.len..], &buffer);
-
                     var aa = std.heap.ArenaAllocator.init(self.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
+
+                    var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
+                    const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa);
+
                     var document_symbols = std.ArrayList(dto.DocumentSymbol).init(aaa);
 
                     for (self.forest.chores.list.items) |chore| {
@@ -310,5 +299,26 @@ pub const Lsp = struct {
                 }
             }
         }
+    }
+
+    // Converts a URI with format 'file:///home/geertf/a%20b.md' into '/home/geert/a b.md'
+    fn uriToPath_(uri: []const u8, buf: *[std.fs.max_path_bytes]u8, a: std.mem.Allocator) ![]const u8 {
+        const prefix = "file://";
+
+        if (!std.mem.startsWith(u8, uri, prefix))
+            return Error.UnexpectedFilenameFormat;
+
+        const size = std.mem.replacementSize(u8, uri[prefix.len..], "%20", " ");
+
+        const b = try a.alloc(u8, size);
+        defer a.free(b);
+
+        _ = std.mem.replace(u8, uri[prefix.len..], "%20", " ", b);
+
+        return try std.fs.realpath(b, buf);
+    }
+    fn pathToUri_(path: []const u8, a: std.mem.Allocator) ![]const u8 {
+        const prefix = "file://";
+        return try std.mem.concat(a, u8, &[_][]const u8{ prefix, path });
     }
 };
