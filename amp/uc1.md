@@ -74,6 +74,8 @@
 	- [x] Make app.Lsp symbols work with this
 		- [x] Add nodes during setup of Forest
 - [x] Support 'goto definition'
+	- [x] Find exact AMP that is meant
+		- [x] Inject AMP location from Node.line into Chores
 - [x] Support 'find references'
 - [ ] Must filter done items by default
 	- [ ] Could support searching all references
