@@ -330,7 +330,10 @@ pub const Forest = struct {
                                     if (try my.tree.parent(child_id)) |parent| {
                                         if (slice.first(parent.data.orgs.items)) |pdef| {
                                             // We are still collecting def info. If anything is present, it should be a def.
-                                            std.debug.assert(pdef.amp.is_absolute);
+                                            if (!pdef.amp.is_absolute) {
+                                                try my.log.err("Parent {} of {} in '{s}' is not absolute\n", .{ pdef.amp, def.amp, my.path });
+                                                return Error.ExpectedAbsoluteDef;
+                                            }
                                             break :block pdef.amp;
                                         } else {
                                             child_id = parent.id;

@@ -58,6 +58,7 @@
 			- `*`: next
 			- `>`: fwd
 		- [x] Support `~status` template
+		- [*] Check [Tasks.md](https://tasks.md/)
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP UNRESOLVED
 	- [ ] Make this configurable
