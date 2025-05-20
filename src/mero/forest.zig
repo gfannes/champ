@@ -331,7 +331,7 @@ pub const Forest = struct {
                                         if (slice.first(parent.data.orgs.items)) |pdef| {
                                             // We are still collecting def info. If anything is present, it should be a def.
                                             if (!pdef.amp.is_absolute) {
-                                                try my.log.err("Parent {} of {} in '{s}' is not absolute\n", .{ pdef.amp, def.amp, my.path });
+                                                try my.log.err("Parent '{}' of '{}' in '{s}' is not absolute, this should not happen\n", .{ pdef.amp, def.amp, my.path });
                                                 return Error.ExpectedAbsoluteDef;
                                             }
                                             break :block pdef.amp;
@@ -346,7 +346,8 @@ pub const Forest = struct {
                                     try def.amp.prepend(parent_def);
                                     try my.log.info("done '{}' '{}'\n", .{ def.amp, n.orgs.items[0] });
                                 } else {
-                                    try my.log.warning("Could not find parent def for '{}'\n", .{def.amp});
+                                    try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def.amp});
+                                    def.amp.is_absolute = true;
                                 }
                             }
 
