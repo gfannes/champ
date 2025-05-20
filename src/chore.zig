@@ -171,13 +171,21 @@ pub const Chores = struct {
         var maybe_match: ?Match = null;
 
         var is_ambiguous = false;
-        for (self.defs.items, 0..) |def, ix| {
-            if (def.amp.is_fit(path.*)) {
-                if (maybe_match) |match| {
-                    if (def.grove_id == grove_id and match.grove_id != grove_id) {
-                        // We found a match within the Grove of path and the previous match was outside this Grove: accept it.
-                    } else {
+        for (&[_]bool{ true, false }) |grove_id_must_match| {
+            if (grove_id_must_match == false and maybe_match != null)
+                // We found a match within the Grove of 'path': do not check for matches outside this Grove.
+                continue;
+
+            for (self.defs.items, 0..) |def, ix| {
+                // We first check for a match within the Grove of 'path', in a second iteration, we check for matches outside.
+                const grove_id_is_same = (def.grove_id == grove_id);
+                if (grove_id_must_match != grove_id_is_same)
+                    continue;
+
+                if (def.amp.is_fit(path.*)) {
+                    if (maybe_match) |match| {
                         if (!is_ambiguous) {
+                            // This is the first ambiguous match we find: report the initial match as well
                             const d = &self.defs.items[match.def_ix];
                             try self.log.warning("Ambiguous AMP found: '{}' fits with def '{}' from '{s}'\n", .{ path, def.amp, d.path });
                         }
@@ -185,8 +193,8 @@ pub const Chores = struct {
 
                         try self.log.warning("Ambiguous AMP found: '{}' fits with '{}' from '{s}'\n", .{ path, def.amp, def.path });
                     }
+                    maybe_match = Match{ .def_ix = ix, .grove_id = def.grove_id };
                 }
-                maybe_match = Match{ .def_ix = ix, .grove_id = def.grove_id };
             }
         }
 

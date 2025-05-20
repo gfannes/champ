@@ -38,7 +38,7 @@
 		- [x] Document symbols
 			- [x] Create string repr
 		- [x] Workspace symbols
-	- [*] Open Jira URL
+	- [ ] Open Jira URL
 		- Support `~id` template
 			- `&!:~id=a3denc$,url=https://auro-3d.atlassian.net/browse/A3DENC-$`
 			- LSP's 'goto definition' must open the URL as well
@@ -50,7 +50,7 @@
 - Support searching for next Chore to execute
 	- [x] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
-		- [*] Support for Markdown titles as well
+		- [ ] Support for Markdown titles as well
 	- [ ] Create DSL for 'todo', 'wip' and 'next'
 		- Use the same marker as for Checkbox AMPs
 			- `.`: all
@@ -60,17 +60,17 @@
 			- `*`: next
 			- `>`: fwd
 		- [x] Support `~status` template
-		- [*] Check [Tasks.md](https://tasks.md/)
-		- [*] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
+		- [ ] Check [Tasks.md](https://tasks.md/)
+		- [ ] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
 - [x] Support searching for unresolved AMPs
-	- [x] Add catch-all AMP UNRESOLVED
+	- [x] Add catch-all AMP '?'
 	- [ ] Make this configurable
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
-	- [ ] Reload when changed, check from time to time
+	- [*] Reload when changed, check from time to time
 
 # Annotate parts of source code with project and status tags &!annotate
-- [ ] Support aggregation of AMP tags
+- [*] Support aggregation of AMP tags
 	- [ ] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.

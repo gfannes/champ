@@ -237,7 +237,6 @@ pub const Forest = struct {
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     if (try my.chores.resolve(&path, grove_id)) {
-                                        try my.log.info("Could resolve '{}'\n", .{path});
                                         try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
