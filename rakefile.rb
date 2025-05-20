@@ -67,6 +67,7 @@ desc('Clean')
 task :clean do
     sh('xmake clean')
     FileUtils.rm_rf('target')
+    FileUtils.rm_rf('zig-out')
 end
 
 desc('Generate .clangd file')

@@ -1,5 +1,4 @@
 const std = @import("std");
-const ut = std.testing;
 
 pub const app = @import("app.zig");
 pub const tkn = @import("tkn.zig");
@@ -9,6 +8,7 @@ pub const chore = @import("chore.zig");
 pub const amp = @import("amp.zig");
 
 test {
+    const ut = std.testing;
     ut.refAllDecls(app);
     ut.refAllDecls(tkn);
     ut.refAllDecls(cfg);

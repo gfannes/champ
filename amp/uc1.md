@@ -97,4 +97,5 @@
 - [x] Must support identifying next subtasks to work on
 - [ ] Support 'goto definition' for languages where an other LSP provides this func as well
 	- Relay requests from champ to this other LSP if champ does not find a reference
+		- [*] Develop `muxls` as a separate LSP to deal with this
 	- Configure this in `~/.config/champ/config.zon` &done

@@ -94,6 +94,7 @@ pub const App = struct {
         self.config_loader = try cfg.Loader.init(self.gpaa);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
+        // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
         const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
         try cfg_loader.loadFromFile(config_fp);

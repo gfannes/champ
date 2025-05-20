@@ -9,8 +9,8 @@ pub const Loader = struct {
     aa: std.heap.ArenaAllocator,
 
     // We hold an std.heap.ArenaAllocator: do not move me once an ArenaAllocator.allocator() is created/used
-    pub fn init(ma: std.mem.Allocator) !Self {
-        return Self{ .aa = std.heap.ArenaAllocator.init(ma) };
+    pub fn init(a: std.mem.Allocator) !Self {
+        return Self{ .aa = std.heap.ArenaAllocator.init(a) };
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
@@ -35,14 +35,14 @@ pub const Loader = struct {
 
     // - Rework include extensions from 'md' to '.md'
     fn normalize(self: *Self) !void {
-        const ma = self.aa.allocator();
+        const a = self.aa.allocator();
         if (self.config) |config| {
             for (config.groves) |*grove| {
                 if (grove.include) |include| {
-                    const new_include = try ma.alloc([]const u8, include.len);
+                    const new_include = try a.alloc([]const u8, include.len);
                     for (include, 0..) |ext, ix| {
                         new_include[ix] = if (ext.len > 0 and ext[0] != '.')
-                            try std.mem.concat(ma, u8, &[_][]const u8{ ".", ext })
+                            try std.mem.concat(a, u8, &[_][]const u8{ ".", ext })
                         else
                             ext;
                     }
