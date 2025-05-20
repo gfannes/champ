@@ -37,7 +37,8 @@ pub const Loader = struct {
     fn normalize(self: *Self) !void {
         const a = self.aa.allocator();
         if (self.config) |config| {
-            for (config.groves) |*grove| {
+            for (config.groves, 0..) |*grove, id| {
+                grove.id = id;
                 if (grove.include) |include| {
                     const new_include = try a.alloc([]const u8, include.len);
                     for (include, 0..) |ext, ix| {
@@ -54,6 +55,8 @@ pub const Loader = struct {
 };
 
 pub const Grove = struct {
+    id: ?usize = null,
+
     name: []const u8,
     path: []const u8,
     include: ?[][]const u8 = null,

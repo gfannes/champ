@@ -110,6 +110,8 @@ pub const Node = struct {
     content_rows: index.Range = .{},
     content_cols: index.Range = .{},
 
+    grove_id: ?usize = null,
+
     a: std.mem.Allocator,
 
     pub fn init(a: std.mem.Allocator) Self {

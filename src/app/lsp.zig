@@ -254,22 +254,25 @@ pub const Lsp = struct {
                             continue;
                         }
 
-                        const score: f32 = @floatCast(fuzz.distance(query, chore.str));
+                        var skip_count: usize = undefined;
+                        const score: f32 = @floatCast(fuzz.distance(query, chore.str, &skip_count));
 
-                        const first_amp = &chore.amps.items[0];
-                        const last_amp = &chore.amps.items[chore.amps.items.len - 1];
-                        const range = dto.Range{
-                            .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
-                            .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
-                        };
-                        try workspace_symbols.append(dto.WorkspaceSymbol{
-                            .name = chore.str,
-                            .location = dto.Location{
-                                .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
-                                .range = range,
-                            },
-                            .score = score,
-                        });
+                        if (skip_count == 0) {
+                            const first_amp = &chore.amps.items[0];
+                            const last_amp = &chore.amps.items[chore.amps.items.len - 1];
+                            const range = dto.Range{
+                                .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
+                                .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
+                            };
+                            try workspace_symbols.append(dto.WorkspaceSymbol{
+                                .name = chore.str,
+                                .location = dto.Location{
+                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
+                                    .range = range,
+                                },
+                                .score = score,
+                            });
+                        }
                     }
 
                     const ByScore = struct {

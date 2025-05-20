@@ -61,8 +61,10 @@ pub const Def = struct {
     amp: amp.Path,
     str: []const u8,
     path: []const u8,
+    grove_id: usize,
     row: usize,
     cols: rubr.index.Range,
+
     pub fn write(self: Def, parent: *naft.Node) void {
         var n = parent.node("Def");
         defer n.deinit();
@@ -124,15 +126,16 @@ pub const Chores = struct {
     }
 
     // Keeps a shallow copy of 'def'
-    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, row: usize, cols: rubr.index.Range) !bool {
+    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !bool {
         const check_fit = struct {
             needle: *const amp.Path,
+            grove_id: usize,
             pub fn call(my: @This(), other: Def) bool {
-                return other.amp.is_fit(my.needle.*);
+                return other.amp.is_fit(my.needle.*) and my.grove_id == other.grove_id;
             }
-        }{ .needle = &def };
+        }{ .needle = &def, .grove_id = grove_id };
         if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
-            try self.log.warning("Definition '{}' is already present.\n", .{def});
+            try self.log.warning("Definition '{}' is already present in Grove {}.\n", .{ def, grove_id });
             return false;
         }
 
@@ -142,6 +145,7 @@ pub const Chores = struct {
             .amp = def,
             .str = try std.fmt.allocPrint(aaa, "{}", .{def}),
             .path = path,
+            .grove_id = grove_id,
             .row = row,
             .cols = cols,
         });
@@ -159,27 +163,38 @@ pub const Chores = struct {
         std.sort.block(Def, self.defs.items, {}, cmp);
     }
 
-    pub fn resolve(self: Self, path: *amp.Path) !bool {
-        var maybe_fit_ix: ?usize = null;
+    pub fn resolve(self: Self, path: *amp.Path, grove_id: usize) !bool {
+        const Match = struct {
+            def_ix: usize,
+            grove_id: usize,
+        };
+        var maybe_match: ?Match = null;
+
         var is_ambiguous = false;
         for (self.defs.items, 0..) |def, ix| {
             if (def.amp.is_fit(path.*)) {
-                if (maybe_fit_ix) |fit_ix| {
-                    if (!is_ambiguous)
-                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, self.defs.items[fit_ix] });
-                    is_ambiguous = true;
+                if (maybe_match) |match| {
+                    if (def.grove_id == grove_id and match.grove_id != grove_id) {
+                        // We found a match within the Grove of path and the previous match was outside this Grove: accept it.
+                    } else {
+                        if (!is_ambiguous) {
+                            const d = &self.defs.items[match.def_ix];
+                            try self.log.warning("Ambiguous AMP found: '{}' fits with def '{}' from '{s}'\n", .{ path, def.amp, d.path });
+                        }
+                        is_ambiguous = true;
 
-                    try self.log.warning("Ambiguous AMP found: '{}' fits with '{}'\n", .{ path, def.amp });
+                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}' from '{s}'\n", .{ path, def.amp, def.path });
+                    }
                 }
-                maybe_fit_ix = ix;
+                maybe_match = Match{ .def_ix = ix, .grove_id = def.grove_id };
             }
         }
 
         if (is_ambiguous)
             return false;
 
-        if (maybe_fit_ix) |fit_ix| {
-            const def = self.defs.items[fit_ix];
+        if (maybe_match) |match| {
+            const def = self.defs.items[match.def_ix];
             if (path.is_absolute) {
                 if (path.parts.items.len != def.amp.parts.items.len) {
                     try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def.amp });

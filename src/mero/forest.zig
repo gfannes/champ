@@ -24,6 +24,7 @@ pub const Error = error{
     ExpectedAtLeastOneGrove,
     CouldNotParseAmp,
     CatchAllAmpAlreadyExists,
+    ExpectedGroveId,
 };
 
 pub const Forest = struct {
@@ -178,6 +179,7 @@ pub const Forest = struct {
                         n.path = try n.a.dupe(u8, path);
                         n.language = language;
                         n.content = try file.readToEndAlloc(n.a, std.math.maxInt(usize));
+                        n.grove_id = my.cfg_grove.id;
 
                         var parser = try mero.Parser.init(entry.id, my.tree, my.tree.a);
                         defer parser.deinit();
@@ -192,7 +194,7 @@ pub const Forest = struct {
     };
 
     fn resolveAmps(self: *Self) !void {
-        try self.chores.setupCatchAll("UNRESOLVED");
+        try self.chores.setupCatchAll("?");
 
         var cb = struct {
             const My = @This();
@@ -204,6 +206,7 @@ pub const Forest = struct {
 
             terms: *const Terms = undefined,
             path: []const u8 = &.{},
+            grove_id: ?usize = null,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
@@ -215,6 +218,9 @@ pub const Forest = struct {
                     Node.Type.File => {
                         my.path = n.path;
                         my.terms = &n.terms;
+                        if (n.grove_id == null)
+                            return Error.ExpectedGroveId;
+                        my.grove_id = n.grove_id;
                     },
                     else => {
                         var line: usize = n.content_rows.begin;
@@ -229,7 +235,8 @@ pub const Forest = struct {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (!path.is_definition) {
-                                    if (try my.chores.resolve(&path)) {
+                                    const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
+                                    if (try my.chores.resolve(&path, grove_id)) {
                                         try my.log.info("Could resolve '{}'\n", .{path});
                                         try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
@@ -271,6 +278,7 @@ pub const Forest = struct {
             terms: ?*const Terms = null,
             path: []const u8 = &.{},
             is_new_file: bool = false,
+            grove_id: ?usize = null,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
@@ -285,6 +293,9 @@ pub const Forest = struct {
                         my.path = n.path;
                         my.terms = &n.terms;
                         my.is_new_file = true;
+                        if (n.grove_id == null)
+                            return Error.ExpectedGroveId;
+                        my.grove_id = n.grove_id;
                     },
                     else => {
                         defer my.is_new_file = false;
@@ -352,7 +363,8 @@ pub const Forest = struct {
                             }
 
                             // Collect all defs in a separate struct
-                            if (!try my.chores.appendDef(def.amp, my.path, def.pos.row, def.pos.cols)) {
+                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
+                            if (!try my.chores.appendDef(def.amp, my.path, grove_id, def.pos.row, def.pos.cols)) {
                                 try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }

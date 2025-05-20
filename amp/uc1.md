@@ -10,7 +10,7 @@
 		- [x] Add AMPs from first line to File
 - Describe these subtasks in Markdown
 - List project breakdown from CLI
-	- [ ] Filter-out tags that do not match
+	- [x] Filter-out tags that do not match
 		- Update rubr.fuzz
 	- [x] Sort by fuzzy match score
 - [ ] Add 'fix' mode to champ
@@ -46,6 +46,7 @@
 - [x] Search smart-case
 	- Impl in rubr.fuzz based on casing of needle
 - [x] Reload when file is changed/created
+- [x] Allow ambiguous resolving when only a single match is found within its own Grove
 - Support searching for next Chore to execute
 	- [x] Interpret '[?]' as AMP
 		- Discriminate between Markdown and Wiki links
