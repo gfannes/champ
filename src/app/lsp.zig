@@ -109,9 +109,9 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        for (chore.amps.items) |e| {
-                            if (e.row == position.line and (e.cols.begin <= position.character and position.character <= e.cols.end)) {
-                                maybe_amp = e.path;
+                        for (chore.parts.items) |part| {
+                            if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                                maybe_amp = part.path;
                             }
                         }
                     }
@@ -164,9 +164,9 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        for (chore.amps.items) |e| {
-                            if (e.row == position.line and (e.cols.begin <= position.character and position.character <= e.cols.end)) {
-                                maybe_amp = e.path;
+                        for (chore.parts.items) |part| {
+                            if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                                maybe_amp = part.path;
                             }
                         }
                     }
@@ -175,12 +175,12 @@ pub const Lsp = struct {
                     if (maybe_amp) |a| {
                         var locations = std.ArrayList(dto.Location).init(aaa);
                         for (self.forest.chores.list.items) |e| {
-                            for (e.amps.items) |ee| {
-                                if (a.is_fit(ee.path)) {
+                            for (e.parts.items) |part| {
+                                if (a.is_fit(part.path)) {
                                     const uri = try pathToUri_(e.path, aaa);
                                     const range = dto.Range{
-                                        .start = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.begin) },
-                                        .end = dto.Position{ .line = @intCast(ee.row), .character = @intCast(ee.cols.end) },
+                                        .start = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.begin) },
+                                        .end = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.end) },
                                     };
                                     const location = dto.Location{ .uri = uri, .range = range };
                                     try locations.append(location);
@@ -214,13 +214,13 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.slice.is_empty(chore.amps.items)) {
+                        if (rubr.slice.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
 
-                        const first_amp = &chore.amps.items[0];
-                        const last_amp = &chore.amps.items[chore.amps.items.len - 1];
+                        const first_amp = &chore.parts.items[0];
+                        const last_amp = &chore.parts.items[chore.parts.items.len - 1];
                         const range = dto.Range{
                             .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                             .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
@@ -249,7 +249,7 @@ pub const Lsp = struct {
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).init(aaa);
 
                     for (self.forest.chores.list.items) |chore| {
-                        if (rubr.slice.is_empty(chore.amps.items)) {
+                        if (rubr.slice.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }
@@ -258,8 +258,8 @@ pub const Lsp = struct {
                         const score: f32 = @floatCast(fuzz.distance(query, chore.str, &skip_count));
 
                         if (skip_count == 0) {
-                            const first_amp = &chore.amps.items[0];
-                            const last_amp = &chore.amps.items[chore.amps.items.len - 1];
+                            const first_amp = &chore.parts.items[0];
+                            const last_amp = &chore.parts.items[chore.parts.items.len - 1];
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },

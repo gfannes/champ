@@ -12,19 +12,20 @@ const mero = @import("mero.zig");
 pub const Error = error{
     CouldNotParseAmp,
     CouldNotAppendCatchall,
+    ExpectedNoCatchAll,
 };
 
 // A Tree node that contains AMP info (both def and non-defs)
 // &cleanup naming conventions
 pub const Chore = struct {
     const Self = @This();
-    const Amp = struct {
+    const Part = struct {
         path: amp.Path,
         str: []const u8,
         row: usize,
         cols: rubr.index.Range,
-        pub fn write(self: Amp, parent: *naft.Node) void {
-            var n = parent.node("Amp");
+        pub fn write(self: Part, parent: *naft.Node) void {
+            var n = parent.node("Chore.Part");
             defer n.deinit();
             n.attr("str", self.str);
             n.attr("row", self.row);
@@ -32,18 +33,18 @@ pub const Chore = struct {
             n.attr("cols.end", self.cols.end);
         }
     };
-    const Amps = std.ArrayList(Amp);
+    const Parts = std.ArrayList(Part);
 
     node_id: usize,
     path: []const u8 = &.{},
     str: []const u8 = &.{},
-    amps: Amps,
+    parts: Parts,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
-        return Self{ .node_id = node_id, .amps = Amps.init(a) };
+        return Self{ .node_id = node_id, .parts = Parts.init(a) };
     }
     pub fn deinit(self: *Self) void {
-        self.amps.deinit();
+        self.parts.deinit();
         self.defs.deinit();
     }
 
@@ -53,7 +54,7 @@ pub const Chore = struct {
         n.attr("id", self.node_id);
         if (self.path.len > 0)
             n.attr("path", self.path);
-        for (self.amps.items) |e|
+        for (self.parts.items) |e|
             e.write(&n);
     }
 };
@@ -84,9 +85,24 @@ pub const Def = struct {
     }
 };
 
+pub const Amp = struct {
+    pub const Ix = rubr.index.Ix(@This());
+
+    path: amp.Path,
+    def: Def.Ix,
+
+    pub fn write(self: Amp, parent: *naft.Node) void {
+        var n = parent.node("Amp");
+        defer n.deinit();
+        n.attr("path", self.path);
+        n.attr("def", self.def);
+    }
+};
+
 // Keeps track of all AMP info and its string repr without the need for tree traversal
 pub const Chores = struct {
     const Self = @This();
+    const Amps = std.ArrayList(Amp);
     const List = std.ArrayList(Chore);
     const Defs = std.ArrayList(Def);
     const Catchall = struct {
@@ -99,6 +115,8 @@ pub const Chores = struct {
     log: *const Log,
 
     aa: std.heap.ArenaAllocator,
+    // All resolved (non-template) AMPs
+    amps: Amps,
     list: List,
     defs: Defs,
     catchall: ?Catchall = null,
@@ -110,6 +128,7 @@ pub const Chores = struct {
             .log = log,
             // Do not use the arena allocator here since Self will still be moved
             .aa = std.heap.ArenaAllocator.init(a),
+            .amps = Amps.init(a),
             .list = List.init(a),
             .defs = Defs.init(a),
             .tmp_concat = TmpConcat.init(a),
@@ -117,28 +136,32 @@ pub const Chores = struct {
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
+        self.amps.deinit();
         self.list.deinit();
-        for (self.defs.items) |*def|
-            def.deinit();
         self.defs.deinit();
         self.tmp_concat.deinit();
     }
 
     pub fn setupCatchAll(self: *Self, name: []const u8) !void {
+        if (self.catchall != null)
+            return Error.ExpectedNoCatchAll;
+
         const aaa = self.aa.allocator();
 
-        const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&!:", name });
+        const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&:", name });
 
         var strange = Strange{ .content = content };
         const a = try amp.Path.parse(&strange, aaa) orelse return Error.CouldNotParseAmp;
 
-        const ix = try self.appendDef(a, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
+        const def_ix = Def.Ix.init(self.defs.items.len);
+        _ = try self.appendDef(a, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
 
-        self.catchall = Catchall{ .amp = a, .str = content, .ix = ix };
+        self.catchall = Catchall{ .amp = a, .str = content, .ix = def_ix };
     }
 
-    // Takes ownership of def
-    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Def.Ix {
+    // Takes deep copy of def
+    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Amp.Ix {
+        try self.log.info("appendDef() '{}'\n", .{def});
         const check_fit = struct {
             needle: *const amp.Path,
             grove_id: usize,
@@ -152,30 +175,39 @@ pub const Chores = struct {
         }
 
         const aaa = self.aa.allocator();
-        const ix: Def.Ix = .{ .ix = self.defs.items.len };
+
+        const def_ix = Def.Ix.init(self.defs.items.len);
         try self.defs.append(Def{
-            .amp = def,
+            .amp = try def.copy(aaa),
             .str = try std.fmt.allocPrint(aaa, "{}", .{def}),
             .path = path,
             .grove_id = grove_id,
             .row = row,
             .cols = cols,
         });
-        return ix;
+
+        if (def.is_template())
+            // Templates are not added to the list of resolved AMPs
+            return null;
+
+        const amp_ix = Amp.Ix.init(self.amps.items.len);
+        var a = try def.copy(aaa);
+        a.is_definition = false;
+        try self.amps.append(Amp{ .path = a, .def = def_ix });
+
+        return amp_ix;
     }
 
-    pub fn sortDefs(self: *Self) void {
-        const cmp = struct {
-            fn call(_: void, lhs: Def, rhs: Def) bool {
-                const lhs_is_template = lhs.amp.is_template();
-                const rhs_is_template = rhs.amp.is_template();
-                return if (lhs_is_template != rhs_is_template) lhs_is_template == false else std.mem.order(u8, lhs.str, rhs.str) == std.math.Order.lt;
+    pub fn resolve(self: *Self, path: *amp.Path, grove_id: usize) !?Amp.Ix {
+        // Find match in already resolved AMPs
+        for (self.amps.items, 0..) |e, ix| {
+            if (e.path.is_fit(path.*)) {
+                try path.extend(e.path);
+                return Amp.Ix.init(ix);
             }
-        }.call;
-        std.sort.block(Def, self.defs.items, {}, cmp);
-    }
+        }
 
-    pub fn resolve(self: Self, path: *amp.Path, grove_id: usize) !?Def.Ix {
+        // No direct match found: find a matching def
         const Match = struct {
             ix: Def.Ix,
             grove_id: usize,
@@ -213,6 +245,9 @@ pub const Chores = struct {
         if (is_ambiguous)
             return null;
 
+        const aaa = self.aa.allocator();
+
+        const amp_ix = Amp.Ix.init(self.amps.items.len);
         if (maybe_match) |match| {
             const def = match.ix.cptr(self.defs.items);
             if (path.is_absolute) {
@@ -220,25 +255,25 @@ pub const Chores = struct {
                     try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def.amp });
                     return null;
                 }
-                return match.ix;
             } else {
-                const count_to_add = def.amp.parts.items.len - path.parts.items.len;
-                const new_parts = try path.parts.addManyAt(0, count_to_add);
-                std.mem.copyForwards(amp.Part, new_parts, def.amp.parts.items[0..count_to_add]);
-                path.is_absolute = true;
-                return match.ix;
+                try path.extend(def.amp);
+                path.is_definition = false;
             }
+            try self.amps.append(Amp{ .path = try path.copy(aaa), .def = match.ix });
         } else {
             if (self.catchall) |catchall| {
-                const new_parts = try path.parts.addManyAt(0, catchall.amp.parts.items.len);
-                std.mem.copyForwards(amp.Part, new_parts, catchall.amp.parts.items);
+                try path.prepend(catchall.amp);
                 path.is_absolute = true;
-                return catchall.ix;
+                path.is_definition = false;
+
+                try self.amps.append(Amp{ .path = try path.copy(aaa), .def = catchall.ix });
             } else {
                 try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{path});
                 return null;
             }
         }
+
+        return amp_ix;
     }
 
     // Return true if tree[node_id] is an actual Chore and was thus added
@@ -250,8 +285,8 @@ pub const Chores = struct {
         try self.tmp_concat.resize(0);
         var sep: []const u8 = "";
         for (node.orgs.items) |org| {
-            const def = org.ix.cptr(self.defs.items);
-            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, def.amp }));
+            const a = org.ix.cptr(self.amps.items);
+            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.path }));
             sep = " ";
         }
 
@@ -270,8 +305,8 @@ pub const Chores = struct {
                 // Drop the sep
                 str.ptr += 1;
 
-            const def = org.ix.cptr(self.defs.items);
-            try chore.amps.append(Chore.Amp{ .path = def.amp, .str = str, .row = org.pos.row, .cols = org.pos.cols });
+            const a = org.ix.cptr(self.amps.items);
+            try chore.parts.append(Chore.Part{ .path = a.path, .str = str, .row = org.pos.row, .cols = org.pos.cols });
         }
 
         // Lookup path
@@ -297,11 +332,14 @@ pub const Chores = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chores");
         defer n.deinit();
-        for (self.defs.items) |def| {
-            def.write(&n);
+        for (self.defs.items) |e| {
+            e.write(&n);
         }
-        for (self.list.items) |chore| {
-            chore.write(&n);
+        for (self.amps.items) |e| {
+            e.write(&n);
+        }
+        for (self.list.items) |e| {
+            e.write(&n);
         }
     }
 };

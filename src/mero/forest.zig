@@ -76,8 +76,6 @@ pub const Forest = struct {
 
         try self.collectDefs();
 
-        self.chores.sortDefs();
-
         try self.resolveAmps();
     }
 
@@ -234,16 +232,14 @@ pub const Forest = struct {
                             if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox) {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                defer path.deinit();
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     if (try my.chores.resolve(&path, grove_id)) |ix| {
                                         try n.orgs.append(mero.Node.Org{ .ix = ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
-                                        path.deinit();
                                     }
-                                } else {
-                                    path.deinit();
                                 }
                             } else if (term.kind == Term.Kind.Newline) {
                                 line += term.word.len;
@@ -314,19 +310,18 @@ pub const Forest = struct {
                                 var strange = Strange{ .content = term.word };
 
                                 var def = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                defer def.deinit();
                                 if (def.is_definition) {
                                     if (n.def != null)
                                         return Error.OnlyOneDefAllowed;
-                                    try my.log.info("Found def '{}'\n", .{def});
                                     // Make the def amp absolute, if necessary
                                     if (!def.is_absolute) {
-                                        try my.log.info("Making def '{}' absolute\n", .{def});
                                         var child_id = entry.id;
                                         const maybe_parent_def: ?amp.Path = block: while (true) {
                                             if (try my.tree.parent(child_id)) |parent| {
                                                 if (parent.data.def) |d| {
-                                                    const pdef = d.ix.cptr(my.chores.defs.items);
-                                                    break :block pdef.amp;
+                                                    const pdef = d.ix.cptr(my.chores.amps.items);
+                                                    break :block pdef.path;
                                                 } else {
                                                     child_id = parent.id;
                                                 }
@@ -336,6 +331,7 @@ pub const Forest = struct {
                                         };
                                         if (maybe_parent_def) |parent_def| {
                                             try def.prepend(parent_def);
+                                            def.is_definition = true;
                                         } else {
                                             try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def});
                                             def.is_absolute = true;
@@ -350,8 +346,6 @@ pub const Forest = struct {
                                     } else {
                                         try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                                     }
-                                } else {
-                                    def.deinit();
                                 }
                             } else if (term.kind == Term.Kind.Newline) {
                                 line += term.word.len;
@@ -362,10 +356,9 @@ pub const Forest = struct {
                         if (my.is_new_file) {
                             switch (n.type) {
                                 Node.Type.Paragraph => {
-                                    // AMPs on the first line are copied to the File as well
+                                    // A def on the first line is copied to the File as well
                                     if (try my.tree.parent(entry.id)) |parent|
-                                        for (n.orgs.items) |org|
-                                            try parent.data.orgs.append(org);
+                                        parent.data.def = n.def;
                                 },
                                 else => {},
                             }

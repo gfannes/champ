@@ -83,11 +83,11 @@ pub const Node = struct {
         cols: rubr.index.Range,
     };
     pub const Amp = struct {
-        ix: rubr.index.Ix(chore.Def),
+        ix: chore.Amp.Ix,
         pos: Pos,
     };
     pub const Org = struct {
-        ix: rubr.index.Ix(chore.Def),
+        ix: chore.Amp.Ix,
         pos: Pos,
     };
     const Orgs = std.ArrayList(Org);
@@ -122,14 +122,10 @@ pub const Node = struct {
         };
     }
     pub fn deinit(self: *Self) void {
-        const array_lists = .{
-            &self.terms,
-        };
-        inline for (array_lists) |al| {
-            for (al.items) |*e|
-                e.deinit();
-            al.deinit();
-        }
+        self.orgs.deinit();
+        for (self.terms.items) |*item|
+            item.deinit();
+        self.terms.deinit();
         self.a.free(self.path);
         self.a.free(self.content);
     }

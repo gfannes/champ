@@ -3,6 +3,11 @@ const std = @import("std");
 const rubr = @import("rubr");
 const Strange = rubr.strange.Strange;
 
+pub const Error = error{
+    CannotExtendAbsolutePath,
+    CannotShrink,
+};
+
 pub const Path = struct {
     const Self = @This();
     const Parts = std.ArrayList(Part);
@@ -17,8 +22,8 @@ pub const Path = struct {
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
     }
-    pub fn copy(self: Path) !Path {
-        var res = Path.init(self.parts.allocator);
+    pub fn copy(self: Path, a: std.mem.Allocator) !Path {
+        var res = Path.init(a);
         res.is_definition = self.is_definition;
         res.is_absolute = self.is_absolute;
         for (self.parts.items) |part|
@@ -114,6 +119,20 @@ pub const Path = struct {
         self.is_absolute = prefix.is_absolute;
         // Assumes Part is POD
         try self.parts.insertSlice(0, prefix.parts.items);
+    }
+
+    pub fn extend(self: *Self, rhs: Self) !void {
+        if (self.is_absolute) {
+            if (self.parts.items.len != rhs.parts.items.len)
+                return Error.CannotExtendAbsolutePath;
+        } else {
+            if (rhs.parts.items.len < self.parts.items.len)
+                return Error.CannotShrink;
+            self.is_definition = rhs.is_definition;
+            self.is_absolute = rhs.is_absolute;
+            const count_to_add = rhs.parts.items.len - self.parts.items.len;
+            try self.parts.insertSlice(0, rhs.parts.items[0..count_to_add]);
+        }
     }
 
     pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
