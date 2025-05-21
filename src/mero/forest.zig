@@ -236,8 +236,8 @@ pub const Forest = struct {
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                                    if (try my.chores.resolve(&path, grove_id)) {
-                                        try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                    if (try my.chores.resolve(&path, grove_id)) |ix| {
+                                        try n.orgs.append(mero.Node.Org{ .ix = ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
                                         path.deinit();
@@ -302,6 +302,7 @@ pub const Forest = struct {
                         // Search n.line for a def AMP
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.index.Range = .{};
+
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const terms = my.terms orelse unreachable;
                             const term = &terms.items[term_ix];
@@ -312,59 +313,49 @@ pub const Forest = struct {
                             if (term.kind == Term.Kind.Amp) {
                                 var strange = Strange{ .content = term.word };
 
-                                var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
-                                if (path.is_definition) {
-                                    if (n.orgs.items.len > 0)
+                                var def = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                if (def.is_definition) {
+                                    if (n.def != null)
                                         return Error.OnlyOneDefAllowed;
-                                    try my.log.info("Found def '{}'\n", .{path});
-                                    try n.orgs.append(mero.Node.Org{ .amp = path, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                    try my.log.info("Found def '{}'\n", .{def});
+                                    // Make the def amp absolute, if necessary
+                                    if (!def.is_absolute) {
+                                        try my.log.info("Making def '{}' absolute\n", .{def});
+                                        var child_id = entry.id;
+                                        const maybe_parent_def: ?amp.Path = block: while (true) {
+                                            if (try my.tree.parent(child_id)) |parent| {
+                                                if (parent.data.def) |d| {
+                                                    const pdef = d.ix.cptr(my.chores.defs.items);
+                                                    break :block pdef.amp;
+                                                } else {
+                                                    child_id = parent.id;
+                                                }
+                                            } else {
+                                                break :block null;
+                                            }
+                                        };
+                                        if (maybe_parent_def) |parent_def| {
+                                            try def.prepend(parent_def);
+                                        } else {
+                                            try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def});
+                                            def.is_absolute = true;
+                                        }
+                                    }
+
+                                    // Collect all defs in a separate struct
+                                    const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
+                                    const pos = mero.Node.Pos{ .row = line, .cols = cols };
+                                    if (try my.chores.appendDef(def, my.path, grove_id, pos.row, pos.cols)) |ix| {
+                                        n.def = mero.Node.Amp{ .ix = ix, .pos = pos };
+                                    } else {
+                                        try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                                    }
                                 } else {
-                                    path.deinit();
+                                    def.deinit();
                                 }
                             } else if (term.kind == Term.Kind.Newline) {
                                 line += term.word.len;
                                 cols = .{};
-                            }
-                        }
-
-                        // Process the def:
-                        // - Make it absolute
-                        // - Check for duplicates
-                        // - Store in chores for later use
-                        if (slice.firstPtr(n.orgs.items)) |def| {
-                            // Make the def amp absolute, if necessary
-                            if (!def.amp.is_absolute) {
-                                try my.log.info("Making def '{}' absolute\n", .{def.amp});
-                                var child_id = entry.id;
-                                const maybe_parent_def: ?amp.Path = block: while (true) {
-                                    if (try my.tree.parent(child_id)) |parent| {
-                                        if (slice.first(parent.data.orgs.items)) |pdef| {
-                                            // We are still collecting def info. If anything is present, it should be a def.
-                                            if (!pdef.amp.is_absolute) {
-                                                try my.log.err("Parent '{}' of '{}' in '{s}' is not absolute, this should not happen\n", .{ pdef.amp, def.amp, my.path });
-                                                return Error.ExpectedAbsoluteDef;
-                                            }
-                                            break :block pdef.amp;
-                                        } else {
-                                            child_id = parent.id;
-                                        }
-                                    } else {
-                                        break :block null;
-                                    }
-                                };
-                                if (maybe_parent_def) |parent_def| {
-                                    try def.amp.prepend(parent_def);
-                                    try my.log.info("done '{}' '{}'\n", .{ def.amp, n.orgs.items[0] });
-                                } else {
-                                    try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def.amp});
-                                    def.amp.is_absolute = true;
-                                }
-                            }
-
-                            // Collect all defs in a separate struct
-                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                            if (!try my.chores.appendDef(def.amp, my.path, grove_id, def.pos.row, def.pos.cols)) {
-                                try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
 
@@ -374,7 +365,7 @@ pub const Forest = struct {
                                     // AMPs on the first line are copied to the File as well
                                     if (try my.tree.parent(entry.id)) |parent|
                                         for (n.orgs.items) |org|
-                                            try parent.data.orgs.append(try org.copy());
+                                            try parent.data.orgs.append(org);
                                 },
                                 else => {},
                             }

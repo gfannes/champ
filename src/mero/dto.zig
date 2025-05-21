@@ -5,6 +5,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Parser = @import("parser.zig").Parser;
+const chore = @import("../chore.zig");
 
 const rubr = @import("rubr");
 const naft = rubr.naft;
@@ -81,15 +82,13 @@ pub const Node = struct {
         row: usize,
         cols: rubr.index.Range,
     };
-    pub const Org = struct {
-        amp: amp.Path,
+    pub const Amp = struct {
+        ix: rubr.index.Ix(chore.Def),
         pos: Pos,
-        pub fn deinit(org: *Org) void {
-            org.amp.deinit();
-        }
-        pub fn copy(org: Org) !Org {
-            return Org{ .amp = try org.amp.copy(), .pos = org.pos };
-        }
+    };
+    pub const Org = struct {
+        ix: rubr.index.Ix(chore.Def),
+        pos: Pos,
     };
     const Orgs = std.ArrayList(Org);
 
@@ -99,6 +98,7 @@ pub const Node = struct {
     language: ?Language = null,
 
     // Will contain resolved Amps, only the first can be a definition
+    def: ?Amp = null,
     orgs: Orgs,
 
     // &perf: Only activate relevant fields depending on type
@@ -123,7 +123,6 @@ pub const Node = struct {
     }
     pub fn deinit(self: *Self) void {
         const array_lists = .{
-            &self.orgs,
             &self.terms,
         };
         inline for (array_lists) |al| {
