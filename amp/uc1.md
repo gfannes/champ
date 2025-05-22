@@ -106,3 +106,6 @@
 	- Relay requests from champ to this other LSP if champ does not find a reference
 		- [*] Develop `muxls` as a separate LSP to deal with this
 	- Configure this in `~/.config/champ/config.zon` &done
+
+- Support env var `helix_filepath` in Helix for `%sh{}` commands
+	- Necessary to get 'daily' working properly
