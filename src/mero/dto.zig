@@ -28,6 +28,7 @@ pub const Term = struct {
         Link,
         Bullet,
         Checkbox,
+        Capital,
         Code,
         Formula,
         Comment,

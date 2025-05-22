@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const naft = @import("rubr").naft;
+const rubr = @import("rubr");
+const naft = rubr.naft;
 
 const tkn = @import("../tkn.zig");
 
@@ -199,6 +200,11 @@ pub const Parser = struct {
 
                 try text.commit();
                 try self.appendToLine(n, comment);
+                continue;
+            }
+            if (self.pop_md_capital_term()) |capital| {
+                try text.commit();
+                try self.appendToLine(n, capital);
                 continue;
             }
 
@@ -523,6 +529,20 @@ pub const Parser = struct {
             }
 
             return formula;
+        }
+        return null;
+    }
+    fn pop_md_capital_term(self: *Self) ?Term {
+        if (self.tokenizer.peek()) |token| {
+            if (token.symbol != tkn.Symbol.Word)
+                return null;
+            if (!rubr.strings.contains(u8, &[_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FWD" }, token.word))
+                return null;
+
+            const capital = Term{ .word = token.word, .kind = Term.Kind.Capital };
+            self.tokenizer.commit_peek();
+
+            return capital;
         }
         return null;
     }

@@ -306,7 +306,7 @@ pub const Forest = struct {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 
-                            if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox) {
+                            if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox or term.kind == Term.Kind.Capital) {
                                 var strange = Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 defer path.deinit();

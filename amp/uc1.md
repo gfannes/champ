@@ -60,8 +60,8 @@
 			- `*`: next
 			- `>`: fwd
 		- [x] Support `~status` template
-		- [ ] Check [Tasks.md](https://tasks.md/)
-		- [ ] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
+		- [x] Check [Tasks.md](https://tasks.md/)
+		- [x] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP '?'
 	- [ ] Make this configurable
@@ -78,7 +78,7 @@
 	- [x] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
-	- [*] Trailing ! indicates dependency: current Chore _uses_ AMP
+	- [/] Trailing ! indicates dependency: current Chore _uses_ AMP
 		- Default behavior is that current Chore _is part of_ AMP
 		- Is this the same as a reverse tag?
 	- [ ] Support Markdown and Wiki links to other files
@@ -107,5 +107,6 @@
 		- [*] Develop `muxls` as a separate LSP to deal with this
 	- Configure this in `~/.config/champ/config.zon` &done
 
-- Support env var `helix_filepath` in Helix for `%sh{}` commands
+- [ ] Support env var `helix_filepath` in Helix for `%sh{}` commands
 	- Necessary to get 'daily' working properly
+- [ ] Support annotating skill level for a Chore

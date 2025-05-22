@@ -104,6 +104,7 @@ pub const Path = struct {
                     'x' => "done",
                     '?' => "question",
                     '!' => "callout",
+                    '>' => "fwd",
                     else => "unknown",
                 };
                 var s = Strange{ .content = content };
@@ -114,6 +115,31 @@ pub const Path = struct {
             }
 
             path.deinit();
+        } else if (rubr.strings.contains(u8, &[_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FWD" }, strange.str())) {
+            var path = Path.init(a);
+            errdefer path.deinit();
+
+            const content: []const u8 = if (strange.popStr("TODO"))
+                "todo"
+            else if (strange.popStr("NEXT"))
+                "next"
+            else if (strange.popStr("WIP"))
+                "wip"
+            else if (strange.popStr("DONE"))
+                "done"
+            else if (strange.popStr("QUESTION"))
+                "question"
+            else if (strange.popStr("CALLOUT"))
+                "callout"
+            else if (strange.popStr("FWD"))
+                "fwd"
+            else
+                unreachable;
+
+            var s = Strange{ .content = content };
+            try path.parts.append(Part.init(&s));
+
+            return path;
         }
 
         return null;
