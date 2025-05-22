@@ -71,6 +71,10 @@
 
 # Annotate parts of source code with project and status tags &!annotate
 - [*] Support aggregation of AMP tags
+	- Rework Node.orgs
+		- [x] Keep refs to defs in chores
+		- [x] Use ?def, org and links (trailing!, maybe ancestral as well?)
+		- Collect all tags as refs to defs in Node.agg
 	- [ ] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.

@@ -104,14 +104,14 @@ pub const Lsp = struct {
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
 
                     // Find Amp
-                    var maybe_amp: ?amp.Path = null;
+                    var maybe_ap: ?amp.Path = null;
                     for (self.forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
                         for (chore.parts.items) |part| {
                             if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
-                                maybe_amp = part.path;
+                                maybe_ap = part.ap;
                             }
                         }
                     }
@@ -119,9 +119,9 @@ pub const Lsp = struct {
                     // Find filename and location of definition
                     var dst_filename: ?[]const u8 = null;
                     var range = dto.Range{};
-                    if (maybe_amp) |e| {
+                    if (maybe_ap) |e| {
                         for (self.forest.chores.defs.items) |def| {
-                            if (def.amp.is_fit(e)) {
+                            if (def.ap.is_fit(e)) {
                                 dst_filename = def.path;
                                 range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
                                 range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
@@ -159,24 +159,24 @@ pub const Lsp = struct {
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
 
                     // Find Amp
-                    var maybe_amp: ?amp.Path = null;
+                    var maybe_ap: ?amp.Path = null;
                     for (self.forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
                         for (chore.parts.items) |part| {
                             if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
-                                maybe_amp = part.path;
+                                maybe_ap = part.ap;
                             }
                         }
                     }
 
                     // Find all usage locations
-                    if (maybe_amp) |a| {
+                    if (maybe_ap) |ap| {
                         var locations = std.ArrayList(dto.Location).init(aaa);
                         for (self.forest.chores.list.items) |e| {
                             for (e.parts.items) |part| {
-                                if (a.is_fit(part.path)) {
+                                if (ap.is_fit(part.ap)) {
                                     const uri = try pathToUri_(e.path, aaa);
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.begin) },

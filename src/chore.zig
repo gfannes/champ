@@ -20,7 +20,7 @@ pub const Error = error{
 pub const Chore = struct {
     const Self = @This();
     const Part = struct {
-        path: amp.Path,
+        ap: amp.Path,
         str: []const u8,
         row: usize,
         cols: rubr.index.Range,
@@ -63,7 +63,7 @@ pub const Def = struct {
     const Self = @This();
     pub const Ix = rubr.index.Ix(@This());
 
-    amp: amp.Path,
+    ap: amp.Path,
     str: []const u8,
     path: []const u8,
     grove_id: usize,
@@ -71,7 +71,7 @@ pub const Def = struct {
     cols: rubr.index.Range,
 
     pub fn deinit(self: *Self) void {
-        self.amp.deinit();
+        self.ap.deinit();
     }
 
     pub fn write(self: Def, parent: *naft.Node) void {
@@ -88,13 +88,13 @@ pub const Def = struct {
 pub const Amp = struct {
     pub const Ix = rubr.index.Ix(@This());
 
-    path: amp.Path,
+    ap: amp.Path,
     def: Def.Ix,
 
     pub fn write(self: Amp, parent: *naft.Node) void {
         var n = parent.node("Amp");
         defer n.deinit();
-        n.attr("path", self.path);
+        n.attr("path", self.ap);
         n.attr("def", self.def);
     }
 };
@@ -106,7 +106,7 @@ pub const Chores = struct {
     const List = std.ArrayList(Chore);
     const Defs = std.ArrayList(Def);
     const Catchall = struct {
-        amp: amp.Path,
+        ap: amp.Path,
         str: []const u8,
         ix: Def.Ix,
     };
@@ -151,26 +151,26 @@ pub const Chores = struct {
         const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&:", name });
 
         var strange = Strange{ .content = content };
-        const a = try amp.Path.parse(&strange, aaa) orelse return Error.CouldNotParseAmp;
+        const ap = try amp.Path.parse(&strange, aaa) orelse return Error.CouldNotParseAmp;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
-        _ = try self.appendDef(a, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
+        _ = try self.appendDef(ap, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
 
-        self.catchall = Catchall{ .amp = a, .str = content, .ix = def_ix };
+        self.catchall = Catchall{ .ap = ap, .str = content, .ix = def_ix };
     }
 
     // Takes deep copy of def
-    pub fn appendDef(self: *Self, def: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Amp.Ix {
-        try self.log.info("appendDef() '{}'\n", .{def});
+    pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Amp.Ix {
+        try self.log.info("appendDef() '{}'\n", .{def_ap});
         const check_fit = struct {
             needle: *const amp.Path,
             grove_id: usize,
             pub fn call(my: @This(), other: Def) bool {
-                return other.amp.is_fit(my.needle.*) and my.grove_id == other.grove_id;
+                return other.ap.is_fit(my.needle.*) and my.grove_id == other.grove_id;
             }
-        }{ .needle = &def, .grove_id = grove_id };
+        }{ .needle = &def_ap, .grove_id = grove_id };
         if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
-            try self.log.warning("Definition '{}' is already present in Grove {}.\n", .{ def, grove_id });
+            try self.log.warning("Definition '{}' is already present in Grove {}.\n", .{ def_ap, grove_id });
             return null;
         }
 
@@ -178,31 +178,31 @@ pub const Chores = struct {
 
         const def_ix = Def.Ix.init(self.defs.items.len);
         try self.defs.append(Def{
-            .amp = try def.copy(aaa),
-            .str = try std.fmt.allocPrint(aaa, "{}", .{def}),
+            .ap = try def_ap.copy(aaa),
+            .str = try std.fmt.allocPrint(aaa, "{}", .{def_ap}),
             .path = path,
             .grove_id = grove_id,
             .row = row,
             .cols = cols,
         });
 
-        if (def.is_template())
+        if (def_ap.is_template())
             // Templates are not added to the list of resolved AMPs
             return null;
 
         const amp_ix = Amp.Ix.init(self.amps.items.len);
-        var a = try def.copy(aaa);
+        var a = try def_ap.copy(aaa);
         a.is_definition = false;
-        try self.amps.append(Amp{ .path = a, .def = def_ix });
+        try self.amps.append(Amp{ .ap = a, .def = def_ix });
 
         return amp_ix;
     }
 
-    pub fn resolve(self: *Self, path: *amp.Path, grove_id: usize) !?Amp.Ix {
+    pub fn resolve(self: *Self, ap: *amp.Path, grove_id: usize) !?Amp.Ix {
         // Find match in already resolved AMPs
         for (self.amps.items, 0..) |e, ix| {
-            if (e.path.is_fit(path.*)) {
-                try path.extend(e.path);
+            if (e.ap.is_fit(ap.*)) {
+                try ap.extend(e.ap);
                 return Amp.Ix.init(ix);
             }
         }
@@ -226,16 +226,16 @@ pub const Chores = struct {
                 if (grove_id_must_match != grove_id_is_same)
                     continue;
 
-                if (def.amp.is_fit(path.*)) {
+                if (def.ap.is_fit(ap.*)) {
                     if (maybe_match) |match| {
                         if (!is_ambiguous) {
                             // This is the first ambiguous match we find: report the initial match as well
                             const d = match.ix.ptr(self.defs.items);
-                            try self.log.warning("Ambiguous AMP found: '{}' fits with def '{}' from '{s}'\n", .{ path, def.amp, d.path });
+                            try self.log.warning("Ambiguous AMP found: '{}' fits with def '{}' from '{s}'\n", .{ ap, def.ap, d.ap });
                         }
                         is_ambiguous = true;
 
-                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}' from '{s}'\n", .{ path, def.amp, def.path });
+                        try self.log.warning("Ambiguous AMP found: '{}' fits with '{}' from '{s}'\n", .{ ap, def.ap, def.ap });
                     }
                     maybe_match = Match{ .ix = Def.Ix{ .ix = ix }, .grove_id = def.grove_id };
                 }
@@ -250,25 +250,25 @@ pub const Chores = struct {
         const amp_ix = Amp.Ix.init(self.amps.items.len);
         if (maybe_match) |match| {
             const def = match.ix.cptr(self.defs.items);
-            if (path.is_absolute) {
-                if (path.parts.items.len != def.amp.parts.items.len) {
-                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ path, def.amp });
+            if (ap.is_absolute) {
+                if (ap.parts.items.len != def.ap.parts.items.len) {
+                    try self.log.warning("Could not resolve '{}', it matches with '{}', but it is absolute\n", .{ ap, def.ap });
                     return null;
                 }
             } else {
-                try path.extend(def.amp);
-                path.is_definition = false;
+                try ap.extend(def.ap);
+                ap.is_definition = false;
             }
-            try self.amps.append(Amp{ .path = try path.copy(aaa), .def = match.ix });
+            try self.amps.append(Amp{ .ap = try ap.copy(aaa), .def = match.ix });
         } else {
             if (self.catchall) |catchall| {
-                try path.prepend(catchall.amp);
-                path.is_absolute = true;
-                path.is_definition = false;
+                try ap.prepend(catchall.ap);
+                ap.is_absolute = true;
+                ap.is_definition = false;
 
-                try self.amps.append(Amp{ .path = try path.copy(aaa), .def = catchall.ix });
+                try self.amps.append(Amp{ .ap = try ap.copy(aaa), .def = catchall.ix });
             } else {
-                try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{path});
+                try self.log.warning("Could not resolve AMP '{}' and not catch-all is present\n", .{ap});
                 return null;
             }
         }
@@ -286,7 +286,7 @@ pub const Chores = struct {
         var sep: []const u8 = "";
         for (node.orgs.items) |org| {
             const a = org.ix.cptr(self.amps.items);
-            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.path }));
+            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.ap }));
             sep = " ";
         }
 
@@ -306,7 +306,7 @@ pub const Chores = struct {
                 str.ptr += 1;
 
             const a = org.ix.cptr(self.amps.items);
-            try chore.parts.append(Chore.Part{ .path = a.path, .str = str, .row = org.pos.row, .cols = org.pos.cols });
+            try chore.parts.append(Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
         }
 
         // Lookup path

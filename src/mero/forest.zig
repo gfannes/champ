@@ -309,19 +309,19 @@ pub const Forest = struct {
                             if (term.kind == Term.Kind.Amp) {
                                 var strange = Strange{ .content = term.word };
 
-                                var def = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
-                                defer def.deinit();
-                                if (def.is_definition) {
+                                var def_ap = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                defer def_ap.deinit();
+                                if (def_ap.is_definition) {
                                     if (n.def != null)
                                         return Error.OnlyOneDefAllowed;
                                     // Make the def amp absolute, if necessary
-                                    if (!def.is_absolute) {
+                                    if (!def_ap.is_absolute) {
                                         var child_id = entry.id;
                                         const maybe_parent_def: ?amp.Path = block: while (true) {
                                             if (try my.tree.parent(child_id)) |parent| {
                                                 if (parent.data.def) |d| {
                                                     const pdef = d.ix.cptr(my.chores.amps.items);
-                                                    break :block pdef.path;
+                                                    break :block pdef.ap;
                                                 } else {
                                                     child_id = parent.id;
                                                 }
@@ -330,18 +330,18 @@ pub const Forest = struct {
                                             }
                                         };
                                         if (maybe_parent_def) |parent_def| {
-                                            try def.prepend(parent_def);
-                                            def.is_definition = true;
+                                            try def_ap.prepend(parent_def);
+                                            def_ap.is_definition = true;
                                         } else {
-                                            try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def});
-                                            def.is_absolute = true;
+                                            try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def_ap});
+                                            def_ap.is_absolute = true;
                                         }
                                     }
 
                                     // Collect all defs in a separate struct
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     const pos = mero.Node.Pos{ .row = line, .cols = cols };
-                                    if (try my.chores.appendDef(def, my.path, grove_id, pos.row, pos.cols)) |ix| {
+                                    if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |ix| {
                                         n.def = mero.Node.Amp{ .ix = ix, .pos = pos };
                                     } else {
                                         try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
