@@ -14,6 +14,7 @@ pub const Path = struct {
 
     is_definition: bool = false,
     is_absolute: bool = false,
+    is_dependency: bool = false,
     parts: Parts,
 
     pub fn init(a: std.mem.Allocator) Path {
@@ -26,6 +27,7 @@ pub const Path = struct {
         var res = Path.init(a);
         res.is_definition = self.is_definition;
         res.is_absolute = self.is_absolute;
+        res.is_dependency = self.is_dependency;
         for (self.parts.items) |part|
             // Assumes part is POD
             try res.parts.append(part);
@@ -74,6 +76,9 @@ pub const Path = struct {
             path.is_definition = strange.popChar('!');
             path.is_absolute = strange.popChar(':');
 
+            while (strange.popCharBack(':')) {}
+            path.is_dependency = strange.popCharBack('!');
+
             while (strange.popTo(':')) |p|
                 if (p.len > 0) {
                     var s = Strange{ .content = p };
@@ -117,6 +122,7 @@ pub const Path = struct {
     pub fn prepend(self: *Self, prefix: Self) !void {
         self.is_definition = prefix.is_definition;
         self.is_absolute = prefix.is_absolute;
+        // We do not copy is_dependency
         // Assumes Part is POD
         try self.parts.insertSlice(0, prefix.parts.items);
     }
@@ -130,6 +136,7 @@ pub const Path = struct {
                 return Error.CannotShrink;
             self.is_definition = rhs.is_definition;
             self.is_absolute = rhs.is_absolute;
+            // We do not copy is_dependency
             const count_to_add = rhs.parts.items.len - self.parts.items.len;
             try self.parts.insertSlice(0, rhs.parts.items[0..count_to_add]);
         }
@@ -145,9 +152,11 @@ pub const Path = struct {
         for (self.parts.items) |part| {
             const exclusive_str = if (part.is_exclusive) "!" else "";
             const template_str = if (part.is_template) "~" else "";
-            try writer.print("{s}{s}{s}{s}", .{ prefix, template_str, part.content, exclusive_str });
+            try writer.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
             prefix = ":";
         }
+        if (self.is_dependency)
+            try writer.print("!", .{});
     }
 };
 
@@ -158,7 +167,7 @@ pub const Part = struct {
     is_template: bool = false,
 
     pub fn init(strange: *Strange) Part {
-        const is_exclusive = strange.popCharBack('!');
+        const is_exclusive = strange.popChar('!');
         const is_template = strange.popChar('~');
         return Part{
             .content = strange.str(),
@@ -181,11 +190,12 @@ test "amp" {
         .{ .repr = "&!abc", .exp = "&!abc" },
         .{ .repr = "&:abc", .exp = "&:abc" },
         .{ .repr = "&!:abc", .exp = "&!:abc" },
-        .{ .repr = "&!:abc!", .exp = "&!:abc!" },
-        .{ .repr = "&!:abc!:", .exp = "&!:abc!" },
+        .{ .repr = "&!:!abc", .exp = "&!:!abc" },
+        .{ .repr = "&!:!abc:", .exp = "&!:!abc" },
         .{ .repr = "&!:a:b!:c", .exp = "&!:a:b!:c" },
         .{ .repr = "&!:a:b!:c:", .exp = "&!:a:b!:c" },
         .{ .repr = "&!:status:~status", .exp = "&!:status:~status" },
+        .{ .repr = "&abc!", .exp = "&abc!" },
     };
 
     for (scns) |scn| {
