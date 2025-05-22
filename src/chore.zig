@@ -37,7 +37,10 @@ pub const Chore = struct {
 
     node_id: usize,
     path: []const u8 = &.{},
+    // String repr of Node.org_amps + Node.agg_amps
     str: []const u8 = &.{},
+    // Indicates the size of Node.org_amps in str
+    org_size: usize = 0,
     parts: Parts,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
@@ -54,6 +57,7 @@ pub const Chore = struct {
         n.attr("id", self.node_id);
         if (self.path.len > 0)
             n.attr("path", self.path);
+        n.attr("str", self.str);
         for (self.parts.items) |e|
             e.write(&n);
     }
@@ -276,29 +280,37 @@ pub const Chores = struct {
         return amp_ix;
     }
 
-    // Return true if tree[node_id] is an actual Chore and was thus added
+    // Returns true if tree[node_id] is an actual Chore and was thus added
     pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree) !bool {
         const node = tree.cptr(node_id);
+
+        if (rubr.slice.is_empty(node.org_amps.items))
+            // This is not a Chore
+            return false;
 
         const aaa = self.aa.allocator();
 
         try self.tmp_concat.resize(0);
         var sep: []const u8 = "";
-        for (node.orgs.items) |org| {
+        var org_size: usize = 0;
+        for (node.org_amps.items) |org| {
+            const a = org.ix.cptr(self.amps.items);
+            try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.ap }));
+            org_size += (rubr.slice.last(self.tmp_concat.items) orelse unreachable).len;
+            sep = " ";
+        }
+        for (node.agg_amps.items) |org| {
             const a = org.ix.cptr(self.amps.items);
             try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.ap }));
             sep = " ";
         }
 
-        if (self.tmp_concat.items.len == 0)
-            // This is not a Chore
-            return false;
-
         var chore = Chore.init(node_id, aaa);
         chore.str = try std.mem.concat(aaa, u8, self.tmp_concat.items);
+        chore.org_size = org_size;
 
         var offset: usize = 0;
-        for (node.orgs.items, 0..) |org, ix| {
+        for (node.org_amps.items, 0..) |org, ix| {
             var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
             offset += str.len;
             if (ix > 0)

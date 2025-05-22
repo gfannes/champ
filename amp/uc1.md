@@ -70,15 +70,15 @@
 	- [*] Reload when changed, check from time to time
 
 # Annotate parts of source code with project and status tags &!annotate
-- [*] Support aggregation of AMP tags
+- [/] Support aggregation of AMP tags
 	- Rework Node.orgs
 		- [x] Keep refs to defs in chores
 		- [x] Use ?def, org and links (trailing!, maybe ancestral as well?)
-		- Collect all tags as refs to defs in Node.agg
-	- [ ] Tag distribution from root to leaf
+		- [x] Collect all tags as refs to defs in Node.agg
+	- [x] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
-	- [ ] Trailing ! indicates dependency: current Chore _uses_ AMP
+	- [*] Trailing ! indicates dependency: current Chore _uses_ AMP
 		- Default behavior is that current Chore _is part of_ AMP
 		- Is this the same as a reverse tag?
 	- [ ] Support Markdown and Wiki links to other files

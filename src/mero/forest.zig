@@ -75,8 +75,9 @@ pub const Forest = struct {
         }
 
         try self.collectDefs();
-
         try self.resolveAmps();
+        try self.aggregateAmps();
+        try self.createChores();
     }
 
     pub fn findFile(self: *Self, name: []const u8) ?Tree.Entry {
@@ -191,6 +192,82 @@ pub const Forest = struct {
         }
     };
 
+    fn aggregateAmps(self: *Self) !void {
+        var cb = struct {
+            const My = @This();
+
+            tree: *const Tree,
+            is_new_file: bool = false,
+
+            pub fn call(my: *My, entry: Tree.Entry) !void {
+                const n = entry.data;
+
+                switch (n.type) {
+                    Node.Type.File => my.is_new_file = true,
+                    else => {
+                        defer my.is_new_file = false;
+
+                        if (rubr.slice.is_empty(n.org_amps.items))
+                            return;
+
+                        if (my.parent(entry.id)) |pnode| {
+                            for (&[_][]const Node.Amp{ pnode.org_amps.items, pnode.agg_amps.items }) |pamps| {
+                                for (pamps) |pamp|
+                                    if (!is_present(n.org_amps.items, pamp) and !is_present(n.agg_amps.items, pamp))
+                                        try n.agg_amps.append(pamp);
+                            }
+                        }
+
+                        if (my.is_new_file) {
+                            switch (n.type) {
+                                Node.Type.Paragraph => {
+                                    // AMPs on the first line are copied to the File as well
+                                    if (try my.tree.parent(entry.id)) |file_entry|
+                                        for (n.org_amps.items) |first_line_amp|
+                                            if (!is_present(file_entry.data.org_amps.items, first_line_amp) and !is_present(file_entry.data.agg_amps.items, first_line_amp))
+                                                try file_entry.data.agg_amps.append(first_line_amp);
+                                },
+                                else => {},
+                            }
+                        }
+                    },
+                }
+            }
+            fn is_present(haystack: []const Node.Amp, needle: Node.Amp) bool {
+                for (haystack) |h|
+                    if (needle.ix.eql(h.ix))
+                        return true;
+                return false;
+            }
+            fn parent(my: My, child_id: usize) ?*const Node {
+                var id = child_id;
+                while (my.tree.parent(id) catch unreachable) |pentry| {
+                    if (!rubr.slice.is_empty(pentry.data.org_amps.items)) {
+                        return pentry.data;
+                    }
+                    id = pentry.id;
+                }
+                return null;
+            }
+        }{ .tree = &self.tree };
+
+        try self.tree.dfsAll(true, &cb);
+    }
+
+    fn createChores(self: *Self) !void {
+        var cb = struct {
+            const My = @This();
+
+            chores: *chore.Chores,
+            tree: *const Tree,
+
+            pub fn call(my: *My, entry: Tree.Entry) !void {
+                _ = try my.chores.add(entry.id, my.tree);
+            }
+        }{ .chores = &self.chores, .tree = &self.tree };
+        try self.tree.dfsAll(true, &cb);
+    }
+
     fn resolveAmps(self: *Self) !void {
         try self.chores.setupCatchAll("?");
 
@@ -235,8 +312,8 @@ pub const Forest = struct {
                                 defer path.deinit();
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                                    if (try my.chores.resolve(&path, grove_id)) |ix| {
-                                        try n.orgs.append(mero.Node.Org{ .ix = ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                    if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
+                                        try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
                                         try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
                                     }
@@ -246,8 +323,6 @@ pub const Forest = struct {
                                 cols = .{};
                             }
                         }
-
-                        _ = try my.chores.add(entry.id, my.tree);
                     },
                 }
             }
@@ -261,7 +336,7 @@ pub const Forest = struct {
     }
 
     fn collectDefs(self: *Self) !void {
-        // Expects Node.orgs to still be empty
+        // Expects Node.org_amps to still be empty
         var cb = struct {
             const My = @This();
 
@@ -277,7 +352,7 @@ pub const Forest = struct {
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
-                std.debug.assert(n.orgs.items.len == 0);
+                std.debug.assert(n.org_amps.items.len == 0);
 
                 switch (n.type) {
                     Node.Type.Grove => {},
@@ -317,6 +392,7 @@ pub const Forest = struct {
                                     // Make the def amp absolute, if necessary
                                     if (!def_ap.is_absolute) {
                                         var child_id = entry.id;
+                                        // Try to find parent def
                                         const maybe_parent_def: ?amp.Path = block: while (true) {
                                             if (try my.tree.parent(child_id)) |parent| {
                                                 if (parent.data.def) |d| {
@@ -329,6 +405,7 @@ pub const Forest = struct {
                                                 break :block null;
                                             }
                                         };
+
                                         if (maybe_parent_def) |parent_def| {
                                             try def_ap.prepend(parent_def);
                                             def_ap.is_definition = true;
@@ -341,8 +418,9 @@ pub const Forest = struct {
                                     // Collect all defs in a separate struct
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     const pos = mero.Node.Pos{ .row = line, .cols = cols };
-                                    if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |ix| {
-                                        n.def = mero.Node.Amp{ .ix = ix, .pos = pos };
+                                    if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
+                                        n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
+                                        try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = pos });
                                     } else {
                                         try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                                     }
@@ -357,8 +435,10 @@ pub const Forest = struct {
                             switch (n.type) {
                                 Node.Type.Paragraph => {
                                     // A def on the first line is copied to the File as well
-                                    if (try my.tree.parent(entry.id)) |parent|
+                                    if (try my.tree.parent(entry.id)) |parent| {
                                         parent.data.def = n.def;
+                                        try parent.data.org_amps.insertSlice(0, n.org_amps.items);
+                                    }
                                 },
                                 else => {},
                             }

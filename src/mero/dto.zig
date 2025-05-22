@@ -86,11 +86,7 @@ pub const Node = struct {
         ix: chore.Amp.Ix,
         pos: Pos,
     };
-    pub const Org = struct {
-        ix: chore.Amp.Ix,
-        pos: Pos,
-    };
-    const Orgs = std.ArrayList(Org);
+    const Amps = std.ArrayList(Amp);
 
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
 
@@ -99,7 +95,10 @@ pub const Node = struct {
 
     // Will contain resolved Amps, only the first can be a definition
     def: ?Amp = null,
-    orgs: Orgs,
+    // Refs to resolved AMPs that are directly present in this Node
+    org_amps: Amps,
+    // Refs to resolved AMPs that are inherited
+    agg_amps: Amps,
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
@@ -116,13 +115,15 @@ pub const Node = struct {
 
     pub fn init(a: std.mem.Allocator) Self {
         return Self{
-            .orgs = Orgs.init(a),
+            .org_amps = Amps.init(a),
+            .agg_amps = Amps.init(a),
             .terms = Terms.init(a),
             .a = a,
         };
     }
     pub fn deinit(self: *Self) void {
-        self.orgs.deinit();
+        self.org_amps.deinit();
+        self.agg_amps.deinit();
         for (self.terms.items) |*item|
             item.deinit();
         self.terms.deinit();
