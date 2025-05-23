@@ -284,7 +284,9 @@ pub const Lsp = struct {
                     };
                     std.sort.block(dto.WorkspaceSymbol, workspace_symbols.items, {}, ByScore.call);
 
-                    try server.send(workspace_symbols.items);
+                    const size = @min(workspace_symbols.items.len, self.config.lsp.max_array_size);
+
+                    try server.send(workspace_symbols.items[0..size]);
                 } else {
                     try self.log.warning("Unhandled request '{s}'\n", .{request.method});
                 }

@@ -10,6 +10,8 @@ pub const Error = error{
 
 // Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
 pub const capitals = [_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FORWARD", "CANCELED" };
+// Lower-case variant. Infinite lifetime is important: amp.Path.Part blindly assumes its content lives long enough.
+pub const lowers = [_][]const u8{ "todo", "next", "wip", "done", "question", "callout", "forward", "canceled" };
 
 pub const Path = struct {
     const Self = @This();
@@ -119,14 +121,11 @@ pub const Path = struct {
             }
 
             path.deinit();
-        } else if (rubr.strings.contains(u8, &capitals, strange.str())) {
+        } else if (rubr.strings.index(u8, &capitals, strange.str())) |ix| {
             var path = Path.init(a);
             errdefer path.deinit();
 
-            var buf: [32]u8 = undefined;
-            const content = std.ascii.lowerString(&buf, strange.str());
-
-            var s = Strange{ .content = content };
+            var s = Strange{ .content = lowers[ix] };
             try path.parts.append(Part.init(&s));
 
             return path;
@@ -178,6 +177,7 @@ pub const Path = struct {
 
 // Part is assumed to be POD
 pub const Part = struct {
+    // content is assumed to output self
     content: []const u8,
     is_exclusive: bool = false,
     is_template: bool = false,

@@ -64,10 +64,15 @@ pub const Grove = struct {
     max_count: ?usize = null,
 };
 
+pub const Lsp = struct {
+    max_array_size: usize = 100,
+};
+
 pub const Config = struct {
     groves: []Grove = &.{},
     max_memsize: ?usize = null,
     default: ?[][]const u8 = null,
+    lsp: Lsp = .{},
 };
 
 test "cfg" {
