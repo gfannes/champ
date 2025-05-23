@@ -4,6 +4,7 @@ const rubr = @import("rubr");
 const naft = rubr.naft;
 
 const tkn = @import("../tkn.zig");
+const capitals = @import("../amp.zig").capitals;
 
 const dto = @import("dto.zig");
 const Language = dto.Language;
@@ -202,7 +203,7 @@ pub const Parser = struct {
                 try self.appendToLine(n, comment);
                 continue;
             }
-            if (self.pop_md_capital_term()) |capital| {
+            if (self.pop_capital_term()) |capital| {
                 try text.commit();
                 try self.appendToLine(n, capital);
                 continue;
@@ -222,6 +223,11 @@ pub const Parser = struct {
                     try self.appendToLine(n, amp);
                     continue;
                 }
+            }
+
+            if (self.pop_capital_term()) |capital| {
+                try self.appendToLine(n, capital);
+                continue;
             }
 
             // If token is '&' but above could not pop a real Amp, make sure we will pop a Text
@@ -263,6 +269,9 @@ pub const Parser = struct {
                     try self.appendToLine(n, code);
                     continue;
                 }
+            } else if (self.pop_capital_term()) |capital| {
+                try self.appendToLine(n, capital);
+                continue;
             } else if (self.pop_nonmd_text_term()) |text| {
                 try self.appendToLine(n, text);
                 continue;
@@ -532,11 +541,11 @@ pub const Parser = struct {
         }
         return null;
     }
-    fn pop_md_capital_term(self: *Self) ?Term {
+    fn pop_capital_term(self: *Self) ?Term {
         if (self.tokenizer.peek()) |token| {
             if (token.symbol != tkn.Symbol.Word)
                 return null;
-            if (!rubr.strings.contains(u8, &[_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FWD" }, token.word))
+            if (!rubr.strings.contains(u8, &capitals, token.word))
                 return null;
 
             const capital = Term{ .word = token.word, .kind = Term.Kind.Capital };

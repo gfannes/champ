@@ -62,6 +62,7 @@
 		- [x] Support `~status` template
 		- [x] Check [Tasks.md](https://tasks.md/)
 		- [x] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
+			- [x] For Markdown, Txt and SourceCode
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP '?'
 	- [ ] Make this configurable
@@ -110,3 +111,5 @@
 - [ ] Support env var `helix_filepath` in Helix for `%sh{}` commands
 	- Necessary to get 'daily' working properly
 - [ ] Support annotating skill level for a Chore
+- [ ] Improve fuzz searching
+	- Segmented search

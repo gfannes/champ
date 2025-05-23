@@ -8,6 +8,9 @@ pub const Error = error{
     CannotShrink,
 };
 
+// Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
+pub const capitals = [_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FORWARD", "CANCELED" };
+
 pub const Path = struct {
     const Self = @This();
     const Parts = std.ArrayList(Part);
@@ -104,7 +107,8 @@ pub const Path = struct {
                     'x' => "done",
                     '?' => "question",
                     '!' => "callout",
-                    '>' => "fwd",
+                    '>' => "forward",
+                    '-' => "canceled",
                     else => "unknown",
                 };
                 var s = Strange{ .content = content };
@@ -115,26 +119,12 @@ pub const Path = struct {
             }
 
             path.deinit();
-        } else if (rubr.strings.contains(u8, &[_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FWD" }, strange.str())) {
+        } else if (rubr.strings.contains(u8, &capitals, strange.str())) {
             var path = Path.init(a);
             errdefer path.deinit();
 
-            const content: []const u8 = if (strange.popStr("TODO"))
-                "todo"
-            else if (strange.popStr("NEXT"))
-                "next"
-            else if (strange.popStr("WIP"))
-                "wip"
-            else if (strange.popStr("DONE"))
-                "done"
-            else if (strange.popStr("QUESTION"))
-                "question"
-            else if (strange.popStr("CALLOUT"))
-                "callout"
-            else if (strange.popStr("FWD"))
-                "fwd"
-            else
-                unreachable;
+            var buf: [32]u8 = undefined;
+            const content = std.ascii.lowerString(&buf, strange.str());
 
             var s = Strange{ .content = content };
             try path.parts.append(Part.init(&s));
