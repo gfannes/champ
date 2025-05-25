@@ -61,7 +61,7 @@
 			- `>`: fwd
 		- [x] Support `~status` template
 		- [x] Check [Tasks.md](https://tasks.md/)
-		- [x] Support TODO and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
+		- [x] Support `TODO` and other capital-based annotations, see [todo-comments](https://github.com/folke/todo-comments.nvim)
 			- [x] For Markdown, Txt and SourceCode
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP '?'
@@ -69,6 +69,10 @@
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
 	- [*] Reload when changed, check from time to time
+		- Create thread that updates a mutex-protected ?Forest
+		- Have the thread wait on a condition variable for some time. This can be woken when LSP indicates a file change.
+		- Have each LSP iteration try and load the ?Forest
+- [ ] Support searching in non-AMP data of Chore
 
 # Annotate parts of source code with project and status tags &!annotate
 - [/] Support aggregation of AMP tags
@@ -79,6 +83,8 @@
 	- [x] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
+	- [x] Do not inherit ~status
+		- Do not inherit if there is already an AMP with the same def
 	- [/] Trailing ! indicates dependency: current Chore _uses_ AMP
 		- Default behavior is that current Chore _is part of_ AMP
 		- Is this the same as a reverse tag?
@@ -88,6 +94,7 @@
 	- Use '_tree.md'
 		- Only aggregate AMP tags specified at the top
 	- Rename existing '_.amp' and update Rust code
+- [ ] Accept AMPs in source code comments if there is AMP data at the start
 
 # Find all references &!search
 - [x] Collect content range per Node

@@ -164,6 +164,7 @@ pub const Chores = struct {
     }
 
     // Takes deep copy of def
+    // For non-templates, the def is added to the list of AMPs as well
     pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Amp.Ix {
         try self.log.info("appendDef() '{}'\n", .{def_ap});
         const check_fit = struct {

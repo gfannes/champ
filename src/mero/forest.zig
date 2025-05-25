@@ -8,7 +8,7 @@ const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
-const chore = @import("../chore.zig");
+const Chores = @import("../chore.zig").Chores;
 
 const rubr = @import("rubr");
 const Log = rubr.log.Log;
@@ -32,14 +32,14 @@ pub const Forest = struct {
 
     log: *const Log,
     tree: Tree,
-    chores: chore.Chores,
+    chores: Chores,
     a: std.mem.Allocator,
 
     pub fn init(log: *const Log, a: std.mem.Allocator) Self {
         return Self{
             .log = log,
             .tree = Tree.init(a),
-            .chores = chore.Chores.init(log, a),
+            .chores = Chores.init(log, a),
             .a = a,
         };
     }
@@ -197,6 +197,7 @@ pub const Forest = struct {
             const My = @This();
 
             tree: *const Tree,
+            chores: *const Chores,
             is_new_file: bool = false,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
@@ -210,11 +211,11 @@ pub const Forest = struct {
                         if (rubr.slice.is_empty(n.org_amps.items))
                             return;
 
-                        if (my.parent(entry.id)) |pnode| {
-                            for (&[_][]const Node.Amp{ pnode.org_amps.items, pnode.agg_amps.items }) |pamps| {
-                                for (pamps) |pamp|
-                                    if (!is_present(n.org_amps.items, pamp) and !is_present(n.agg_amps.items, pamp))
-                                        try n.agg_amps.append(pamp);
+                        if (my.parent(entry.id)) |parent_node| {
+                            for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
+                                for (parent_amps) |parent_amp|
+                                    if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
+                                        try n.agg_amps.append(parent_amp);
                             }
                         }
 
@@ -224,7 +225,7 @@ pub const Forest = struct {
                                     // AMPs on the first line are copied to the File as well
                                     if (try my.tree.parent(entry.id)) |file_entry|
                                         for (n.org_amps.items) |first_line_amp|
-                                            if (!is_present(file_entry.data.org_amps.items, first_line_amp) and !is_present(file_entry.data.agg_amps.items, first_line_amp))
+                                            if (!my.is_present(file_entry.data.org_amps.items, first_line_amp) and !my.is_present(file_entry.data.agg_amps.items, first_line_amp))
                                                 try file_entry.data.agg_amps.append(first_line_amp);
                                 },
                                 else => {},
@@ -233,10 +234,17 @@ pub const Forest = struct {
                     },
                 }
             }
-            fn is_present(haystack: []const Node.Amp, needle: Node.Amp) bool {
-                for (haystack) |h|
-                    if (needle.ix.eql(h.ix))
+            fn is_present(my: My, haystack: []const Node.Amp, needle: Node.Amp) bool {
+                const needle_ap = needle.ix.cptr(my.chores.amps.items);
+                for (haystack) |h| {
+                    const h_ap = h.ix.cptr(my.chores.amps.items);
+                    if (needle_ap == h_ap)
+                        // These AMPs are the same
                         return true;
+                    if (needle_ap.def.eql(h_ap.def))
+                        // These AMPs have the same def: both are eg the same ~status
+                        return true;
+                }
                 return false;
             }
             fn parent(my: My, child_id: usize) ?*const Node {
@@ -249,7 +257,7 @@ pub const Forest = struct {
                 }
                 return null;
             }
-        }{ .tree = &self.tree };
+        }{ .tree = &self.tree, .chores = &self.chores };
 
         try self.tree.dfsAll(true, &cb);
     }
@@ -258,7 +266,7 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
-            chores: *chore.Chores,
+            chores: *Chores,
             tree: *const Tree,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
@@ -275,7 +283,7 @@ pub const Forest = struct {
             const My = @This();
 
             tree: *const Tree,
-            chores: *chore.Chores,
+            chores: *Chores,
             log: *const Log,
             a: std.mem.Allocator,
 
@@ -341,7 +349,7 @@ pub const Forest = struct {
             const My = @This();
 
             tree: *Tree,
-            chores: *chore.Chores,
+            chores: *Chores,
             log: *const Log,
             a: std.mem.Allocator,
 
