@@ -106,14 +106,14 @@
 	- [x] Find exact AMP that is meant
 		- [x] Inject AMP location from Node.line into Chores
 - [x] Support 'find references'
-- [/] Must filter done items by default
-	- [ ] Support searching all references with `.`
-	- [/] Create dedicated qry.Query
+- [x] Must filter done items by default
+	- [x] Support searching all references with `.`
+	- [x] Create dedicated qry.Query
 - [x] Must only report nodes with an AMP tag
 - [x] Must support identifying next subtasks to work on
 - [ ] Support 'goto definition' for languages where an other LSP provides this func as well
 	- Relay requests from champ to this other LSP if champ does not find a reference
-		- [*] Develop `muxls` as a separate LSP to deal with this
+		- [-] Develop `muxls` as a separate LSP to deal with this
 	- Configure this in `~/.config/champ/config.zon` &done
 
 - [ ] Support env var `helix_filepath` in Helix for `%sh{}` commands

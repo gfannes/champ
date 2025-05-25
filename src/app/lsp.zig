@@ -10,6 +10,7 @@ const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
+const qry = @import("../qry.zig");
 
 pub const Error = error{
     ExpectedParams,
@@ -248,16 +249,17 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).init(aaa);
 
+                    var q = qry.Query.init(self.a);
+                    defer q.deinit();
+                    try q.setup(&[_][]const u8{query});
+
                     for (self.forest.chores.list.items) |chore| {
                         if (rubr.slice.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }
 
-                        var skip_count: usize = undefined;
-                        const score: f32 = @floatCast(fuzz.distance(query, chore.str, &skip_count));
-
-                        if (skip_count == 0) {
+                        if (q.distance(chore)) |distance| {
                             const first_amp = &chore.parts.items[0];
                             const last_amp = &chore.parts.items[chore.parts.items.len - 1];
                             const range = dto.Range{
@@ -270,7 +272,7 @@ pub const Lsp = struct {
                                     .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
                                     .range = range,
                                 },
-                                .score = score,
+                                .score = @floatCast(distance),
                             });
                         }
                     }

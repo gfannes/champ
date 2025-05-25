@@ -35,12 +35,9 @@ pub const Search = struct {
         if (self.options.extra.items.len == 0)
             return Error.ExpectedQueryArgument;
 
-        var q = qry.Query.init(self.a);
-        defer q.deinit();
-        try q.setup(self.options.extra.items);
-
-        const query = try std.mem.concat(self.a, u8, self.options.extra.items);
-        defer self.a.free(query);
+        var query = qry.Query.init(self.a);
+        defer query.deinit();
+        try query.setup(self.options.extra.items);
 
         try self.forest.load(self.config, self.options);
 
@@ -58,14 +55,11 @@ pub const Search = struct {
             path: usize = 0,
         }{};
         for (self.forest.chores.list.items, 0..) |chore, ix| {
-            var skip_count: usize = undefined;
-            const score = rubr.fuzz.distance(query, chore.str, &skip_count);
-            if (skip_count > 0)
-                continue;
-
-            try refs.append(Ref{ .ix = ix, .score = score });
-            max.name = @max(max.name, chore.str.len);
-            max.path = @max(max.path, chore.path.len);
+            if (query.distance(chore)) |distance| {
+                try refs.append(Ref{ .ix = ix, .score = distance });
+                max.name = @max(max.name, chore.str.len);
+                max.path = @max(max.path, chore.path.len);
+            }
         }
 
         const Fn = struct {
@@ -87,7 +81,7 @@ pub const Search = struct {
         for (refs.items) |ref| {
             const chore = self.forest.chores.list.items[ref.ix];
             const line = if (rubr.slice.firstPtr(chore.parts.items)) |part| part.row + 1 else 0;
-            std.debug.print("{s}{s}    {s}{s}   {}\n", .{ chore.str, blank[0 .. max.name - chore.str.len], chore.path, blank[0 .. max.path - chore.path.len], line });
+            std.debug.print("{s}{s}    {s}{s}:{} {}\n", .{ chore.str, blank[0 .. max.name - chore.str.len], chore.path, blank[0 .. max.path - chore.path.len], line, ref.score });
         }
     }
 };

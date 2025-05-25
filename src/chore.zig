@@ -311,15 +311,20 @@ pub const Chores = struct {
         chore.org_size = org_size;
 
         var offset: usize = 0;
-        for (node.org_amps.items, 0..) |org, ix| {
-            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
-            offset += str.len;
-            if (ix > 0)
-                // Drop the sep
-                str.ptr += 1;
+        var ix: usize = 0;
+        for (&[_][]mero.Node.Amp{ node.org_amps.items, node.agg_amps.items }) |amps| {
+            for (amps) |org| {
+                defer ix += 1;
 
-            const a = org.ix.cptr(self.amps.items);
-            try chore.parts.append(Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
+                var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
+                offset += str.len;
+                if (ix > 0)
+                    // Drop the sep
+                    str.ptr += 1;
+
+                const a = org.ix.cptr(self.amps.items);
+                try chore.parts.append(Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
+            }
         }
 
         // Lookup path
