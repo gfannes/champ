@@ -106,8 +106,9 @@
 	- [x] Find exact AMP that is meant
 		- [x] Inject AMP location from Node.line into Chores
 - [x] Support 'find references'
-- [*] Must filter done items by default
+- [/] Must filter done items by default
 	- [ ] Support searching all references with `.`
+	- [/] Create dedicated qry.Query
 - [x] Must only report nodes with an AMP tag
 - [x] Must support identifying next subtasks to work on
 - [ ] Support 'goto definition' for languages where an other LSP provides this func as well

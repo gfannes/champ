@@ -8,6 +8,7 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
+const qry = @import("../qry.zig");
 
 pub const Error = error{
     ExpectedQueryArgument,
@@ -33,6 +34,10 @@ pub const Search = struct {
     pub fn call(self: *Self) !void {
         if (self.options.extra.items.len == 0)
             return Error.ExpectedQueryArgument;
+
+        var q = qry.Query.init(self.a);
+        defer q.deinit();
+        try q.setup(self.options.extra.items);
 
         const query = try std.mem.concat(self.a, u8, self.options.extra.items);
         defer self.a.free(query);
