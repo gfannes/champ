@@ -39,9 +39,10 @@ pub const Chore = struct {
     path: []const u8 = &.{},
     // String repr of Node.org_amps + Node.agg_amps
     str: []const u8 = &.{},
-    // Indicates the size of Node.org_amps in str
-    org_count: usize = 0,
+
     parts: Parts,
+    // Indicates the number of Parts that are orgs
+    org_count: usize = 0,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
         return Self{ .node_id = node_id, .parts = Parts.init(a) };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 const rubr = @import("rubr");
 const Log = rubr.log.Log;
@@ -18,6 +19,7 @@ pub const Error = error{
     ExpectedTextDocument,
     UnexpectedFilenameFormat,
     ExpectedPosition,
+    CouldNotLoadConfig,
 };
 
 pub const Lsp = struct {
@@ -28,13 +30,13 @@ pub const Lsp = struct {
     log: *const Log,
     a: std.mem.Allocator,
 
-    forest: mero.Forest = undefined,
+    forest_pp: ForestPP = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest = mero.Forest.init(self.log, self.a);
+        self.forest_pp = ForestPP.init(self.options, self.log, self.a);
     }
     pub fn deinit(self: *Self) void {
-        self.forest.deinit();
+        self.forest_pp.deinit();
     }
 
     pub fn call(self: *Self) !void {
@@ -48,17 +50,23 @@ pub const Lsp = struct {
 
         var reloadForest: bool = true;
 
+        try self.forest_pp.startThread();
+
         var count: usize = 0;
         var do_continue = true;
         var init_ok = false;
         while (do_continue) : (count += 1) {
             try self.log.info("[Iteration](count:{})\n", .{count});
 
+            self.forest_pp.mutex.lock();
+            defer self.forest_pp.mutex.unlock();
+            const forest = self.forest_pp.ping();
+
             const request = try server.receive();
             const dto = lsp.dto;
             if (request.id) |_| {
                 if (request.is("initialize")) {
-                    try self.forest.load(self.config, self.options);
+                    try forest.load(self.config, self.options);
                     reloadForest = false;
 
                     const result = dto.InitializeResult{
@@ -88,8 +96,8 @@ pub const Lsp = struct {
                     // &cleanup by moving some func to Chores
 
                     if (reloadForest) {
-                        self.forest.reinit();
-                        try self.forest.load(self.config, self.options);
+                        forest.reinit();
+                        try forest.load(self.config, self.options);
                         reloadForest = false;
                     }
 
@@ -106,7 +114,7 @@ pub const Lsp = struct {
 
                     // Find Amp
                     var maybe_ap: ?amp.Path = null;
-                    for (self.forest.chores.list.items) |chore| {
+                    for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
@@ -121,7 +129,7 @@ pub const Lsp = struct {
                     var dst_filename: ?[]const u8 = null;
                     var range = dto.Range{};
                     if (maybe_ap) |e| {
-                        for (self.forest.chores.defs.items) |def| {
+                        for (forest.chores.defs.items) |def| {
                             if (def.ap.is_fit(e)) {
                                 dst_filename = def.path;
                                 range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
@@ -143,8 +151,8 @@ pub const Lsp = struct {
                     }
                 } else if (request.is("textDocument/references")) {
                     if (reloadForest) {
-                        self.forest.reinit();
-                        try self.forest.load(self.config, self.options);
+                        forest.reinit();
+                        try forest.load(self.config, self.options);
                         reloadForest = false;
                     }
 
@@ -161,7 +169,7 @@ pub const Lsp = struct {
 
                     // Find Amp
                     var maybe_ap: ?amp.Path = null;
-                    for (self.forest.chores.list.items) |chore| {
+                    for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
@@ -175,7 +183,7 @@ pub const Lsp = struct {
                     // Find all usage locations
                     if (maybe_ap) |ap| {
                         var locations = std.ArrayList(dto.Location).init(aaa);
-                        for (self.forest.chores.list.items) |e| {
+                        for (forest.chores.list.items) |e| {
                             for (e.parts.items) |part| {
                                 if (ap.is_fit(part.ap)) {
                                     const uri = try pathToUri_(e.path, aaa);
@@ -194,8 +202,8 @@ pub const Lsp = struct {
                     }
                 } else if (request.is("textDocument/documentSymbol")) {
                     if (reloadForest) {
-                        self.forest.reinit();
-                        try self.forest.load(self.config, self.options);
+                        forest.reinit();
+                        try forest.load(self.config, self.options);
                         reloadForest = false;
                     }
 
@@ -211,7 +219,7 @@ pub const Lsp = struct {
 
                     var document_symbols = std.ArrayList(dto.DocumentSymbol).init(aaa);
 
-                    for (self.forest.chores.list.items) |chore| {
+                    for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
@@ -236,8 +244,8 @@ pub const Lsp = struct {
                     try server.send(document_symbols.items);
                 } else if (request.is("workspace/symbol")) {
                     if (reloadForest) {
-                        self.forest.reinit();
-                        try self.forest.load(self.config, self.options);
+                        forest.reinit();
+                        try forest.load(self.config, self.options);
                         reloadForest = false;
                     }
 
@@ -253,7 +261,7 @@ pub const Lsp = struct {
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
-                    for (self.forest.chores.list.items) |chore| {
+                    for (forest.chores.list.items) |chore| {
                         if (rubr.slice.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
@@ -327,5 +335,91 @@ pub const Lsp = struct {
     fn pathToUri_(path: []const u8, a: std.mem.Allocator) ![]const u8 {
         const prefix = "file://";
         return try std.mem.concat(a, u8, &[_][]const u8{ prefix, path });
+    }
+};
+
+pub const ForestPP = struct {
+    const Self = @This();
+
+    options: *const cli.Options,
+
+    a: std.mem.Allocator,
+    config_loader: cfg.Loader,
+
+    mutex: std.Thread.Mutex = .{},
+
+    thread: ?std.Thread = null,
+    quit_thread: bool = false,
+
+    pp: [2]mero.Forest,
+    ping_is_first: bool = true,
+
+    pub fn init(options: *const cli.Options, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
+        return ForestPP{ .options = options, .a = a, .config_loader = try cfg.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
+    }
+    pub fn deinit(self: *Self) void {
+        self.stopThread();
+        self.config_loader.deinit();
+        for (&self.pp) |*forest|
+            forest.deinit();
+    }
+
+    pub fn ping(self: *Self) *mero.Forest {
+        return &self.pp[if (self.ping_is_first) 0 else 1];
+    }
+    pub fn pong(self: *Self) *mero.Forest {
+        return &self.pp[if (self.ping_is_first) 1 else 0];
+    }
+
+    pub fn swap(self: *Self) void {
+        self.ping_is_first = !self.ping_is_first;
+    }
+
+    fn startThread(self: *Self) !void {
+        self.stopThread();
+        self.quit_thread = false;
+        self.thread = try std.Thread.spawn(.{}, Self.call, .{self});
+    }
+    fn stopThread(self: *Self) void {
+        if (self.thread) |thr| {
+            self.mutex.lock();
+            self.quit_thread = true;
+            self.mutex.unlock();
+
+            thr.join();
+        }
+        self.thread = null;
+    }
+
+    fn call(self: *Self) !void {
+        while (true) {
+            {
+                self.mutex.lock();
+                defer self.mutex.unlock();
+
+                std.debug.print("Thread loop\n", .{});
+
+                if (self.quit_thread) {
+                    std.debug.print("Stopping Thread\n", .{});
+                    break;
+                }
+            }
+
+            // &todo: Replace hardcoded HOME folder
+            // &:zig:build:info Couple filename with build.zig.zon#name
+            const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
+            try self.config_loader.loadFromFile(config_fp);
+
+            const config = self.config_loader.config orelse return Error.CouldNotLoadConfig;
+
+            const forest = self.pong();
+            forest.reinit();
+            try forest.load(&config, self.options);
+
+            self.mutex.lock();
+            std.debug.print("Swapping forests\n", .{});
+            self.swap();
+            self.mutex.unlock();
+        }
     }
 };

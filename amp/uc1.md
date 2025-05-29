@@ -69,7 +69,8 @@
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
 	- [*] Reload when changed, check from time to time
-		- Create thread that updates a mutex-protected ?Forest
+		- [/] Create a Forest_db double buffer with thread
+		- [>] Move fixed-buffer allocation into Forest
 		- Have the thread wait on a condition variable for some time. This can be woken when LSP indicates a file change.
 		- Have each LSP iteration try and load the ?Forest
 - [ ] Support searching in non-AMP data of Chore

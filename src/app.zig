@@ -100,15 +100,6 @@ pub const App = struct {
         try cfg_loader.loadFromFile(config_fp);
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
-
-        if (builtin.mode == .ReleaseFast) {
-            if (self.config.max_memsize) |max_memsize| {
-                try self.stdoutw.print("Running with max_memsize {}MB\n", .{max_memsize / 1024 / 1024});
-                self.maybe_fba = FBA.init(try self.gpaa.alloc(u8, max_memsize));
-                // Rewire self.ma to this fba
-                self.a = (self.maybe_fba orelse unreachable).allocator();
-            }
-        }
     }
 
     pub fn run(self: Self) !void {
