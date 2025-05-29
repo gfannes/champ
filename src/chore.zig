@@ -40,7 +40,7 @@ pub const Chore = struct {
     // String repr of Node.org_amps + Node.agg_amps
     str: []const u8 = &.{},
     // Indicates the size of Node.org_amps in str
-    org_size: usize = 0,
+    org_count: usize = 0,
     parts: Parts,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
@@ -293,11 +293,11 @@ pub const Chores = struct {
 
         try self.tmp_concat.resize(0);
         var sep: []const u8 = "";
-        var org_size: usize = 0;
+        var org_count: usize = 0;
         for (node.org_amps.items) |org| {
             const a = org.ix.cptr(self.amps.items);
             try self.tmp_concat.append(try std.fmt.allocPrint(aaa, "{s}{}", .{ sep, a.ap }));
-            org_size += (rubr.slice.last(self.tmp_concat.items) orelse unreachable).len;
+            org_count += 1;
             sep = " ";
         }
         for (node.agg_amps.items) |org| {
@@ -308,7 +308,7 @@ pub const Chores = struct {
 
         var chore = Chore.init(node_id, aaa);
         chore.str = try std.mem.concat(aaa, u8, self.tmp_concat.items);
-        chore.org_size = org_size;
+        chore.org_count = org_count;
 
         var offset: usize = 0;
         var ix: usize = 0;

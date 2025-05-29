@@ -221,7 +221,7 @@ pub const Lsp = struct {
                         }
 
                         const first_amp = &chore.parts.items[0];
-                        const last_amp = &chore.parts.items[chore.parts.items.len - 1];
+                        const last_amp = &chore.parts.items[chore.org_count - 1];
                         const range = dto.Range{
                             .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                             .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
@@ -261,7 +261,7 @@ pub const Lsp = struct {
 
                         if (q.distance(chore)) |distance| {
                             const first_amp = &chore.parts.items[0];
-                            const last_amp = &chore.parts.items[chore.parts.items.len - 1];
+                            const last_amp = &chore.parts.items[chore.org_count - 1];
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
