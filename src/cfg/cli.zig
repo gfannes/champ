@@ -1,6 +1,7 @@
-const std = @import("std");
+// Command-line interface arguments
 
-const cli = @import("rubr").cli;
+const std = @import("std");
+const rubr = @import("rubr");
 
 const Error = error{
     CouldNotFindExeName,
@@ -15,7 +16,7 @@ pub const Mode = enum {
     Test,
 };
 
-pub const Options = struct {
+pub const Args = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
@@ -29,11 +30,11 @@ pub const Options = struct {
     mode: ?Mode = null,
     extra: Strings = undefined,
 
-    args: cli.Args = undefined,
+    args: rubr.cli.Args = undefined,
     aa: std.heap.ArenaAllocator = undefined,
 
     pub fn init(self: *Self, ma: std.mem.Allocator) !void {
-        self.args = cli.Args.init(ma);
+        self.args = rubr.cli.Args.init(ma);
         try self.args.setupFromOS();
 
         self.aa = std.heap.ArenaAllocator.init(ma);

@@ -15,7 +15,7 @@ pub const Test = struct {
     const Self = @This();
 
     config: *const cfg.file.Config,
-    options: *const cfg.cli.Options,
+    cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
 
@@ -29,7 +29,7 @@ pub const Test = struct {
     }
 
     pub fn call(self: *Self) !void {
-        try self.forest.load(self.config, self.options);
+        try self.forest.load(self.config, self.cli_args);
 
         var root = naft.Node.init(self.log.writer());
         defer root.deinit();

@@ -157,9 +157,7 @@ pub const Path = struct {
         }
     }
 
-    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print("&", .{});
         if (self.is_definition)
             try writer.print("!", .{});

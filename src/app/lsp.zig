@@ -25,14 +25,14 @@ pub const Lsp = struct {
     const Self = @This();
 
     config: *const cfg.file.Config,
-    options: *const cfg.cli.Options,
+    cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
 
     forest_pp: ForestPP = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest_pp = ForestPP.init(self.options, self.log, self.a);
+        self.forest_pp = ForestPP.init(self.cli_args, self.log, self.a);
     }
     pub fn deinit(self: *Self) void {
         self.forest_pp.deinit();
@@ -65,7 +65,7 @@ pub const Lsp = struct {
             const dto = lsp.dto;
             if (request.id) |_| {
                 if (request.is("initialize")) {
-                    try forest.load(self.config, self.options);
+                    try forest.load(self.config, self.cli_args);
                     reloadForest = false;
 
                     const result = dto.InitializeResult{
@@ -96,7 +96,7 @@ pub const Lsp = struct {
 
                     if (reloadForest) {
                         forest.reinit();
-                        try forest.load(self.config, self.options);
+                        try forest.load(self.config, self.cli_args);
                         reloadForest = false;
                     }
 
@@ -151,7 +151,7 @@ pub const Lsp = struct {
                 } else if (request.is("textDocument/references")) {
                     if (reloadForest) {
                         forest.reinit();
-                        try forest.load(self.config, self.options);
+                        try forest.load(self.config, self.cli_args);
                         reloadForest = false;
                     }
 
@@ -202,7 +202,7 @@ pub const Lsp = struct {
                 } else if (request.is("textDocument/documentSymbol")) {
                     if (reloadForest) {
                         forest.reinit();
-                        try forest.load(self.config, self.options);
+                        try forest.load(self.config, self.cli_args);
                         reloadForest = false;
                     }
 
@@ -244,7 +244,7 @@ pub const Lsp = struct {
                 } else if (request.is("workspace/symbol")) {
                     if (reloadForest) {
                         forest.reinit();
-                        try forest.load(self.config, self.options);
+                        try forest.load(self.config, self.cli_args);
                         reloadForest = false;
                     }
 
@@ -340,7 +340,7 @@ pub const Lsp = struct {
 pub const ForestPP = struct {
     const Self = @This();
 
-    options: *const cfg.cli.Options,
+    cli_args: *const cfg.cli.Args,
 
     a: std.mem.Allocator,
     config_loader: cfg.file.Loader,
@@ -353,8 +353,8 @@ pub const ForestPP = struct {
     pp: [2]mero.Forest,
     ping_is_first: bool = true,
 
-    pub fn init(options: *const cfg.cli.Options, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
-        return ForestPP{ .options = options, .a = a, .config_loader = try cfg.file.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
+    pub fn init(cli_args: *const cfg.cli.Args, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
+        return ForestPP{ .cli_args = cli_args, .a = a, .config_loader = try cfg.file.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
     }
     pub fn deinit(self: *Self) void {
         self.stopThread();
@@ -413,7 +413,7 @@ pub const ForestPP = struct {
 
             const forest = self.pong();
             forest.reinit();
-            try forest.load(&config, self.options);
+            try forest.load(&config, self.cli_args);
 
             self.mutex.lock();
             std.debug.print("Swapping forests\n", .{});

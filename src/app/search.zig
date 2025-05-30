@@ -17,7 +17,7 @@ pub const Search = struct {
     const Self = @This();
 
     config: *const cfg.file.Config,
-    options: *const cfg.cli.Options,
+    cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
 
@@ -31,14 +31,14 @@ pub const Search = struct {
     }
 
     pub fn call(self: *Self) !void {
-        if (self.options.extra.items.len == 0)
+        if (self.cli_args.extra.items.len == 0)
             return Error.ExpectedQueryArgument;
 
         var query = qry.Query.init(self.a);
         defer query.deinit();
-        try query.setup(self.options.extra.items);
+        try query.setup(self.cli_args.extra.items);
 
-        try self.forest.load(self.config, self.options);
+        try self.forest.load(self.config, self.cli_args);
 
         const Ref = struct {
             ix: usize,

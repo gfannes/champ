@@ -45,7 +45,7 @@ pub const App = struct {
 
     a: std.mem.Allocator = undefined,
 
-    options: cfg.cli.Options = .{},
+    cli_args: cfg.cli.Args = .{},
 
     config_loader: ?cfg.file.Loader = null,
     config: cfg.file.Config = .{},
@@ -60,11 +60,11 @@ pub const App = struct {
         self.gpaa = self.gpa.allocator();
         self.a = self.gpaa;
 
-        try self.options.init(self.gpaa);
+        try self.cli_args.init(self.gpaa);
     }
     pub fn deinit(self: *Self) void {
         if (self.config_loader) |*loader| loader.deinit();
-        self.options.deinit();
+        self.cli_args.deinit();
         if (self.maybe_fba) |fba| self.gpaa.free(fba.buffer);
         if (self.gpa.deinit() == .leak) std.debug.print("Found memory leak\n", .{});
 
@@ -76,14 +76,14 @@ pub const App = struct {
     }
 
     pub fn parseOptions(self: *Self) !void {
-        self.options.parse() catch |err| {
+        self.cli_args.parse() catch |err| {
             std.debug.print("{}\n", .{err});
-            self.options.print_help = true;
+            self.cli_args.print_help = true;
         };
 
-        if (self.options.logfile) |logfile| {
+        if (self.cli_args.logfile) |logfile| {
             try self.log.toFile(logfile);
-        } else if (self.options.mode == cfg.cli.Mode.Lsp) {
+        } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
             try self.log.toFile("/tmp/champ.log");
         }
@@ -102,14 +102,14 @@ pub const App = struct {
     }
 
     pub fn run(self: Self) !void {
-        if (self.options.print_help) {
-            std.debug.print("{s}", .{self.options.help()});
-        } else if (self.options.mode) |mode| {
+        if (self.cli_args.print_help) {
+            std.debug.print("{s}", .{self.cli_args.help()});
+        } else if (self.cli_args.mode) |mode| {
             switch (mode) {
                 cfg.cli.Mode.Lsp => {
                     var obj = Lsp{
                         .config = &self.config,
-                        .options = &self.options,
+                        .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
                     };
@@ -120,7 +120,7 @@ pub const App = struct {
                 cfg.cli.Mode.Search => {
                     var obj = Search{
                         .config = &self.config,
-                        .options = &self.options,
+                        .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
                     };
@@ -131,7 +131,7 @@ pub const App = struct {
                 cfg.cli.Mode.Perf => {
                     var obj = Perf{
                         .config = &self.config,
-                        .options = &self.options,
+                        .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
                     };
@@ -140,7 +140,7 @@ pub const App = struct {
                 cfg.cli.Mode.Test => {
                     var obj = Test{
                         .config = &self.config,
-                        .options = &self.options,
+                        .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
                     };

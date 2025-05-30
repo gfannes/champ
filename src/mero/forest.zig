@@ -68,8 +68,8 @@ pub const Forest = struct {
         self.* = Self.init(log, a);
     }
 
-    pub fn load(self: *Self, config: *const cfg.file.Config, options: *const cfg.cli.Options) !void {
-        var wanted_groves: [][]const u8 = options.groves.items;
+    pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
+        var wanted_groves: [][]const u8 = cli_args.groves.items;
         if (slice.is_empty(wanted_groves)) {
             if (config.default) |default|
                 wanted_groves = default;

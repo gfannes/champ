@@ -13,13 +13,13 @@ pub const Perf = struct {
     const Self = @This();
 
     config: *const cfg.file.Config,
-    options: *const cfg.cli.Options,
+    cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
 
     pub fn call(self: Self) !void {
         for (self.config.groves) |grove| {
-            if (!strings.contains(u8, self.options.groves.items, grove.name))
+            if (!strings.contains(u8, self.cli_args.groves.items, grove.name))
                 // Skip this grove
                 continue;
 
@@ -87,7 +87,7 @@ pub const Perf = struct {
                     }
                     my.file_count += 1;
 
-                    if (my.outer.options.do_scan) {
+                    if (my.outer.cli_args.do_scan) {
                         var tokenizer = tkn.Tokenizer.init(my.content.items);
                         // Iterate over tokens: 355ms-160ms
                         while (tokenizer.next()) |_| {
@@ -95,7 +95,7 @@ pub const Perf = struct {
                         }
                     }
 
-                    if (my.outer.options.do_parse) {
+                    if (my.outer.cli_args.do_parse) {
                         const my_ext = std.fs.path.extension(name);
                         if (mero.Language.from_extension(my_ext)) |language| {
                             var tree = mero.Tree.init(my.a);
