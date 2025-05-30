@@ -68,10 +68,18 @@
 	- [ ] Make this configurable
 - [ ] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
-	- [*] Reload when changed, check from time to time
+	- [/] Reload when changed, check from time to time
 		- [/] Create a Forest_db double buffer with thread
 		- [>] Move fixed-buffer allocation into Forest
+		- [*] Cleanup all config handling
+			- [x] Move into 'cfg' namespace
+			- 'cfg.cli.Options' must be const and not depend on other things
+				- Maybe rename into Config?
+			- 'cfg.file.Config' must be easy to reload and indicate if a change was detected
+			- [?] Maybe introduce an additional struct that combines all info?
 		- Have the thread wait on a condition variable for some time. This can be woken when LSP indicates a file change.
+			- Check every second for cfg.file.Config update
+			- Check every 10 seconds for Forest update
 		- Have each LSP iteration try and load the ?Forest
 - [ ] Support searching in non-AMP data of Chore
 

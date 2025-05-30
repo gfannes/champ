@@ -8,7 +8,6 @@ const strings = rubr.strings;
 const fuzz = rubr.fuzz;
 
 const cfg = @import("../cfg.zig");
-const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const qry = @import("../qry.zig");
@@ -25,8 +24,8 @@ pub const Error = error{
 pub const Lsp = struct {
     const Self = @This();
 
-    config: *const cfg.Config,
-    options: *const cli.Options,
+    config: *const cfg.file.Config,
+    options: *const cfg.cli.Options,
     log: *const Log,
     a: std.mem.Allocator,
 
@@ -341,10 +340,10 @@ pub const Lsp = struct {
 pub const ForestPP = struct {
     const Self = @This();
 
-    options: *const cli.Options,
+    options: *const cfg.cli.Options,
 
     a: std.mem.Allocator,
-    config_loader: cfg.Loader,
+    config_loader: cfg.file.Loader,
 
     mutex: std.Thread.Mutex = .{},
 
@@ -354,8 +353,8 @@ pub const ForestPP = struct {
     pp: [2]mero.Forest,
     ping_is_first: bool = true,
 
-    pub fn init(options: *const cli.Options, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
-        return ForestPP{ .options = options, .a = a, .config_loader = try cfg.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
+    pub fn init(options: *const cfg.cli.Options, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
+        return ForestPP{ .options = options, .a = a, .config_loader = try cfg.file.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
     }
     pub fn deinit(self: *Self) void {
         self.stopThread();

@@ -6,7 +6,6 @@ const lsp = rubr.lsp;
 const strings = rubr.strings;
 
 const cfg = @import("../cfg.zig");
-const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
 
@@ -17,8 +16,8 @@ pub const Error = error{
 pub const Search = struct {
     const Self = @This();
 
-    config: *const cfg.Config,
-    options: *const cli.Options,
+    config: *const cfg.file.Config,
+    options: *const cfg.cli.Options,
     log: *const Log,
     a: std.mem.Allocator,
 

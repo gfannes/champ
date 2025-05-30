@@ -6,15 +6,14 @@ const naft = @import("rubr").naft;
 const Log = @import("rubr").log.Log;
 
 const cfg = @import("../cfg.zig");
-const cli = @import("../cli.zig");
 const tkn = @import("../tkn.zig");
 const mero = @import("../mero.zig");
 
 pub const Perf = struct {
     const Self = @This();
 
-    config: *const cfg.Config,
-    options: *const cli.Options,
+    config: *const cfg.file.Config,
+    options: *const cfg.cli.Options,
     log: *const Log,
     a: std.mem.Allocator,
 
@@ -38,7 +37,7 @@ pub const Perf = struct {
                 const Buffer = std.ArrayList(u8);
 
                 outer: *const Self,
-                grove: *const cfg.Grove,
+                grove: *const cfg.file.Grove,
                 content: *String,
                 a: std.mem.Allocator,
 

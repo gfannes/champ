@@ -8,7 +8,6 @@ const ignore = @import("rubr").ignore;
 const naft = @import("rubr").naft;
 const Log = @import("rubr").log.Log;
 
-const cli = @import("cli.zig");
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
 const cfg = @import("cfg.zig");
@@ -46,10 +45,10 @@ pub const App = struct {
 
     a: std.mem.Allocator = undefined,
 
-    options: cli.Options = .{},
+    options: cfg.cli.Options = .{},
 
-    config_loader: ?cfg.Loader = null,
-    config: cfg.Config = .{},
+    config_loader: ?cfg.file.Loader = null,
+    config: cfg.file.Config = .{},
 
     // Instance should not be moved after init()
     pub fn init(self: *Self) !void {
@@ -84,14 +83,14 @@ pub const App = struct {
 
         if (self.options.logfile) |logfile| {
             try self.log.toFile(logfile);
-        } else if (self.options.mode == cli.Mode.Lsp) {
+        } else if (self.options.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
             try self.log.toFile("/tmp/champ.log");
         }
     }
 
     pub fn loadConfig(self: *Self) !void {
-        self.config_loader = try cfg.Loader.init(self.gpaa);
+        self.config_loader = try cfg.file.Loader.init(self.gpaa);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
         // &todo: Replace hardcoded HOME folder
@@ -107,7 +106,7 @@ pub const App = struct {
             std.debug.print("{s}", .{self.options.help()});
         } else if (self.options.mode) |mode| {
             switch (mode) {
-                cli.Mode.Lsp => {
+                cfg.cli.Mode.Lsp => {
                     var obj = Lsp{
                         .config = &self.config,
                         .options = &self.options,
@@ -118,7 +117,7 @@ pub const App = struct {
                     defer obj.deinit();
                     try obj.call();
                 },
-                cli.Mode.Search => {
+                cfg.cli.Mode.Search => {
                     var obj = Search{
                         .config = &self.config,
                         .options = &self.options,
@@ -129,7 +128,7 @@ pub const App = struct {
                     defer obj.deinit();
                     try obj.call();
                 },
-                cli.Mode.Perf => {
+                cfg.cli.Mode.Perf => {
                     var obj = Perf{
                         .config = &self.config,
                         .options = &self.options,
@@ -138,7 +137,7 @@ pub const App = struct {
                     };
                     try obj.call();
                 },
-                cli.Mode.Test => {
+                cfg.cli.Mode.Test => {
                     var obj = Test{
                         .config = &self.config,
                         .options = &self.options,

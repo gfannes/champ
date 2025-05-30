@@ -5,7 +5,6 @@ const Terms = @import("dto.zig").Terms;
 const Tree = @import("dto.zig").Tree;
 const Node = @import("dto.zig").Node;
 const cfg = @import("../cfg.zig");
-const cli = @import("../cli.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Chores = @import("../chore.zig").Chores;
@@ -69,7 +68,7 @@ pub const Forest = struct {
         self.* = Self.init(log, a);
     }
 
-    pub fn load(self: *Self, config: *const cfg.Config, options: *const cli.Options) !void {
+    pub fn load(self: *Self, config: *const cfg.file.Config, options: *const cfg.cli.Options) !void {
         var wanted_groves: [][]const u8 = options.groves.items;
         if (slice.is_empty(wanted_groves)) {
             if (config.default) |default|
@@ -97,7 +96,7 @@ pub const Forest = struct {
         return null;
     }
 
-    fn loadGrove(self: *Self, cfg_grove: *const cfg.Grove) !void {
+    fn loadGrove(self: *Self, cfg_grove: *const cfg.file.Grove) !void {
         var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a);
         defer cb.deinit();
 
@@ -113,12 +112,12 @@ pub const Forest = struct {
         const Stack = std.ArrayList(usize);
 
         log: *const Log,
-        cfg_grove: *const cfg.Grove,
+        cfg_grove: *const cfg.file.Grove,
         tree: *Tree,
         node_stack: Stack,
         file_count: usize = 0,
 
-        pub fn init(log: *const Log, cfg_grove: *const cfg.Grove, tree: *Tree, a: std.mem.Allocator) Cb {
+        pub fn init(log: *const Log, cfg_grove: *const cfg.file.Grove, tree: *Tree, a: std.mem.Allocator) Cb {
             return Cb{
                 .log = log,
                 .cfg_grove = cfg_grove,
