@@ -114,7 +114,7 @@ test "cfg" {
     var loader = try Loader.init(ut.allocator);
     defer loader.deinit();
 
-    try loader.loadFromContent(content);
+    _ = try loader.loadFromContent(content);
 
     if (loader.config) |config| {
         try ut.expectEqual(10_000_000_000, config.max_memsize);
