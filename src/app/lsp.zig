@@ -19,6 +19,7 @@ pub const Error = error{
     UnexpectedFilenameFormat,
     ExpectedPosition,
     CouldNotLoadConfig,
+    ThreadNotRunning,
 };
 
 pub const Lsp = struct {
@@ -47,8 +48,6 @@ pub const Lsp = struct {
         var server = lsp.Server.init(cin.reader(), cout.writer(), self.log.writer(), self.a);
         defer server.deinit();
 
-        var reloadForest: bool = true;
-
         try self.forest_pp.startThread();
 
         var count: usize = 0;
@@ -57,17 +56,14 @@ pub const Lsp = struct {
         while (do_continue) : (count += 1) {
             try self.log.info("[Iteration](count:{})\n", .{count});
 
-            self.forest_pp.mutex.lock();
-            defer self.forest_pp.mutex.unlock();
-            const forest = self.forest_pp.ping();
-
             const request = try server.receive();
+
+            const forest, const mutex = try self.forest_pp.waitForPing();
+            defer mutex.unlock();
+
             const dto = lsp.dto;
             if (request.id) |_| {
                 if (request.is("initialize")) {
-                    try forest.load(self.config, self.cli_args);
-                    reloadForest = false;
-
                     const result = dto.InitializeResult{
                         .capabilities = dto.ServerCapabilities{
                             .textDocumentSync = dto.ServerCapabilities.TextDocumentSyncOptions{},
@@ -93,12 +89,6 @@ pub const Lsp = struct {
                 } else if (request.is("textDocument/definition")) {
                     // &cleanup common func between textDocument/definition and textDocument/references
                     // &cleanup by moving some func to Chores
-
-                    if (reloadForest) {
-                        forest.reinit();
-                        try forest.load(self.config, self.cli_args);
-                        reloadForest = false;
-                    }
 
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
@@ -149,12 +139,6 @@ pub const Lsp = struct {
                         try server.send(null);
                     }
                 } else if (request.is("textDocument/references")) {
-                    if (reloadForest) {
-                        forest.reinit();
-                        try forest.load(self.config, self.cli_args);
-                        reloadForest = false;
-                    }
-
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
                     const position = params.position orelse return Error.ExpectedPosition;
@@ -200,12 +184,6 @@ pub const Lsp = struct {
                         try server.send(null);
                     }
                 } else if (request.is("textDocument/documentSymbol")) {
-                    if (reloadForest) {
-                        forest.reinit();
-                        try forest.load(self.config, self.cli_args);
-                        reloadForest = false;
-                    }
-
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
 
@@ -222,7 +200,7 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.slice.is_empty(chore.parts.items)) {
+                        if (rubr.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
@@ -242,12 +220,6 @@ pub const Lsp = struct {
 
                     try server.send(document_symbols.items);
                 } else if (request.is("workspace/symbol")) {
-                    if (reloadForest) {
-                        forest.reinit();
-                        try forest.load(self.config, self.cli_args);
-                        reloadForest = false;
-                    }
-
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;
 
@@ -261,7 +233,7 @@ pub const Lsp = struct {
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (rubr.slice.is_empty(chore.parts.items)) {
+                        if (rubr.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }
@@ -303,7 +275,7 @@ pub const Lsp = struct {
                 if (request.is("textDocument/didOpen")) {
                     //
                 } else if (request.is("textDocument/didChange")) {
-                    reloadForest = true;
+                    forest.valid = false;
                 } else if (request.is("initialized")) {
                     init_ok = true;
                 } else if (request.is("exit")) {
@@ -353,6 +325,8 @@ pub const ForestPP = struct {
     pp: [2]mero.Forest,
     ping_is_first: bool = true,
 
+    reload_counter: usize = 0,
+
     pub fn init(cli_args: *const cfg.cli.Args, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
         return ForestPP{ .cli_args = cli_args, .a = a, .config_loader = try cfg.file.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
     }
@@ -363,15 +337,24 @@ pub const ForestPP = struct {
             forest.deinit();
     }
 
-    pub fn ping(self: *Self) *mero.Forest {
-        return &self.pp[if (self.ping_is_first) 0 else 1];
-    }
-    pub fn pong(self: *Self) *mero.Forest {
-        return &self.pp[if (self.ping_is_first) 1 else 0];
-    }
+    // Unlock the mutex when finished working with forest
+    pub fn waitForPing(self: *Self) !struct { *mero.Forest, *std.Thread.Mutex } {
+        while (true) {
+            {
+                self.mutex.lock();
+                if (self.quit_thread) {
+                    self.mutex.unlock();
+                    return Error.ThreadNotRunning;
+                }
+                const forest = self.ping();
+                if (forest.valid)
+                    return .{ forest, &self.mutex };
+                self.mutex.unlock();
+            }
 
-    pub fn swap(self: *Self) void {
-        self.ping_is_first = !self.ping_is_first;
+            const _100_ms = 100_000_000;
+            std.Thread.sleep(_100_ms);
+        }
     }
 
     fn startThread(self: *Self) !void {
@@ -390,35 +373,62 @@ pub const ForestPP = struct {
         self.thread = null;
     }
 
+    fn ping(self: *Self) *mero.Forest {
+        return &self.pp[if (self.ping_is_first) 0 else 1];
+    }
+    fn pong(self: *Self) *mero.Forest {
+        return &self.pp[if (self.ping_is_first) 1 else 0];
+    }
+
     fn call(self: *Self) !void {
         while (true) {
+            var reload: bool = false;
+
             {
                 self.mutex.lock();
                 defer self.mutex.unlock();
 
-                std.debug.print("Thread loop\n", .{});
-
                 if (self.quit_thread) {
                     std.debug.print("Stopping Thread\n", .{});
-                    break;
+                    return;
+                }
+
+                if (!self.ping().valid)
+                    reload = true;
+
+                if (self.reload_counter == 0) {
+                    reload = true;
+                    self.reload_counter = 100;
+                } else {
+                    self.reload_counter -= 1;
                 }
             }
 
             // &todo: Replace hardcoded HOME folder
             // &:zig:build:info Couple filename with build.zig.zon#name
             const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
-            try self.config_loader.loadFromFile(config_fp);
+            if (try self.config_loader.loadFromFile(config_fp)) {
+                std.debug.print("Found new config\n", .{});
+                reload = true;
+            }
 
-            const config = self.config_loader.config orelse return Error.CouldNotLoadConfig;
+            if (reload) {
+                const config = self.config_loader.config orelse return Error.CouldNotLoadConfig;
 
-            const forest = self.pong();
-            forest.reinit();
-            try forest.load(&config, self.cli_args);
+                const forest = self.pong();
+                forest.reinit();
+                try forest.load(&config, self.cli_args);
 
-            self.mutex.lock();
-            std.debug.print("Swapping forests\n", .{});
-            self.swap();
-            self.mutex.unlock();
+                // Swap ping and pong
+                {
+                    self.mutex.lock();
+                    defer self.mutex.unlock();
+                    self.ping_is_first = !self.ping_is_first;
+                }
+            }
+
+            const _100_ms = 100_000_000;
+            std.Thread.sleep(_100_ms);
         }
     }
 };

@@ -95,7 +95,7 @@ pub const Query = struct {
     pub fn distance(self: Self, chore: Chore) ?f64 {
         const status_is_match = block: {
             for (chore.parts.items) |part| {
-                const last = rubr.slice.lastPtrUnsafe(part.ap.parts.items).content;
+                const last = rubr.lastPtrUnsafe(part.ap.parts.items).content;
                 if (std.mem.eql(u8, last, "done"))
                     break :block self.include.done;
                 if (std.mem.eql(u8, last, "todo"))

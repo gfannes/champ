@@ -3,8 +3,11 @@ const std = @import("std");
 // Loads Config from a file in ZON format
 pub const Loader = struct {
     const Self = @This();
+    const Hasher = std.crypto.hash.sha2.Sha256;
+    const Hash = [Hasher.digest_length]u8;
 
     config: ?Config = null,
+    hash: ?Hash = null,
 
     aa: std.heap.ArenaAllocator,
 
@@ -17,20 +20,31 @@ pub const Loader = struct {
     }
 
     // For some reason, std.zon.parse.fromSlice() expects a sentinel string
-    pub fn loadFromContent(self: *Self, content: [:0]const u8) !void {
+    // Returns true if the loaded config is different from before
+    pub fn loadFromContent(self: *Self, content: [:0]const u8) !bool {
+        var my_hash: Hash = undefined;
+        Hasher.hash(content, &my_hash, .{});
+
+        if (self.hash) |hash| {
+            if (std.mem.eql(u8, &hash, &my_hash))
+                return false;
+        }
+
         self.config = try std.zon.parse.fromSlice(Config, self.aa.allocator(), content, null, .{});
+        self.hash = my_hash;
 
         try self.normalize();
+        return true;
     }
 
-    pub fn loadFromFile(self: *Self, filename: []const u8) !void {
+    pub fn loadFromFile(self: *Self, filename: []const u8) !bool {
         var file = try std.fs.openFileAbsolute(filename, .{});
         defer file.close();
 
         // For some reason, std.zon.parse.fromSlice() expects a sentinel string
         const content = try file.readToEndAllocOptions(self.aa.allocator(), std.math.maxInt(usize), null, 1, 0);
 
-        try self.loadFromContent(content);
+        return try self.loadFromContent(content);
     }
 
     // - Rework include extensions from 'md' to '.md'

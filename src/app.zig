@@ -89,16 +89,18 @@ pub const App = struct {
         }
     }
 
-    pub fn loadConfig(self: *Self) !void {
+    pub fn loadConfig(self: *Self) !bool {
         self.config_loader = try cfg.file.Loader.init(self.gpaa);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
         // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
         const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
-        try cfg_loader.loadFromFile(config_fp);
+        const ret = try cfg_loader.loadFromFile(config_fp);
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
+
+        return ret;
     }
 
     pub fn run(self: Self) !void {

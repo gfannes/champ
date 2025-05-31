@@ -12,7 +12,6 @@ const Chores = @import("../chore.zig").Chores;
 const rubr = @import("rubr");
 const Log = rubr.log.Log;
 const walker = rubr.walker;
-const slice = rubr.slice;
 const strings = rubr.strings;
 const Strange = rubr.strange.Strange;
 
@@ -29,6 +28,7 @@ pub const Error = error{
 pub const Forest = struct {
     const Self = @This();
 
+    valid: bool = false,
     log: *const Log,
     tree: Tree,
     chores: Chores,
@@ -70,11 +70,11 @@ pub const Forest = struct {
 
     pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
         var wanted_groves: [][]const u8 = cli_args.groves.items;
-        if (slice.is_empty(wanted_groves)) {
+        if (rubr.is_empty(wanted_groves)) {
             if (config.default) |default|
                 wanted_groves = default;
         }
-        if (slice.is_empty(wanted_groves))
+        if (rubr.is_empty(wanted_groves))
             return Error.ExpectedAtLeastOneGrove;
 
         for (config.groves) |cfg_grove| {
@@ -86,6 +86,8 @@ pub const Forest = struct {
         try self.resolveAmps();
         try self.aggregateAmps();
         try self.createChores();
+
+        self.valid = true;
     }
 
     pub fn findFile(self: *Self, name: []const u8) ?Tree.Entry {
@@ -142,7 +144,7 @@ pub const Forest = struct {
                         node_type = Node.Type.Grove;
                     }
 
-                    const entry = try my.tree.addChild(slice.last(my.node_stack.items));
+                    const entry = try my.tree.addChild(rubr.last(my.node_stack.items));
                     const n = entry.data;
                     n.* = Node.init(my.tree.a);
                     n.type = node_type;
@@ -179,7 +181,7 @@ pub const Forest = struct {
                         if (!size_is_ok)
                             return;
 
-                        const entry = try my.tree.addChild(slice.last(my.node_stack.items));
+                        const entry = try my.tree.addChild(rubr.last(my.node_stack.items));
                         const n = entry.data;
                         n.* = Node.init(my.tree.a);
                         n.type = Node.Type.File;
@@ -216,7 +218,7 @@ pub const Forest = struct {
                     else => {
                         defer my.is_new_file = false;
 
-                        if (rubr.slice.is_empty(n.org_amps.items))
+                        if (rubr.is_empty(n.org_amps.items))
                             return;
 
                         if (my.parent(entry.id)) |parent_node| {
@@ -258,7 +260,7 @@ pub const Forest = struct {
             fn parent(my: My, child_id: usize) ?*const Node {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
-                    if (!rubr.slice.is_empty(pentry.data.org_amps.items)) {
+                    if (!rubr.is_empty(pentry.data.org_amps.items)) {
                         return pentry.data;
                     }
                     id = pentry.id;

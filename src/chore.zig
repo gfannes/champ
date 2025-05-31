@@ -286,7 +286,7 @@ pub const Chores = struct {
     pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree) !bool {
         const node = tree.cptr(node_id);
 
-        if (rubr.slice.is_empty(node.org_amps.items))
+        if (rubr.is_empty(node.org_amps.items))
             // This is not a Chore
             return false;
 

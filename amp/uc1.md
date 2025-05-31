@@ -66,21 +66,19 @@
 - [x] Support searching for unresolved AMPs
 	- [x] Add catch-all AMP '?'
 	- [ ] Make this configurable
-- [ ] Reload from time to time
+- [x] Reload from time to time
 - [x] Must support specification of defaults in '~/.config/champ/config.zon#default'
-	- [/] Reload when changed, check from time to time
-		- [/] Create a Forest_db double buffer with thread
+	- [x] Reload when changed, check from time to time
+		- [x] Create a Forest_db double buffer with thread
 		- [>] Move fixed-buffer allocation into Forest
-		- [*] Cleanup all config handling
+		- [x] Cleanup all config handling
 			- [x] Move into 'cfg' namespace
-			- 'cfg.cli.Options' must be const and not depend on other things
-				- Maybe rename into Config?
-			- 'cfg.file.Config' must be easy to reload and indicate if a change was detected
-			- [?] Maybe introduce an additional struct that combines all info?
-		- Have the thread wait on a condition variable for some time. This can be woken when LSP indicates a file change.
-			- Check every second for cfg.file.Config update
-			- Check every 10 seconds for Forest update
-		- Have each LSP iteration try and load the ?Forest
+			- [x] 'cfg.cli.Args' must be const and not depend on other things
+			- [x] 'cfg.file.Config' must be easy to reload and indicate if a change was detected
+		- [x] Have the thread running that
+			- [x] Check every 100ms for cfg.file.Config update
+			- [x] Check every 10 seconds for Forest update
+			- [x] Can be woken by file update events from LSP
 - [ ] Support searching in non-AMP data of Chore
 
 # Annotate parts of source code with project and status tags &!annotate
@@ -99,7 +97,7 @@
 		- Is this the same as a reverse tag?
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
-- [ ] Support specification of AMP tags for a folder
+- [*] Support specification of AMP tags for a folder
 	- Use '_tree.md'
 		- Only aggregate AMP tags specified at the top
 	- Rename existing '_.amp' and update Rust code

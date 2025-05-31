@@ -6,6 +6,6 @@ pub fn main() !void {
     defer my_app.deinit();
 
     try my_app.parseOptions();
-    try my_app.loadConfig();
+    _ = try my_app.loadConfig();
     try my_app.run();
 }
