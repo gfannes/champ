@@ -132,5 +132,5 @@
 - [ ] Support env var `helix_filepath` in Helix for `%sh{}` commands
 	- Necessary to get 'daily' working properly
 - [ ] Support annotating skill level for a Chore
-- [ ] Improve fuzz searching
+- [x] Improve fuzz searching
 	- Segmented search

@@ -2,7 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const rubr = @import("rubr");
-const Log = rubr.log.Log;
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 const fuzz = rubr.fuzz;
@@ -27,7 +26,7 @@ pub const Lsp = struct {
 
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
-    log: *const Log,
+    log: *const rubr.log.Log,
     a: std.mem.Allocator,
 
     forest_pp: ForestPP = undefined,
@@ -273,9 +272,10 @@ pub const Lsp = struct {
                 }
             } else {
                 if (request.is("textDocument/didOpen")) {
-                    //
+                    // Nothing todo
                 } else if (request.is("textDocument/didChange")) {
-                    forest.valid = false;
+                    // Force a reload, but do not wait for it
+                    self.forest_pp.reload_counter = 0;
                 } else if (request.is("initialized")) {
                     init_ok = true;
                 } else if (request.is("exit")) {
@@ -352,8 +352,8 @@ pub const ForestPP = struct {
                 self.mutex.unlock();
             }
 
-            const _100_ms = 100_000_000;
-            std.Thread.sleep(_100_ms);
+            const _10_ms = 10_000_000;
+            std.Thread.sleep(_10_ms);
         }
     }
 
@@ -398,7 +398,8 @@ pub const ForestPP = struct {
 
                 if (self.reload_counter == 0) {
                     reload = true;
-                    self.reload_counter = 100;
+                    // &fixme:thread_sleep Set back to 100
+                    self.reload_counter = 10;
                 } else {
                     self.reload_counter -= 1;
                 }

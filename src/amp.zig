@@ -47,7 +47,7 @@ pub const Path = struct {
             const self_part: *const Part = self_rit.nextPtr() orelse return false;
             if (self_part.is_template) {
                 if (std.mem.eql(u8, self_part.content, "status")) {
-                    if (std.mem.indexOf(u8, "(question)(todo)(next)(wip)(done)(callout)(forward)", rhs_part.content) == null)
+                    if (!rubr.strings.contains(u8, &lowers, rhs_part.content))
                         return false;
                 } else {
                     // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
