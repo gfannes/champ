@@ -94,9 +94,11 @@ pub const Node = struct {
     type: Type = Type.Unknown,
     language: ?Language = null,
 
-    // Will contain resolved Amps, only the first can be a definition
+    // Ref to a definition that is directly present in this Node
+    // Is also added to org_amps
     def: ?Amp = null,
     // Refs to resolved AMPs that are directly present in this Node
+    // Only the first can be a def
     org_amps: Amps,
     // Refs to resolved AMPs that are inherited
     agg_amps: Amps,

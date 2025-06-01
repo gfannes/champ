@@ -97,7 +97,10 @@
 		- Is this the same as a reverse tag?
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
-- [*] Support specification of AMP tags for a folder
+- [/] Support specification of AMP tags for a folder
+	- [/] Process '_tree.md' first when processing a Folder
+		- [x] When collecting defs
+		- [*] When aggregating amps
 	- Use '_tree.md'
 		- Only aggregate AMP tags specified at the top
 	- Rename existing '_.amp' and update Rust code

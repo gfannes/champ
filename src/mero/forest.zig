@@ -367,101 +367,131 @@ pub const Forest = struct {
             path: []const u8 = &.{},
             is_new_file: bool = false,
             grove_id: ?usize = null,
+            do_process_tree_md: bool = false,
+            do_process_other: bool = true,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
-                std.debug.assert(n.org_amps.items.len == 0);
 
                 switch (n.type) {
-                    Node.Type.Grove => {},
-                    Node.Type.Folder => {
+                    // Node.Type.Grove => {},
+                    Node.Type.Grove, Node.Type.Folder => {
                         my.path = n.path;
+                        // Process '_tree.md' before other Files and Folders.
+                        // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
+                        // Both making defs absolute or aggregation of AMPs require this.
+                        for (my.tree.childIds(entry.id)) |child_id| {
+                            const child = my.tree.ptr(child_id);
+                            if (is_tree_md(child.path)) {
+                                // Allow processing '_tree.md'
+                                my.do_process_tree_md = true;
+                                try my.tree.dfs(child_id, true, my);
+                                my.do_process_tree_md = false;
+                            }
+                        }
                     },
                     Node.Type.File => {
-                        my.path = n.path;
+                        defer my.path = n.path;
                         my.terms = &n.terms;
                         my.is_new_file = true;
-                        if (n.grove_id == null)
-                            return Error.ExpectedGroveId;
-                        my.grove_id = n.grove_id;
+                        my.grove_id = n.grove_id orelse return Error.ExpectedGroveId;
+
+                        my.do_process_other = if (is_tree_md(n.path)) my.do_process_tree_md else true;
                     },
                     else => {
-                        defer my.is_new_file = false;
+                        if (my.do_process_other)
+                            try my.processOther(entry);
+                    },
+                }
+            }
 
-                        // Search n.line for a def AMP
-                        var line: usize = n.content_rows.begin;
-                        var cols: rubr.index.Range = .{};
+            fn processOther(my: *My, entry: Tree.Entry) !void {
+                const n = entry.data;
+                std.debug.assert(n.org_amps.items.len == 0);
+                std.debug.assert(n.type != Node.Type.Grove and n.type != Node.Type.Folder and n.type != Node.Type.File);
 
-                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
-                            const terms = my.terms orelse unreachable;
-                            const term = &terms.items[term_ix];
+                defer my.is_new_file = false;
 
-                            cols.begin = cols.end;
-                            cols.end += term.word.len;
+                // Search n.line for a def AMP
+                var line: usize = n.content_rows.begin;
+                var cols: rubr.index.Range = .{};
 
-                            if (term.kind == Term.Kind.Amp) {
-                                var strange = Strange{ .content = term.word };
+                for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                    const terms = my.terms orelse unreachable;
+                    const term = &terms.items[term_ix];
 
-                                var def_ap = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
-                                defer def_ap.deinit();
-                                if (def_ap.is_definition) {
-                                    if (n.def != null)
-                                        return Error.OnlyOneDefAllowed;
-                                    // Make the def amp absolute, if necessary
-                                    if (!def_ap.is_absolute) {
-                                        var child_id = entry.id;
-                                        // Try to find parent def
-                                        const maybe_parent_def: ?amp.Path = block: while (true) {
-                                            if (try my.tree.parent(child_id)) |parent| {
-                                                if (parent.data.def) |d| {
-                                                    const pdef = d.ix.cptr(my.chores.amps.items);
-                                                    break :block pdef.ap;
-                                                } else {
-                                                    child_id = parent.id;
-                                                }
-                                            } else {
-                                                break :block null;
-                                            }
-                                        };
+                    cols.begin = cols.end;
+                    cols.end += term.word.len;
 
-                                        if (maybe_parent_def) |parent_def| {
-                                            try def_ap.prepend(parent_def);
-                                            def_ap.is_definition = true;
+                    if (term.kind == Term.Kind.Amp) {
+                        var strange = Strange{ .content = term.word };
+
+                        var def_ap = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                        defer def_ap.deinit();
+                        if (def_ap.is_definition) {
+                            if (n.def != null)
+                                return Error.OnlyOneDefAllowed;
+                            // Make the def amp absolute, if necessary
+                            if (!def_ap.is_absolute) {
+                                var child_id = entry.id;
+                                // Try to find parent def
+                                const maybe_parent_def: ?amp.Path = block: while (true) {
+                                    if (try my.tree.parent(child_id)) |parent| {
+                                        if (parent.data.def) |d| {
+                                            const pdef = d.ix.cptr(my.chores.amps.items);
+                                            break :block pdef.ap;
                                         } else {
-                                            try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def_ap});
-                                            def_ap.is_absolute = true;
+                                            child_id = parent.id;
                                         }
-                                    }
-
-                                    // Collect all defs in a separate struct
-                                    const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                                    const pos = mero.Node.Pos{ .row = line, .cols = cols };
-                                    if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
-                                        n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
-                                        try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = pos });
                                     } else {
-                                        try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                                        break :block null;
+                                    }
+                                };
+
+                                if (maybe_parent_def) |parent_def| {
+                                    try def_ap.prepend(parent_def);
+                                    def_ap.is_definition = true;
+                                } else {
+                                    try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def_ap});
+                                    def_ap.is_absolute = true;
+                                }
+                            }
+
+                            // Collect all defs in a separate struct
+                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
+                            const pos = mero.Node.Pos{ .row = line, .cols = cols };
+                            if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
+                                n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
+                                try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = pos });
+                            } else {
+                                try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                            }
+                        }
+                    } else if (term.kind == Term.Kind.Newline) {
+                        line += term.word.len;
+                        cols = .{};
+                    }
+                }
+
+                if (my.is_new_file) {
+                    switch (n.type) {
+                        Node.Type.Paragraph => {
+                            // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
+                            // If the file is '_tree.md', it is copied to the Folder as well
+                            if (try my.tree.parent(entry.id)) |file| {
+                                file.data.def = n.def;
+                                try file.data.org_amps.insertSlice(0, n.org_amps.items);
+
+                                if (std.mem.endsWith(u8, file.data.path, "_tree.md")) {
+                                    if (try my.tree.parent(file.id)) |folder| {
+                                        folder.data.def = n.def;
+                                        try folder.data.org_amps.insertSlice(0, n.org_amps.items);
                                     }
                                 }
-                            } else if (term.kind == Term.Kind.Newline) {
-                                line += term.word.len;
-                                cols = .{};
                             }
-                        }
-
-                        if (my.is_new_file) {
-                            switch (n.type) {
-                                Node.Type.Paragraph => {
-                                    // A def on the first line is copied to the File as well
-                                    if (try my.tree.parent(entry.id)) |parent| {
-                                        parent.data.def = n.def;
-                                        try parent.data.org_amps.insertSlice(0, n.org_amps.items);
-                                    }
-                                },
-                                else => {},
-                            }
-                        }
-                    },
+                        },
+                        else => {},
+                    }
                 }
             }
         }{ .tree = &self.tree, .chores = &self.chores, .log = self.log, .a = self.a };
@@ -486,3 +516,7 @@ pub const Forest = struct {
         return null;
     }
 };
+
+fn is_tree_md(path: []const u8) bool {
+    return std.mem.endsWith(u8, path, "_tree.md");
+}

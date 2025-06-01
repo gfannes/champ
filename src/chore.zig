@@ -333,13 +333,12 @@ pub const Chores = struct {
         while (maybe_id) |id| {
             const n = tree.cptr(id);
             switch (n.type) {
-                mero.Node.Type.Folder => chore.path = n.path,
-                mero.Node.Type.File => chore.path = n.path,
+                mero.Node.Type.Grove, mero.Node.Type.Folder, mero.Node.Type.File => chore.path = n.path,
                 else => {},
             }
-            if (try tree.parent(id)) |p|
-                maybe_id = p.id;
+            maybe_id = if (try tree.parent(id)) |p| p.id else null;
             if (chore.path.len > 0)
+                // We found a path: stop search
                 maybe_id = null;
         }
 
