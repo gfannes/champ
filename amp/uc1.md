@@ -97,12 +97,15 @@
 		- Is this the same as a reverse tag?
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
-- [/] Support specification of AMP tags for a folder
-	- [/] Process '_tree.md' first when processing a Folder
+- [x] Support specification of AMP tags for a folder
+	- [x] Find good name to store metadata for Folder: '_amp.md'
+		- Extension should be a known extension to leverage existing bindings
+		- Start with an '_' to avoid collisions. Starting with a '.' is to impractical.
+		- '_amp': communicates this is metadata for AMP
+		- '_tree': communicates this is metadata for the (sub)tree
+		- '_metadata.md'
+	- [x] Process '_amp.md' first when processing a Folder
 		- [x] When collecting defs
-		- [*] When aggregating amps
-	- Use '_tree.md'
-		- Only aggregate AMP tags specified at the top
 	- Rename existing '_.amp' and update Rust code
 - [ ] Accept AMPs in source code comments if there is AMP data at the start
 

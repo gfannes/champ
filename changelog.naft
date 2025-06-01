@@ -9,7 +9,7 @@
 			[release](date:20241018)
 		}
 		[patch](version:1){
-			[feature]{Using `_.amp` to provide metadata for folders}
+			[feature]{Using `_amp.md` to provide metadata for folders}
 		}
 	}
 }

@@ -41,7 +41,7 @@ impl Builder {
 
     // Inits node.def and node.org from
     // - Node metadata
-    // - Metadata files (_.amp)
+    // - Metadata files (_amp.md)
     // Does not join node.def or resolve node.org
     fn init_org_def(&mut self, forest: &mut Forest) -> util::Result<()> {
         let span = span!(Level::TRACE, "init_org_def");
@@ -104,7 +104,7 @@ impl Builder {
         })?;
 
         // Populate Tree.root().org with info from
-        // - _.amp for Folders
+        // - _amp.md for Folders
         // - tree.filename for Files &todo
         for ix in 0..forest.trees.len() {
             let mut md_paths = None;
@@ -119,7 +119,7 @@ impl Builder {
                         if md_tree
                             .filename
                             .file_name()
-                            .and_then(|file_name| Some(file_name.to_string_lossy() == "_.amp"))
+                            .and_then(|file_name| Some(file_name.to_string_lossy() == "_amp.md"))
                             .unwrap_or(false)
                         {
                             info!("Found Tree metadata for '{}'", tree.filename.display());

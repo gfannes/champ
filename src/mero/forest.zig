@@ -208,42 +208,22 @@ pub const Forest = struct {
 
             tree: *const Tree,
             chores: *const Chores,
-            is_new_file: bool = false,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
 
-                switch (n.type) {
-                    Node.Type.File => my.is_new_file = true,
-                    else => {
-                        defer my.is_new_file = false;
+                if (rubr.is_empty(n.org_amps.items))
+                    return;
 
-                        if (rubr.is_empty(n.org_amps.items))
-                            return;
-
-                        if (my.parent(entry.id)) |parent_node| {
-                            for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
-                                for (parent_amps) |parent_amp|
-                                    if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
-                                        try n.agg_amps.append(parent_amp);
-                            }
-                        }
-
-                        if (my.is_new_file) {
-                            switch (n.type) {
-                                Node.Type.Paragraph => {
-                                    // AMPs on the first line are copied to the File as well
-                                    if (try my.tree.parent(entry.id)) |file_entry|
-                                        for (n.org_amps.items) |first_line_amp|
-                                            if (!my.is_present(file_entry.data.org_amps.items, first_line_amp) and !my.is_present(file_entry.data.agg_amps.items, first_line_amp))
-                                                try file_entry.data.agg_amps.append(first_line_amp);
-                                },
-                                else => {},
-                            }
-                        }
-                    },
+                if (my.parent(entry.id)) |parent_node| {
+                    for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
+                        for (parent_amps) |parent_amp|
+                            if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
+                                try n.agg_amps.append(parent_amp);
+                    }
                 }
             }
+
             fn is_present(my: My, haystack: []const Node.Amp, needle: Node.Amp) bool {
                 const needle_ap = needle.ix.cptr(my.chores.amps.items);
                 for (haystack) |h| {
@@ -367,7 +347,7 @@ pub const Forest = struct {
             path: []const u8 = &.{},
             is_new_file: bool = false,
             grove_id: ?usize = null,
-            do_process_tree_md: bool = false,
+            do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
@@ -377,16 +357,16 @@ pub const Forest = struct {
                     // Node.Type.Grove => {},
                     Node.Type.Grove, Node.Type.Folder => {
                         my.path = n.path;
-                        // Process '_tree.md' before other Files and Folders.
+                        // Process '_amp.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
                         for (my.tree.childIds(entry.id)) |child_id| {
                             const child = my.tree.ptr(child_id);
-                            if (is_tree_md(child.path)) {
-                                // Allow processing '_tree.md'
-                                my.do_process_tree_md = true;
+                            if (is_amp_md(child.path)) {
+                                // Allow processing '_amp.md'
+                                my.do_process_amp_md = true;
                                 try my.tree.dfs(child_id, true, my);
-                                my.do_process_tree_md = false;
+                                my.do_process_amp_md = false;
                             }
                         }
                     },
@@ -396,7 +376,7 @@ pub const Forest = struct {
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return Error.ExpectedGroveId;
 
-                        my.do_process_other = if (is_tree_md(n.path)) my.do_process_tree_md else true;
+                        my.do_process_other = if (is_amp_md(n.path)) my.do_process_amp_md else true;
                     },
                     else => {
                         if (my.do_process_other)
@@ -477,12 +457,12 @@ pub const Forest = struct {
                     switch (n.type) {
                         Node.Type.Paragraph => {
                             // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
-                            // If the file is '_tree.md', it is copied to the Folder as well
+                            // If the file is '_amp.md', it is copied to the Folder as well
                             if (try my.tree.parent(entry.id)) |file| {
                                 file.data.def = n.def;
                                 try file.data.org_amps.insertSlice(0, n.org_amps.items);
 
-                                if (std.mem.endsWith(u8, file.data.path, "_tree.md")) {
+                                if (is_amp_md(file.data.path)) {
                                     if (try my.tree.parent(file.id)) |folder| {
                                         folder.data.def = n.def;
                                         try folder.data.org_amps.insertSlice(0, n.org_amps.items);
@@ -517,6 +497,6 @@ pub const Forest = struct {
     }
 };
 
-fn is_tree_md(path: []const u8) bool {
-    return std.mem.endsWith(u8, path, "_tree.md");
+fn is_amp_md(path: []const u8) bool {
+    return std.mem.endsWith(u8, path, "_amp.md");
 }
