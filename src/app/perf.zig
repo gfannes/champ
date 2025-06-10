@@ -120,8 +120,8 @@ pub const Perf = struct {
                 }
             }{ .outer = &self, .grove = &grove, .content = &content, .a = self.a };
 
-            // const dir = try std.fs.cwd().openDir(grove.path, .{});
-            const dir = try std.fs.openDirAbsolute(grove.path, .{});
+            var dir = try std.fs.openDirAbsolute(grove.path, .{});
+            defer dir.close();
             std.debug.print("folder: {s} {}\n", .{ grove.path, dir });
 
             try w.walk(dir, &cb);

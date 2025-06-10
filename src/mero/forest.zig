@@ -102,7 +102,8 @@ pub const Forest = struct {
         var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a);
         defer cb.deinit();
 
-        const dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
+        var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
+        defer dir.close();
 
         var w = try walker.Walker.init(self.a);
         defer w.deinit();
