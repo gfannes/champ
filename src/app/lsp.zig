@@ -399,7 +399,7 @@ pub const ForestPP = struct {
                 if (self.reload_counter == 0) {
                     reload = true;
                     // &fixme:thread_sleep Set back to 100
-                    self.reload_counter = 10;
+                    self.reload_counter = 100;
                 } else {
                     self.reload_counter -= 1;
                 }
@@ -426,6 +426,7 @@ pub const ForestPP = struct {
                     defer self.mutex.unlock();
                     self.ping_is_first = !self.ping_is_first;
                 }
+                std.debug.print("Reloaded Forest\n", .{});
             }
 
             const _100_ms = 100_000_000;
