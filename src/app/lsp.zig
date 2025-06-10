@@ -165,10 +165,10 @@ pub const Lsp = struct {
                     // Find all usage locations
                     if (maybe_ap) |ap| {
                         var locations = std.ArrayList(dto.Location).init(aaa);
-                        for (forest.chores.list.items) |e| {
-                            for (e.parts.items) |part| {
+                        for (forest.chores.list.items) |chore| {
+                            for (chore.parts.items[0..chore.org_count]) |part| {
                                 if (ap.is_fit(part.ap)) {
-                                    const uri = try pathToUri_(e.path, aaa);
+                                    const uri = try pathToUri_(chore.path, aaa);
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.begin) },
                                         .end = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.end) },
