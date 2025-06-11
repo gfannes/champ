@@ -426,7 +426,6 @@ pub const ForestPP = struct {
                     defer self.mutex.unlock();
                     self.ping_is_first = !self.ping_is_first;
                 }
-                std.debug.print("Reloaded Forest\n", .{});
             }
 
             const _100_ms = 100_000_000;
