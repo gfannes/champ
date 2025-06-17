@@ -13,7 +13,6 @@ const rubr = @import("rubr");
 const Log = rubr.log.Log;
 const walker = rubr.walker;
 const strings = rubr.strings;
-const Strange = rubr.strange.Strange;
 
 pub const Error = error{
     ExpectedOffsets,
@@ -298,7 +297,7 @@ pub const Forest = struct {
                     },
                     else => {
                         var line: usize = n.content_rows.begin;
-                        var cols: rubr.index.Range = .{};
+                        var cols: rubr.idx.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const term = &my.terms.items[term_ix];
 
@@ -306,7 +305,7 @@ pub const Forest = struct {
                             cols.end += term.word.len;
 
                             if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox or term.kind == Term.Kind.Capital) {
-                                var strange = Strange{ .content = term.word };
+                                var strange = rubr.strng.Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                                 defer path.deinit();
                                 if (!path.is_definition) {
@@ -395,7 +394,7 @@ pub const Forest = struct {
 
                 // Search n.line for a def AMP
                 var line: usize = n.content_rows.begin;
-                var cols: rubr.index.Range = .{};
+                var cols: rubr.idx.Range = .{};
 
                 for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                     const terms = my.terms orelse unreachable;
@@ -405,7 +404,7 @@ pub const Forest = struct {
                     cols.end += term.word.len;
 
                     if (term.kind == Term.Kind.Amp) {
-                        var strange = Strange{ .content = term.word };
+                        var strange = rubr.strng.Strange{ .content = term.word };
 
                         var def_ap = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
                         defer def_ap.deinit();

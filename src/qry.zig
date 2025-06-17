@@ -48,7 +48,7 @@ pub const Query = struct {
 
     pub fn setup(self: *Self, parts: []const []const u8) !void {
         for (parts) |part| {
-            var strange = rubr.strange.Strange{ .content = part };
+            var strange = rubr.strng.Strange{ .content = part };
 
             while (!strange.empty()) {
                 if (strange.popChar('.')) {

@@ -118,7 +118,7 @@ pub const Lsp = struct {
                     var range = dto.Range{};
                     if (maybe_ap) |e| {
                         for (forest.chores.defs.items) |def| {
-                            if (def.ap.is_fit(e)) {
+                            if (def.ap.isFit(e)) {
                                 dst_filename = def.path;
                                 range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
                                 range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
@@ -167,7 +167,7 @@ pub const Lsp = struct {
                         var locations = std.ArrayList(dto.Location).init(aaa);
                         for (forest.chores.list.items) |chore| {
                             for (chore.parts.items[0..chore.org_count]) |part| {
-                                if (ap.is_fit(part.ap)) {
+                                if (ap.isFit(part.ap)) {
                                     const uri = try pathToUri_(chore.path, aaa);
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.begin) },
@@ -203,6 +203,9 @@ pub const Lsp = struct {
                             try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
+
+                        if (chore.isDone())
+                            continue;
 
                         const first_amp = &chore.parts.items[0];
                         const last_amp = &chore.parts.items[chore.org_count - 1];
@@ -398,8 +401,8 @@ pub const ForestPP = struct {
 
                 if (self.reload_counter == 0) {
                     reload = true;
-                    // &fixme:thread_sleep Set back to 100
-                    self.reload_counter = 100;
+                    // Reload every 5min
+                    self.reload_counter = 5 * 60 * 10;
                 } else {
                     self.reload_counter -= 1;
                 }

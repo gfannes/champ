@@ -12,7 +12,7 @@ const naft = rubr.naft;
 const strings = rubr.strings;
 const walker = rubr.walker;
 const Log = rubr.log.Log;
-const index = rubr.index;
+const idx = rubr.idx;
 const tree = rubr.tree;
 
 pub const Error = error{
@@ -54,7 +54,7 @@ pub const Term = struct {
 pub const Line = struct {
     const Self = @This();
 
-    terms_ixr: index.Range = .{},
+    terms_ixr: idx.Range = .{},
 
     pub fn append(self: *Self, term: Term, terms: *Terms) !void {
         if (term.word.len > 0) {
@@ -81,7 +81,7 @@ pub const Node = struct {
     const Self = @This();
     pub const Pos = struct {
         row: usize,
-        cols: rubr.index.Range,
+        cols: rubr.idx.Range,
     };
     pub const Amp = struct {
         ix: chore.Amp.Ix,
@@ -109,8 +109,8 @@ pub const Node = struct {
     content: []const u8 = &.{},
     terms: Terms,
 
-    content_rows: index.Range = .{},
-    content_cols: index.Range = .{},
+    content_rows: idx.Range = .{},
+    content_cols: idx.Range = .{},
 
     grove_id: ?usize = null,
 

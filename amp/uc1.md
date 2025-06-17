@@ -28,7 +28,7 @@
 		- [x] Resolve amps into Node.orgs
 			- [x] Create flat list of defs as part of joinDefs()
 			- [x] Report doubles via log
-				- [x] Impl 'amp.Path.is_fit()'
+				- [x] Impl 'amp.Path.isFit()'
 			- [x] Dfs over tree
 				- [x] Parse each amp
 				- [x] Resolve non-defs and append
@@ -46,6 +46,7 @@
 - [x] Search smart-case
 	- Impl in rubr.fuzz based on casing of needle
 - [x] Reload when file is changed/created
+	- [*] Check for time stamp diff iso full reload
 - [x] Allow ambiguous resolving when only a single match is found within its own Grove
 - Support searching for next Chore to execute
 	- [x] Interpret '[?]' as AMP
@@ -99,6 +100,8 @@
 		- [?] Do we need some marker to take them into account
 - [x] Support specification of AMP tags for a folder
 	- [x] Find good name to store metadata for Folder: '_amp.md'
+		- [*] Make this name configurable from config.zon
+		- [*] Maybe 'readme.md' is better than '_amp.md'
 		- Extension should be a known extension to leverage existing bindings
 		- Start with an '_' to avoid collisions. Starting with a '.' is to impractical.
 		- '_amp': communicates this is metadata for AMP

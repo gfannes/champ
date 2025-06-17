@@ -5,7 +5,6 @@ const amp = @import("amp.zig");
 const rubr = @import("rubr");
 const naft = rubr.naft;
 const Log = rubr.log.Log;
-const Strange = rubr.strange.Strange;
 
 const mero = @import("mero.zig");
 
@@ -23,7 +22,7 @@ pub const Chore = struct {
         ap: amp.Path,
         str: []const u8,
         row: usize,
-        cols: rubr.index.Range,
+        cols: rubr.idx.Range,
         pub fn write(self: Part, parent: *naft.Node) void {
             var n = parent.node("Chore.Part");
             defer n.deinit();
@@ -52,6 +51,17 @@ pub const Chore = struct {
         self.defs.deinit();
     }
 
+    pub fn isDone(self: Self) bool {
+        var strange = rubr.strng.Strange{ .content = "&status:done" };
+        var done_ap = (amp.Path.parse(&strange, self.parts.allocator) catch null) orelse unreachable;
+        defer done_ap.deinit();
+        for (self.parts.items) |part| {
+            if (part.ap.isFit(done_ap))
+                return true;
+        }
+        return false;
+    }
+
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chore");
         defer n.deinit();
@@ -66,14 +76,14 @@ pub const Chore = struct {
 
 pub const Def = struct {
     const Self = @This();
-    pub const Ix = rubr.index.Ix(@This());
+    pub const Ix = rubr.idx.Ix(@This());
 
     ap: amp.Path,
     str: []const u8,
     path: []const u8,
     grove_id: usize,
     row: usize,
-    cols: rubr.index.Range,
+    cols: rubr.idx.Range,
 
     pub fn deinit(self: *Self) void {
         self.ap.deinit();
@@ -91,7 +101,7 @@ pub const Def = struct {
 };
 
 pub const Amp = struct {
-    pub const Ix = rubr.index.Ix(@This());
+    pub const Ix = rubr.idx.Ix(@This());
 
     ap: amp.Path,
     def: Def.Ix,
@@ -155,7 +165,7 @@ pub const Chores = struct {
 
         const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&:", name });
 
-        var strange = Strange{ .content = content };
+        var strange = rubr.strng.Strange{ .content = content };
         const ap = try amp.Path.parse(&strange, aaa) orelse return Error.CouldNotParseAmp;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
@@ -166,13 +176,13 @@ pub const Chores = struct {
 
     // Takes deep copy of def
     // For non-templates, the def is added to the list of AMPs as well
-    pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.index.Range) !?Amp.Ix {
+    pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.idx.Range) !?Amp.Ix {
         try self.log.info("appendDef() '{}'\n", .{def_ap});
         const check_fit = struct {
             needle: *const amp.Path,
             grove_id: usize,
             pub fn call(my: @This(), other: Def) bool {
-                return other.ap.is_fit(my.needle.*) and my.grove_id == other.grove_id;
+                return other.ap.isFit(my.needle.*) and my.grove_id == other.grove_id;
             }
         }{ .needle = &def_ap, .grove_id = grove_id };
         if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
@@ -207,7 +217,7 @@ pub const Chores = struct {
     pub fn resolve(self: *Self, ap: *amp.Path, grove_id: usize) !?Amp.Ix {
         // Find match in already resolved AMPs
         for (self.amps.items, 0..) |e, ix| {
-            if (e.ap.is_fit(ap.*)) {
+            if (e.ap.isFit(ap.*)) {
                 try ap.extend(e.ap);
                 return Amp.Ix.init(ix);
             }
@@ -232,7 +242,7 @@ pub const Chores = struct {
                 if (grove_id_must_match != grove_id_is_same)
                     continue;
 
-                if (def.ap.is_fit(ap.*)) {
+                if (def.ap.isFit(ap.*)) {
                     if (maybe_match) |match| {
                         if (!is_ambiguous) {
                             // This is the first ambiguous match we find: report the initial match as well

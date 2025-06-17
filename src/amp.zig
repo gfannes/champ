@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const rubr = @import("rubr");
-const Strange = rubr.strange.Strange;
 
 pub const Error = error{
     CannotExtendAbsolutePath,
@@ -40,7 +39,7 @@ pub const Path = struct {
     }
 
     // rhs is the smaller one
-    pub fn is_fit(self: Self, rhs: Self) bool {
+    pub fn isFit(self: Self, rhs: Self) bool {
         var rhs_rit = std.mem.reverseIterator(rhs.parts.items);
         var self_rit = std.mem.reverseIterator(self.parts.items);
         while (rhs_rit.nextPtr()) |rhs_part| {
@@ -73,7 +72,7 @@ pub const Path = struct {
     }
 
     // Assumes strange outlives Path
-    pub fn parse(strange: *Strange, a: std.mem.Allocator) !?Path {
+    pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Path {
         if (strange.popChar('&')) {
             var path = Path.init(a);
             errdefer path.deinit();
@@ -86,13 +85,13 @@ pub const Path = struct {
 
             while (strange.popTo(':')) |p|
                 if (p.len > 0) {
-                    var s = Strange{ .content = p };
+                    var s = rubr.strng.Strange{ .content = p };
                     try path.parts.append(Part.init(&s));
                 };
 
             if (strange.popAll()) |p|
                 if (p.len > 0) {
-                    var s = Strange{ .content = p };
+                    var s = rubr.strng.Strange{ .content = p };
                     try path.parts.append(Part.init(&s));
                 };
 
@@ -113,7 +112,7 @@ pub const Path = struct {
                     '-' => "canceled",
                     else => "unknown",
                 };
-                var s = Strange{ .content = content };
+                var s = rubr.strng.Strange{ .content = content };
                 try path.parts.append(Part.init(&s));
 
                 if (strange.popChar(']'))
@@ -125,7 +124,7 @@ pub const Path = struct {
             var path = Path.init(a);
             errdefer path.deinit();
 
-            var s = Strange{ .content = lowers[ix] };
+            var s = rubr.strng.Strange{ .content = lowers[ix] };
             try path.parts.append(Part.init(&s));
 
             return path;
@@ -180,7 +179,7 @@ pub const Part = struct {
     is_exclusive: bool = false,
     is_template: bool = false,
 
-    pub fn init(strange: *Strange) Part {
+    pub fn init(strange: *rubr.strng.Strange) Part {
         const is_exclusive = strange.popChar('!');
         const is_template = strange.popChar('~');
         return Part{
@@ -213,7 +212,7 @@ test "amp" {
     };
 
     for (scns) |scn| {
-        var strange = Strange{ .content = scn.repr };
+        var strange = rubr.strng.Strange{ .content = scn.repr };
         var path = try Path.parse(&strange, ut.allocator) orelse unreachable;
         defer path.deinit();
         const act = try std.fmt.allocPrint(ut.allocator, "{s}", .{path});
