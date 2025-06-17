@@ -25,7 +25,7 @@ pub const Perf = struct {
 
             std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.path });
 
-            var w = try walker.Walker.init(self.a);
+            var w = walker.Walker.init(self.a);
             defer w.deinit();
 
             const String = std.ArrayList(u8);

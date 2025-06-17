@@ -104,7 +104,7 @@ pub const Forest = struct {
         var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
         defer dir.close();
 
-        var w = try walker.Walker.init(self.a);
+        var w = walker.Walker.init(self.a);
         defer w.deinit();
         try w.walk(dir, &cb);
     }
