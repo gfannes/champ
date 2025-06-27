@@ -85,7 +85,7 @@ pub const App = struct {
             try self.log.toFile(logfile);
         } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
-            try self.log.toFile("/tmp/champ.log");
+            try self.log.toFile("/tmp/champ-%.log");
         }
     }
 

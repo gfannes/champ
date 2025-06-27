@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .strip = false,
+        .link_libc = true,
     });
 
     // This declares intent for the executable to be installed into the
