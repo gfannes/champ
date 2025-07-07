@@ -1,6 +1,6 @@
-&!:uc1
+&&:uc1
 
-# Create project breakdown &!breakdown
+# Create project breakdown &&breakdown
 - Must support defining a tree of subtasks as AMP tags
 	- [x] Join relative defs into absolute defs
 		- [x] Use rubr.tree.Tree to store Nodes
@@ -16,7 +16,7 @@
 - [ ] Add 'fix' mode to champ
 	- [ ] Warn on amps without definition
 
-# Search for AMP defs and tags from editor &!define
+# Search for AMP defs and tags from editor &&define
 - [x] Must support [[Helix]] via [[Language Server Protocol (LSP)]]
 	- [x] Use workspace symbols
 - [x] Search in amp.Path, not in terms
@@ -40,7 +40,7 @@
 		- [x] Workspace symbols
 	- [ ] Open Jira URL
 		- Support `~id` template
-			- `&!:~id=a3denc$,url=https://auro-3d.atlassian.net/browse/A3DENC-$`
+			- `&&:~id=a3denc$,url=https://auro-3d.atlassian.net/browse/A3DENC-$`
 			- LSP's 'goto definition' must open the URL as well
 			- Match against templates after other matches fail
 - [x] Search smart-case
@@ -82,7 +82,7 @@
 			- [x] Can be woken by file update events from LSP
 - [ ] Support searching in non-AMP data of Chore
 
-# Annotate parts of source code with project and status tags &!annotate
+# Annotate parts of source code with project and status tags &&annotate
 - [/] Support aggregation of AMP tags
 	- Rework Node.orgs
 		- [x] Keep refs to defs in chores
@@ -99,8 +99,8 @@
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
 - [x] Support specification of AMP tags for a folder
-	- [x] Find good name to store metadata for Folder: '_amp.md'
-		- [*] Make this name configurable from config.zon
+	- [x] Find good name to store metadata for Folder: '_amp.md', '&amp.md', '&tree.md', '&index.md', '&meta.md', '&root.md', '&.md'
+		- [*] Make this name(s) configurable from config.zon
 		- [*] Maybe 'readme.md' is better than '_amp.md'
 		- Extension should be a known extension to leverage existing bindings
 		- Start with an '_' to avoid collisions. Starting with a '.' is to impractical.
@@ -112,7 +112,7 @@
 	- Rename existing '_.amp' and update Rust code
 - [ ] Accept AMPs in source code comments if there is AMP data at the start
 
-# Find all references &!search
+# Find all references &&search
 - [x] Collect content range per Node
 - [x] Convert Nodes with AMP info into Chores
 	- [x] Merge Defs into chore.Chores

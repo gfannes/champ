@@ -77,11 +77,11 @@ pub const Path = struct {
             var path = Path.init(a);
             errdefer path.deinit();
 
-            path.is_definition = strange.popChar('!');
+            path.is_definition = strange.popChar('&');
             path.is_absolute = strange.popChar(':');
 
             while (strange.popCharBack(':')) {}
-            path.is_dependency = strange.popCharBack('!');
+            path.is_dependency = strange.popCharBack('&');
 
             while (strange.popTo(':')) |p|
                 if (p.len > 0) {
@@ -159,7 +159,7 @@ pub const Path = struct {
     pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
         try writer.print("&", .{});
         if (self.is_definition)
-            try writer.print("!", .{});
+            try writer.print("&", .{});
         var prefix: []const u8 = if (self.is_absolute) ":" else "";
         for (self.parts.items) |part| {
             const exclusive_str = if (part.is_exclusive) "!" else "";
@@ -200,14 +200,14 @@ test "amp" {
 
     const scns = [_]Scn{
         .{ .repr = "&abc", .exp = "&abc" },
-        .{ .repr = "&!abc", .exp = "&!abc" },
+        .{ .repr = "&&abc", .exp = "&&abc" },
         .{ .repr = "&:abc", .exp = "&:abc" },
-        .{ .repr = "&!:abc", .exp = "&!:abc" },
-        .{ .repr = "&!:!abc", .exp = "&!:!abc" },
-        .{ .repr = "&!:!abc:", .exp = "&!:!abc" },
-        .{ .repr = "&!:a:b!:c", .exp = "&!:a:b!:c" },
-        .{ .repr = "&!:a:b!:c:", .exp = "&!:a:b!:c" },
-        .{ .repr = "&!:status:~status", .exp = "&!:status:~status" },
+        .{ .repr = "&&:abc", .exp = "&&:abc" },
+        .{ .repr = "&&:!abc", .exp = "&&:!abc" },
+        .{ .repr = "&&:!abc:", .exp = "&&:!abc" },
+        .{ .repr = "&&:a:b!:c", .exp = "&&:a:b!:c" },
+        .{ .repr = "&&:a:b!:c:", .exp = "&&:a:b!:c" },
+        .{ .repr = "&&:status:~status", .exp = "&&:status:~status" },
         .{ .repr = "&abc!", .exp = "&abc!" },
     };
 

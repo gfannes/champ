@@ -1,34 +1,34 @@
 # Project management
 
 
-## Status &!:status:~status
+## Status &&:status:~status
 
 Most agile projects should use only 3 statuses: `todo`, `wip` and `done`. All other labels should be additional aspects (tbd, dev, test, onhold, ...).
 
 ### Next
 Can be directly executed
 
-### Blocked &!blocked
+### Blocked &&blocked
 Non-exclusive
 
 
-## Prio &!:prio:~priority 
+## Prio &&:prio:~priority 
 
 
-## Effort &!:effort:~duration
+## Effort &&:effort:~duration
 
 
-## Deadline &!:deadline:~date
+## Deadline &&:deadline:~date
 
 
-## Type &!:type
+## Type &&:type
 
-### Documentation &!doc
+### Documentation &&doc
 
-### Performance optimizations &!perf
+### Performance optimizations &&perf
 
-### Improvements &!improv
+### Improvements &&improv
 
-### Quality control &!qc
+### Quality control &&qc
 
-### Development &!dev
+### Development &&dev

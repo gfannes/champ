@@ -1,5 +1,21 @@
-# Use cases &!:ucs
+# Use cases &&:ucs
 Lose collection of requirements
+
+## Support use of prios
+- Post-fix start: `&3*`
+
+## Search
+- Sort search results by prio
+- Support searching in 'org' and 'agg'
+	- First search part searches in 'org', others search in 'agg'?
+
+## Path DSL
+- Replace `!` with `&`
+	- Can this be done for definition and dependency?
+
+## Help
+- Print help for search &2*
+- Print help for config.zon + example
 
 ## Build second brain
 - Must be compatible with [[Obsidian]]

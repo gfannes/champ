@@ -10,5 +10,5 @@
 
 ## Describe 'bullet journal' best practices
 
-## Cleanup old logs &!cleanup:log
+## Cleanup old logs &&cleanup:log
 - Log files are in '/tmp/champ-<process_id>.log'

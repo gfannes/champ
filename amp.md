@@ -1,18 +1,18 @@
-# Ampersand Metadata Protocol (AMP) &!:amp
+# Ampersand Metadata Protocol (AMP) &&:amp
 
 ## Interpret AMP on first Node as AMP for Tree &todo &a0
 
 ## Set ~date from filename &todo &b3
 - For `daily/YYYY-MM-DD.md` format
 
-## Specification &!spec
+## Specification &&spec
 - AMP data is searched in _metadata_, not in actual data
 	- For source code, the metadata are _the comments_
 	- For Markdown, the metadata is _the text, excluding code blocks and formulas_
 - AMP data consists of Paths, sequences of Parts
 	- The `&` character starts an AMP Path. To avoid false positive detection, the `&` should occur at the start of a metadata section or occur after a space/tab character.
 	- If the next character is a `!`, it is a _definition Path_. Definition Paths are used to resolve other Paths. They allow:
-		- Using shorter Paths when there is no ambiguity: `&todo` can be used iso `&status:todo` if there is no other definition Path that matches with `todo` expect `&!:status:todo`
+		- Using shorter Paths when there is no ambiguity: `&todo` can be used iso `&status:todo` if there is no other definition Path that matches with `todo` expect `&&:status:todo`
 		- Specify typed data via the use of templates
 	- The `:` character is the Path separator
 		- A Path starting with a `:` is an absolute Path
@@ -22,7 +22,7 @@
 		- `::{{{item}}}` if `item` does not start with a `{`, using as many `{{{` as necessary to ensure there is no match of `}}}` in `item`
 		- Note that we do not allow empty items in Path, avoiding a conflict with `::` and allowing one to trim trailing `:` as is `&todo: Finish this`
 	- Template Path Parts for defs start with `~`
-		- Eg: the `&!:eta:~date` definition allows you to specify ETA metadata as `&eta:2024-11-06`
+		- Eg: the `&&:eta:~date` definition allows you to specify ETA metadata as `&eta:2024-11-06`
 		- Note: `$` cannot be used as it conflicts with Markdown formula
 - A trailing `!` indicates _exclusivity_. This is typically used for status information: something is either _todo_ or _done_, but not both.
 - [?] Maybe reverse a path to improve free search?

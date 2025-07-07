@@ -694,11 +694,11 @@ pub const Parser = struct {
         if (maybe_past) |past|
             if (!is_newline(past) and !is_whitespace(past))
                 return false;
-        return t.symbol == tkn.Symbol.Ampersand and t.word.len == 1;
+        return t.symbol == tkn.Symbol.Ampersand;
     }
     fn is_amp_body(t: tkn.Token) bool {
         const S = tkn.Symbol;
-        return t.symbol == S.Word or t.symbol == S.Underscore or t.symbol == S.Colon or t.symbol == S.Exclamation or t.symbol == S.Dot or t.symbol == S.Tilde;
+        return t.symbol == S.Word or t.symbol == S.Underscore or t.symbol == S.Colon or t.symbol == S.Ampersand or t.symbol == S.Dot or t.symbol == S.Tilde;
     }
     fn is_whitespace(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Space;
