@@ -3,7 +3,7 @@
 # AMP DSL &&dsl
 
 ```
-PATH: &&:PARENT:NAME!
+PATH: &&:PARENT:NAME&
       1??*******1111?
 	  |||           +------- depends-on, optional
       ||+------------------- absolute, optional

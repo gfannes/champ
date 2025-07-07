@@ -10,8 +10,7 @@ Lose collection of requirements
 	- First search part searches in 'org', others search in 'agg'?
 
 ## Path DSL
-- Replace `!` with `&`
-	- Can this be done for definition and dependency?
+- [x] Replace `!` with `&` for definition and dependency
 
 ## Help
 - Print help for search &2*
