@@ -155,7 +155,7 @@ pub const Language = enum {
         if (std.mem.eql(u8, ext, ".txt"))
             return Language.Text;
 
-        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai", ".zig", ".zon", ".rs" };
+        const cish_exts = [_][]const u8{ ".c", ".h", ".hpp", ".cpp", ".chai", ".zig", ".zon", ".rs", ".java" };
         for (cish_exts) |el|
             if (std.mem.eql(u8, ext, el))
                 return Language.Cish;
