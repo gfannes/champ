@@ -11,6 +11,7 @@ Lose collection of requirements
 
 ## Path DSL
 - [x] Replace `!` with `&` for definition and dependency
+- [ ] Support trailing '.?!' as in `Should this work for &yamaha?`
 
 ## Help
 - Print help for search &2*
