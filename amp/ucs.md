@@ -1,6 +1,10 @@
 # Use cases &&:ucs
 Lose collection of requirements
 
+## Fix detection of 'yamaha' in '2025-30.md'
+
+## Provide completion for amp and document links with LSP
+
 ## Support use of prios
 - Post-fix start: `&3*`
 
