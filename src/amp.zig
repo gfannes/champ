@@ -35,7 +35,7 @@ pub const Path = struct {
         res.is_dependency = self.is_dependency;
         for (self.parts.items) |part|
             // Assumes part is POD
-            try res.parts.append(self.a, part);
+            try res.parts.append(res.a, part);
         return res;
     }
 
