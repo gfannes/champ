@@ -38,8 +38,8 @@ pub const Args = struct {
         try self.args.setupFromOS();
 
         self.aa = std.heap.ArenaAllocator.init(ma);
-        self.groves = Strings.init(self.aa.allocator());
-        self.extra = Strings.init(self.aa.allocator());
+        self.groves = Strings{};
+        self.extra = Strings{};
     }
     pub fn deinit(self: *Self) void {
         self.args.deinit();
@@ -61,7 +61,7 @@ pub const Args = struct {
                     self.verbose = try x.as(usize);
             } else if (arg.is("-g", "--grove")) {
                 if (self.args.pop()) |x|
-                    try self.groves.append(x.arg);
+                    try self.groves.append(self.aa.allocator(), x.arg);
             } else if (arg.is("-l", "--log")) {
                 if (self.args.pop()) |x|
                     self.logfile = x.arg;
@@ -72,7 +72,7 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        Mode.Search, Mode.Test => try self.extra.append(arg.arg),
+                        Mode.Search, Mode.Test => try self.extra.append(self.aa.allocator(), arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;

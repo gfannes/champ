@@ -56,11 +56,11 @@ pub const Line = struct {
 
     terms_ixr: idx.Range = .{},
 
-    pub fn append(self: *Self, term: Term, terms: *Terms) !void {
+    pub fn append(self: *Self, term: Term, terms: *Terms, a: std.mem.Allocator) !void {
         if (term.word.len > 0) {
             if (self.terms_ixr.empty())
                 self.terms_ixr = .{ .begin = terms.items.len, .end = terms.items.len };
-            try terms.append(term);
+            try terms.append(a, term);
             self.terms_ixr.end += 1;
         }
     }
@@ -99,15 +99,15 @@ pub const Node = struct {
     def: ?Amp = null,
     // Refs to resolved AMPs that are directly present in this Node
     // Only the first can be a def
-    org_amps: Amps,
+    org_amps: Amps = .{},
     // Refs to resolved AMPs that are inherited
-    agg_amps: Amps,
+    agg_amps: Amps = .{},
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
     path: []const u8 = &.{},
     content: []const u8 = &.{},
-    terms: Terms,
+    terms: Terms = .{},
 
     content_rows: idx.Range = .{},
     content_cols: idx.Range = .{},
@@ -118,18 +118,15 @@ pub const Node = struct {
 
     pub fn init(a: std.mem.Allocator) Self {
         return Self{
-            .org_amps = Amps.init(a),
-            .agg_amps = Amps.init(a),
-            .terms = Terms.init(a),
             .a = a,
         };
     }
     pub fn deinit(self: *Self) void {
-        self.org_amps.deinit();
-        self.agg_amps.deinit();
+        self.org_amps.deinit(self.a);
+        self.agg_amps.deinit(self.a);
         for (self.terms.items) |*item|
             item.deinit();
-        self.terms.deinit();
+        self.terms.deinit(self.a);
         self.a.free(self.path);
         self.a.free(self.content);
     }

@@ -33,8 +33,9 @@ pub const App = struct {
     start_time: i64 = undefined,
 
     log: Log = .{},
-    stdout: std.fs.File = std.io.getStdOut(),
+    buffer: [1024]u8 = undefined,
     stdoutw: std.fs.File.Writer = undefined,
+    io: *std.Io.Writer = undefined,
 
     // gpa: 1075ms
     // fba: 640ms
@@ -55,7 +56,8 @@ pub const App = struct {
         self.start_time = std.time.milliTimestamp();
 
         self.log.init();
-        self.stdoutw = self.stdout.writer();
+        self.stdoutw = std.fs.File.stdout().writer(&self.buffer);
+        self.io = &self.stdoutw.interface;
 
         self.gpaa = self.gpa.allocator();
         self.a = self.gpaa;
@@ -70,7 +72,7 @@ pub const App = struct {
 
         {
             const stop_time = std.time.milliTimestamp();
-            self.stdoutw.print("Duration: {}ms\n", .{stop_time - self.start_time}) catch {};
+            self.io.print("Duration: {}ms\n", .{stop_time - self.start_time}) catch {};
         }
         self.log.deinit();
     }

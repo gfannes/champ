@@ -42,7 +42,7 @@ pub const Loader = struct {
         defer file.close();
 
         // For some reason, std.zon.parse.fromSlice() expects a sentinel string
-        const content = try file.readToEndAllocOptions(self.aa.allocator(), std.math.maxInt(usize), null, 1, 0);
+        const content = try file.readToEndAllocOptions(self.aa.allocator(), std.math.maxInt(usize), null, .@"1", 0);
 
         return try self.loadFromContent(content);
     }

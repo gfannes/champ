@@ -35,15 +35,15 @@ pub const Query = struct {
     a: std.mem.Allocator,
     include: Include = .{},
     only_status: bool = false,
-    parts: Parts,
+    parts: Parts = .{},
 
     pub fn init(a: std.mem.Allocator) Self {
-        return .{ .a = a, .parts = Parts.init(a) };
+        return .{ .a = a };
     }
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|
             self.a.free(part);
-        self.parts.deinit();
+        self.parts.deinit(self.a);
     }
 
     pub fn setup(self: *Self, parts: []const []const u8) !void {
@@ -82,7 +82,7 @@ pub const Query = struct {
 
                 const str: []const u8 = if (strange.popTo(' ')) |str| str else if (strange.popAll()) |str| str else &.{};
                 if (str.len > 0)
-                    try self.parts.append(try self.a.dupe(u8, str));
+                    try self.parts.append(self.a, try self.a.dupe(u8, str));
             }
         }
 
@@ -95,7 +95,7 @@ pub const Query = struct {
     pub fn distance(self: Self, chore: Chore) ?f64 {
         const status_is_match = block: {
             for (chore.parts.items) |part| {
-                const last = rubr.lastPtrUnsafe(part.ap.parts.items).content;
+                const last = rubr.slc.lastPtrUnsafe(part.ap.parts.items).content;
                 if (std.mem.eql(u8, last, "done"))
                     break :block self.include.done;
                 if (std.mem.eql(u8, last, "todo"))

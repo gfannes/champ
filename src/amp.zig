@@ -16,16 +16,17 @@ pub const Path = struct {
     const Self = @This();
     const Parts = std.ArrayList(Part);
 
+    a: std.mem.Allocator,
     is_definition: bool = false,
     is_absolute: bool = false,
     is_dependency: bool = false,
-    parts: Parts,
+    parts: Parts = .{},
 
     pub fn init(a: std.mem.Allocator) Path {
-        return Path{ .parts = Parts.init(a) };
+        return Path{ .a = a };
     }
     pub fn deinit(self: *Self) void {
-        self.parts.deinit();
+        self.parts.deinit(self.a);
     }
     pub fn copy(self: Path, a: std.mem.Allocator) !Path {
         var res = Path.init(a);
@@ -34,7 +35,7 @@ pub const Path = struct {
         res.is_dependency = self.is_dependency;
         for (self.parts.items) |part|
             // Assumes part is POD
-            try res.parts.append(part);
+            try res.parts.append(self.a, part);
         return res;
     }
 
@@ -86,13 +87,13 @@ pub const Path = struct {
             while (strange.popTo(':')) |p|
                 if (p.len > 0) {
                     var s = rubr.strng.Strange{ .content = p };
-                    try path.parts.append(Part.init(&s));
+                    try path.parts.append(a, Part.init(&s));
                 };
 
             if (strange.popAll()) |p|
                 if (p.len > 0) {
                     var s = rubr.strng.Strange{ .content = p };
-                    try path.parts.append(Part.init(&s));
+                    try path.parts.append(a, Part.init(&s));
                 };
 
             return path;
@@ -113,7 +114,7 @@ pub const Path = struct {
                     else => "unknown",
                 };
                 var s = rubr.strng.Strange{ .content = content };
-                try path.parts.append(Part.init(&s));
+                try path.parts.append(a, Part.init(&s));
 
                 if (strange.popChar(']'))
                     return path;
@@ -125,7 +126,7 @@ pub const Path = struct {
             errdefer path.deinit();
 
             var s = rubr.strng.Strange{ .content = lowers[ix] };
-            try path.parts.append(Part.init(&s));
+            try path.parts.append(a, Part.init(&s));
 
             return path;
         }
@@ -138,7 +139,7 @@ pub const Path = struct {
         self.is_absolute = prefix.is_absolute;
         // We do not copy is_dependency
         // Assumes Part is POD
-        try self.parts.insertSlice(0, prefix.parts.items);
+        try self.parts.insertSlice(self.a, 0, prefix.parts.items);
     }
 
     pub fn extend(self: *Self, rhs: Self) !void {
@@ -152,23 +153,23 @@ pub const Path = struct {
             self.is_absolute = rhs.is_absolute;
             // We do not copy is_dependency
             const count_to_add = rhs.parts.items.len - self.parts.items.len;
-            try self.parts.insertSlice(0, rhs.parts.items[0..count_to_add]);
+            try self.parts.insertSlice(self.a, 0, rhs.parts.items[0..count_to_add]);
         }
     }
 
-    pub fn format(self: Self, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print("&", .{});
+    pub fn format(self: Self, io: *std.Io.Writer) !void {
+        try io.print("&", .{});
         if (self.is_definition)
-            try writer.print("&", .{});
+            try io.print("&", .{});
         var prefix: []const u8 = if (self.is_absolute) ":" else "";
         for (self.parts.items) |part| {
             const exclusive_str = if (part.is_exclusive) "!" else "";
             const template_str = if (part.is_template) "~" else "";
-            try writer.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
+            try io.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
             prefix = ":";
         }
         if (self.is_dependency)
-            try writer.print("!", .{});
+            try io.print("!", .{});
     }
 };
 

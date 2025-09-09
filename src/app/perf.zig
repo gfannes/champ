@@ -29,8 +29,8 @@ pub const Perf = struct {
             defer w.deinit();
 
             const String = std.ArrayList(u8);
-            var content = String.init(self.a);
-            defer content.deinit();
+            var content = String{};
+            defer content.deinit(self.a);
 
             var cb = struct {
                 const Cb = @This();
@@ -82,7 +82,7 @@ pub const Perf = struct {
 
                     // Read data: 160ms
                     {
-                        try my.content.resize(stat.size);
+                        try my.content.resize(my.a, stat.size);
                         my.byte_count += try file.readAll(my.content.items);
                     }
                     my.file_count += 1;

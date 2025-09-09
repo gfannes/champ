@@ -46,8 +46,8 @@ pub const Search = struct {
         };
         const Refs = std.ArrayList(Ref);
 
-        var refs = Refs.init(self.a);
-        defer refs.deinit();
+        var refs = Refs{};
+        defer refs.deinit(self.a);
 
         var max = struct {
             name: usize = 0,
@@ -55,7 +55,7 @@ pub const Search = struct {
         }{};
         for (self.forest.chores.list.items, 0..) |chore, ix| {
             if (query.distance(chore)) |distance| {
-                try refs.append(Ref{ .ix = ix, .score = distance });
+                try refs.append(self.a, Ref{ .ix = ix, .score = distance });
                 max.name = @max(max.name, chore.str.len);
                 max.path = @max(max.path, chore.path.len);
             }
@@ -79,7 +79,7 @@ pub const Search = struct {
 
         for (refs.items) |ref| {
             const chore = self.forest.chores.list.items[ref.ix];
-            const line = if (rubr.firstPtr(chore.parts.items)) |part| part.row + 1 else 0;
+            const line = if (rubr.slc.firstPtr(chore.parts.items)) |part| part.row + 1 else 0;
             std.debug.print("{s}{s}    {s}{s}:{} {}\n", .{ chore.str, blank[0 .. max.name - chore.str.len], chore.path, blank[0 .. max.path - chore.path.len], line, ref.score });
         }
     }

@@ -121,7 +121,7 @@ pub const Parser = struct {
     }
 
     fn appendToLine(self: *Self, n: *Node, term: Term) !void {
-        try n.line.append(term, &self.root().terms);
+        try n.line.append(term, &self.root().terms, self.a);
     }
 
     fn pop_md_text(self: *Self, n: *Node) !void {

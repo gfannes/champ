@@ -41,10 +41,13 @@ pub const Lsp = struct {
     pub fn call(self: *Self) !void {
         try self.log.info("Lsp server started {}\n", .{std.time.timestamp()});
 
-        var cin = std.io.getStdIn();
-        var cout = std.io.getStdOut();
+        var readbuf: [1024]u8 = undefined;
+        var cin = std.fs.File.stdin().reader(&readbuf);
 
-        var server = lsp.Server.init(cin.reader(), cout.writer(), self.log.writer(), self.a);
+        var writebuf: [1024]u8 = undefined;
+        var cout = std.fs.File.stdout().writer(&writebuf);
+
+        var server = lsp.Server.init(&cin.interface, &cout.interface, self.log.writer(), self.a);
         defer server.deinit();
 
         try self.forest_pp.startThread();
@@ -164,7 +167,7 @@ pub const Lsp = struct {
 
                     // Find all usage locations
                     if (maybe_ap) |ap| {
-                        var locations = std.ArrayList(dto.Location).init(aaa);
+                        var locations = std.ArrayList(dto.Location){};
                         for (forest.chores.list.items) |chore| {
                             for (chore.parts.items[0..chore.org_count]) |part| {
                                 if (ap.isFit(part.ap)) {
@@ -174,7 +177,7 @@ pub const Lsp = struct {
                                         .end = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.end) },
                                     };
                                     const location = dto.Location{ .uri = uri, .range = range };
-                                    try locations.append(location);
+                                    try locations.append(aaa, location);
                                 }
                             }
                         }
@@ -193,13 +196,13 @@ pub const Lsp = struct {
                     var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa);
 
-                    var document_symbols = std.ArrayList(dto.DocumentSymbol).init(aaa);
+                    var document_symbols = std.ArrayList(dto.DocumentSymbol){};
 
                     for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.is_empty(chore.parts.items)) {
+                        if (rubr.slc.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
@@ -213,7 +216,7 @@ pub const Lsp = struct {
                             .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                             .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
                         };
-                        try document_symbols.append(dto.DocumentSymbol{
+                        try document_symbols.append(aaa, dto.DocumentSymbol{
                             .name = chore.str,
                             .range = range,
                             .selectionRange = range,
@@ -228,14 +231,14 @@ pub const Lsp = struct {
                     var aa = std.heap.ArenaAllocator.init(self.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
-                    var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).init(aaa);
+                    var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol){};
 
                     var q = qry.Query.init(self.a);
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (rubr.is_empty(chore.parts.items)) {
+                        if (rubr.slc.is_empty(chore.parts.items)) {
                             try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }
@@ -247,7 +250,7 @@ pub const Lsp = struct {
                                 .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
                             };
-                            try workspace_symbols.append(dto.WorkspaceSymbol{
+                            try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
                                 .name = chore.str,
                                 .location = dto.Location{
                                     .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),

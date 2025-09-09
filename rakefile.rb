@@ -20,7 +20,8 @@ task :install, :variant do |_task, args|
     when :zig
         m = {safe: :safe, fast: :fast}[mode]
         mode_str = m ? "--release=#{m}" : ''
-        sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir}")
+        sh("clear")
+        sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir} -freference-trace=21")
     when :cpp
         m = { safe: :release, fast: :release }[mode] || :release
         sh("xmake f -m #{m}")

@@ -69,11 +69,11 @@ pub const Forest = struct {
 
     pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
         var wanted_groves: [][]const u8 = cli_args.groves.items;
-        if (rubr.is_empty(wanted_groves)) {
+        if (rubr.slc.is_empty(wanted_groves)) {
             if (config.default) |default|
                 wanted_groves = default;
         }
-        if (rubr.is_empty(wanted_groves))
+        if (rubr.slc.is_empty(wanted_groves))
             return Error.ExpectedAtLeastOneGrove;
 
         for (config.groves) |cfg_grove| {
@@ -113,22 +113,23 @@ pub const Forest = struct {
         const My = @This();
         const Stack = std.ArrayList(usize);
 
+        a: std.mem.Allocator,
         log: *const Log,
         cfg_grove: *const cfg.file.Grove,
         tree: *Tree,
-        node_stack: Stack,
+        node_stack: Stack = .{},
         file_count: usize = 0,
 
         pub fn init(log: *const Log, cfg_grove: *const cfg.file.Grove, tree: *Tree, a: std.mem.Allocator) Cb {
             return Cb{
+                .a = a,
                 .log = log,
                 .cfg_grove = cfg_grove,
                 .tree = tree,
-                .node_stack = Stack.init(a),
             };
         }
         pub fn deinit(my: *My) void {
-            my.node_stack.deinit();
+            my.node_stack.deinit(my.a);
         }
 
         pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
@@ -144,13 +145,13 @@ pub const Forest = struct {
                         node_type = Node.Type.Grove;
                     }
 
-                    const entry = try my.tree.addChild(rubr.last(my.node_stack.items));
+                    const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                     const n = entry.data;
                     n.* = Node.init(my.tree.a);
                     n.type = node_type;
                     n.path = try n.a.dupe(u8, path);
 
-                    try my.node_stack.append(entry.id);
+                    try my.node_stack.append(my.a, entry.id);
                 },
                 walker.Kind.Leave => {
                     _ = my.node_stack.pop();
@@ -181,7 +182,7 @@ pub const Forest = struct {
                         if (!size_is_ok)
                             return;
 
-                        const entry = try my.tree.addChild(rubr.last(my.node_stack.items));
+                        const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
                         n.* = Node.init(my.tree.a);
                         n.type = Node.Type.File;
@@ -206,20 +207,21 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
+            a: std.mem.Allocator,
             tree: *const Tree,
             chores: *const Chores,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
 
-                if (rubr.is_empty(n.org_amps.items))
+                if (rubr.slc.is_empty(n.org_amps.items))
                     return;
 
                 if (my.parent(entry.id)) |parent_node| {
                     for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
                         for (parent_amps) |parent_amp|
                             if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
-                                try n.agg_amps.append(parent_amp);
+                                try n.agg_amps.append(my.a, parent_amp);
                     }
                 }
             }
@@ -240,14 +242,14 @@ pub const Forest = struct {
             fn parent(my: My, child_id: usize) ?*const Node {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
-                    if (!rubr.is_empty(pentry.data.org_amps.items)) {
+                    if (!rubr.slc.is_empty(pentry.data.org_amps.items)) {
                         return pentry.data;
                     }
                     id = pentry.id;
                 }
                 return null;
             }
-        }{ .tree = &self.tree, .chores = &self.chores };
+        }{ .a = self.a, .tree = &self.tree, .chores = &self.chores };
 
         try self.tree.dfsAll(true, &cb);
     }
@@ -311,9 +313,9 @@ pub const Forest = struct {
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
-                                        try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                        try n.org_amps.append(my.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
-                                        try my.log.warning("Could not resolve amp '{}' in '{s}'\n", .{ path, my.path });
+                                        try my.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }
                                 }
                             } else if (term.kind == Term.Kind.Newline) {
@@ -432,7 +434,7 @@ pub const Forest = struct {
                                     try def_ap.prepend(parent_def);
                                     def_ap.is_definition = true;
                                 } else {
-                                    try my.log.warning("Could not find parent def for non-absolute '{}', making it absolute as it is\n", .{def_ap});
+                                    try my.log.warning("Could not find parent def for non-absolute '{f}', making it absolute as it is\n", .{def_ap});
                                     def_ap.is_absolute = true;
                                 }
                             }
@@ -442,7 +444,7 @@ pub const Forest = struct {
                             const pos = mero.Node.Pos{ .row = line, .cols = cols };
                             if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
                                 n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
-                                try n.org_amps.append(mero.Node.Amp{ .ix = amp_ix, .pos = pos });
+                                try n.org_amps.append(my.a, mero.Node.Amp{ .ix = amp_ix, .pos = pos });
                             } else {
                                 try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
@@ -460,12 +462,12 @@ pub const Forest = struct {
                             // If the file is '_amp.md', it is copied to the Folder as well
                             if (try my.tree.parent(entry.id)) |file| {
                                 file.data.def = n.def;
-                                try file.data.org_amps.insertSlice(0, n.org_amps.items);
+                                try file.data.org_amps.insertSlice(my.a, 0, n.org_amps.items);
 
                                 if (is_amp_md(file.data.path)) {
                                     if (try my.tree.parent(file.id)) |folder| {
                                         folder.data.def = n.def;
-                                        try folder.data.org_amps.insertSlice(0, n.org_amps.items);
+                                        try folder.data.org_amps.insertSlice(my.a, 0, n.org_amps.items);
                                     }
                                 }
                             }
