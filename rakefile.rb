@@ -18,7 +18,7 @@ task :install, :variant do |_task, args|
 
     case variant
     when :zig
-        m = {safe: :safe, fast: :fast}[mode]
+        m = { safe: :safe, fast: :fast }[mode]
         mode_str = m ? "--release=#{m}" : ''
         sh("clear")
         sh("zig build install #{mode_str} --prefix-exe-dir #{gubg_bin_dir} -freference-trace=10")
@@ -58,7 +58,7 @@ task :ut, %i[filter] do |_task, args|
     sh('xmake build -v amplib_ut')
     sh('xmake run amplib_ut')
 
-    if !:rust
+    unless :rust
         # sh 'cargo test -- --nocapture --test-threads 1 lex'
         sh 'cargo test -- --nocapture --test-threads 1'
     end

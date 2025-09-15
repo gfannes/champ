@@ -7,6 +7,7 @@ pub fn main() !void {
     defer my_app.deinit();
 
     try my_app.parseOptions();
+
     if (my_app.loadConfig()) |_| {
         try my_app.run();
     } else |err| {
