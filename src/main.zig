@@ -9,7 +9,7 @@ pub fn main() !void {
     try my_app.parseOptions();
 
     if (my_app.loadConfig()) |_| {
-        try my_app.run();
+        my_app.run();
     } else |err| {
         std.debug.print("Error: Could not load config due to '{}'.\n", .{err});
         std.debug.print("{s}", .{my_app.cli_args.help()});

@@ -106,7 +106,12 @@ pub const App = struct {
         return ret;
     }
 
-    pub fn run(self: Self) !void {
+    pub fn run(self: Self) void {
+        self.run_() catch |err| {
+            self.log.err("Received '{}'\n", .{err}) catch {};
+        };
+    }
+    fn run_(self: Self) !void {
         if (self.cli_args.print_help) {
             std.debug.print("{s}", .{self.cli_args.help()});
         } else if (self.cli_args.mode) |mode| {
