@@ -158,8 +158,11 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        for (chore.parts.items) |part| {
+                        // We only check the org parts for references, not all inherited agg parts
+                        for (chore.parts.items[0..chore.org_count]) |part| {
                             if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                                if (maybe_ap) |ap|
+                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}' part count {}\n", .{ ap, src_filename, chore.path, chore.parts.items.len });
                                 maybe_ap = part.ap;
                             }
                         }

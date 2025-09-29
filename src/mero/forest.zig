@@ -203,6 +203,7 @@ pub const Forest = struct {
         }
     };
 
+    // Distribute parent org_amps and agg_amps from root to leaf into agg_amps
     fn aggregateAmps(self: *Self) !void {
         var cb = struct {
             const My = @This();

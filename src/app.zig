@@ -84,11 +84,11 @@ pub const App = struct {
         };
 
         if (self.cli_args.logfile) |logfile| {
-            try self.log.toFile(logfile);
+            try self.log.toFile(logfile, .{});
         } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
             // &cleanup:log &todo Cleanup old log files
-            try self.log.toFile("/tmp/champ-%.log");
+            try self.log.toFile("/tmp/champ-%.log", .{ .autoclean = true });
         }
     }
 

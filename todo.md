@@ -12,3 +12,5 @@
 
 ## Cleanup old logs &&cleanup:log
 - Log files are in '/tmp/champ-<process_id>.log'
+
+## Support trailing `?`
