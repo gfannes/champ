@@ -88,7 +88,7 @@ pub const App = struct {
         } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
             // &cleanup:log &todo Cleanup old log files
-            try self.log.toFile("/tmp/champ-%.log", .{ .autoclean = true });
+            try self.log.toFile("/tmp/champ-%.log", .{ .autoclean = false });
         }
     }
 

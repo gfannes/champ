@@ -66,9 +66,11 @@ pub const Lsp = struct {
             const dto = lsp.dto;
             if (request.id) |_| {
                 if (request.is("initialize")) {
+                    // const triggerCharacters = [_][]const u8{"&"};
                     const result = dto.InitializeResult{
                         .capabilities = dto.ServerCapabilities{
                             .textDocumentSync = dto.ServerCapabilities.TextDocumentSyncOptions{},
+                            // .completionProvider = dto.ServerCapabilities.CompletionOptions{ .triggerCharacters = &triggerCharacters },
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
                             .definitionProvider = true,
@@ -227,6 +229,31 @@ pub const Lsp = struct {
                     }
 
                     try server.send(document_symbols.items);
+                } else if (request.is("textDocument/completion")) {
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+
+                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+
+                    var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
+                    const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa);
+                    _ = filename;
+
+                    var completions = std.ArrayList(dto.CompletionItem){};
+
+                    // &todo: replace with real &completion
+                    try completions.append(aaa, dto.CompletionItem{
+                        .label = "abc",
+                        .kind = 14,
+                    });
+                    try completions.append(aaa, dto.CompletionItem{
+                        .label = "def",
+                        .kind = 14,
+                    });
+
+                    try server.send(completions.items);
                 } else if (request.is("workspace/symbol")) {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;
