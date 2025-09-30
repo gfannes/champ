@@ -309,11 +309,11 @@ pub const Parser = struct {
                 var amp = Term{ .word = first_token.word, .kind = Term.Kind.Amp };
                 self.tokenizer.commit_peek();
 
-                // Savepoint to rollback to state before adding a ':'. This is used to avoid a trailing ':' in Amp.
+                // Savepoint to rollback to state before adding a '[:.]'. This is used to avoid a trailing '[:.]' in Amp.
                 var sp_2: ?tkn.Tokenizer = null;
 
                 while (self.tokenizer.peek()) |token| {
-                    if (is_whitespace(token) or is_newline(token))
+                    if (is_whitespace(token) or is_newline(token) or is_questionmark(token) or is_exclamation(token))
                         // We accept this Amp
                         break;
 
@@ -323,11 +323,11 @@ pub const Parser = struct {
                         return null;
                     }
 
-                    if (token.symbol == tkn.Symbol.Colon)
-                        // Setup savepoint to support removing this ':' if it turns-out to be a trailing ':'
+                    if (token.symbol == tkn.Symbol.Colon or token.symbol == tkn.Symbol.Dot)
+                        // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
                         sp_2 = self.tokenizer
                     else
-                        // Reset sp_2 (if any), this will accept the ':'
+                        // Reset sp_2 (if any), this will accept the '[:.]'
                         sp_2 = null;
 
                     self.tokenizer.commit_peek();
@@ -523,6 +523,9 @@ pub const Parser = struct {
         return null;
     }
     fn pop_md_formula_term(self: *Self) ?Term {
+        // Savepoint to rollback to original state.
+        const sp = self.tokenizer;
+
         if (self.tokenizer.peek()) |first_token| {
             if (first_token.symbol != tkn.Symbol.Dollar)
                 return null;
@@ -533,12 +536,19 @@ pub const Parser = struct {
             while (self.tokenizer.next()) |token| {
                 formula.word.len += token.word.len;
 
+                if (token.symbol == tkn.Symbol.Newline and first_token.word.len == 1) {
+                    // This is an unclosed inline formula: do not detect it.
+                    self.tokenizer = sp;
+                    return null;
+                }
+
                 if (token.symbol == first_token.symbol and token.word.len == first_token.word.len)
                     break;
             }
 
             return formula;
         }
+
         return null;
     }
     fn pop_capital_term(self: *Self) ?Term {
@@ -705,6 +715,12 @@ pub const Parser = struct {
     }
     fn is_newline(t: tkn.Token) bool {
         return t.symbol == tkn.Symbol.Newline;
+    }
+    fn is_questionmark(t: tkn.Token) bool {
+        return t.symbol == tkn.Symbol.Questionmark;
+    }
+    fn is_exclamation(t: tkn.Token) bool {
+        return t.symbol == tkn.Symbol.Exclamation;
     }
 
     fn root(self: *Self) *Node {

@@ -1,16 +1,20 @@
-## Count lines in Markdown code block &todo
+# TODO Reload Tree when an openend file is touched
 
-## Create QC tests
+# TODO Count lines in Markdown code block
+
+# TODO Create QC tests
 - Create naft-based folder packing
 
-## Refuse empty Paths &todo
+# TODO Refuse empty Paths &todo
 - This occurs in am
 
-## Support square-bracket status &todo
+# TODO Support square-bracket status &todo
 
-## Describe 'bullet journal' best practices
+# TODO Describe 'bullet journal' best practices
 
-## Cleanup old logs &&cleanup:log
+# TODO Cleanup old logs &&cleanup:log
 - Log files are in '/tmp/champ-<process_id>.log'
 
-## Support trailing `?`
+# DONE Support trailing `?.!`
+
+# DONE Inline formula should end at end of line

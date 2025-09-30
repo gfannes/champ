@@ -169,7 +169,7 @@ pub const Path = struct {
             prefix = ":";
         }
         if (self.is_dependency)
-            try io.print("!", .{});
+            try io.print("&", .{});
     }
 };
 
@@ -206,17 +206,17 @@ test "amp" {
         .{ .repr = "&&:abc", .exp = "&&:abc" },
         .{ .repr = "&&:!abc", .exp = "&&:!abc" },
         .{ .repr = "&&:!abc:", .exp = "&&:!abc" },
-        .{ .repr = "&&:a:b!:c", .exp = "&&:a:b!:c" },
-        .{ .repr = "&&:a:b!:c:", .exp = "&&:a:b!:c" },
+        .{ .repr = "&&:a:b&:c", .exp = "&&:a:b&:c" },
+        .{ .repr = "&&:a:b&:c:", .exp = "&&:a:b&:c" },
         .{ .repr = "&&:status:~status", .exp = "&&:status:~status" },
-        .{ .repr = "&abc!", .exp = "&abc!" },
+        .{ .repr = "&abc&", .exp = "&abc&" },
     };
 
     for (scns) |scn| {
         var strange = rubr.strng.Strange{ .content = scn.repr };
         var path = try Path.parse(&strange, ut.allocator) orelse unreachable;
         defer path.deinit();
-        const act = try std.fmt.allocPrint(ut.allocator, "{s}", .{path});
+        const act = try std.fmt.allocPrint(ut.allocator, "{f}", .{path});
         try ut.expectEqualSlices(u8, scn.exp, act);
         defer ut.allocator.free(act);
     }

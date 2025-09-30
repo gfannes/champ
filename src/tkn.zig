@@ -23,8 +23,8 @@ pub const Tokenizer = struct {
     }
 
     // 460ms
-    pub fn scan(self: *Self, tokens: *Tokens) !void {
-        try tokens.resize(0);
+    pub fn scan(self: *Self, a: std.mem.Allocator, tokens: *Tokens) !void {
+        try tokens.resize(a, 0);
 
         if (self.content.len == 0)
             // Nothing to do
@@ -37,7 +37,7 @@ pub const Tokenizer = struct {
             const symbol = Symbol.from(ch);
 
             if (current_token.symbol != symbol) {
-                try tokens.append(current_token);
+                try tokens.append(a, current_token);
                 current_token = Token{ .word = self.content[ix..ix], .symbol = symbol };
             }
 
@@ -45,7 +45,7 @@ pub const Tokenizer = struct {
         }
 
         // Push last 'current_token'
-        try tokens.append(current_token);
+        try tokens.append(a, current_token);
 
         // Consume all content
         self.content.ptr += self.content.len;
@@ -204,10 +204,10 @@ test "Tokenizer.scan()" {
 
     var tokenizer = Tokenizer.init(content);
 
-    var tokens = Tokenizer.Tokens.init(ut.allocator);
-    defer tokens.deinit();
+    var tokens = Tokenizer.Tokens{};
+    defer tokens.deinit(ut.allocator);
 
-    try tokenizer.scan(&tokens);
+    try tokenizer.scan(ut.allocator, &tokens);
 
     for (tokens.items) |token| {
         std.debug.print("Token: symbol {} word {s}\n", .{ token.symbol, token.word });
