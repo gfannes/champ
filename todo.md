@@ -18,3 +18,8 @@
 # DONE Support trailing `?.!`
 
 # DONE Inline formula should end at end of line
+
+# DONE Support basic completion
+- [x] Use `&` as trigger character
+- [x] Emit extra `&` when not invoked via this trigger character
+- [ ] Sort/unique the list of matches
