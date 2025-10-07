@@ -1,5 +1,8 @@
 # TODO Reload Tree when an openend file is touched
 
+# TODO Make amps case-insensitive
+- Prefer formatting found in definition
+
 # TODO Count lines in Markdown code block
 
 # TODO Create QC tests
