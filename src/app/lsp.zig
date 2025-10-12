@@ -242,16 +242,11 @@ pub const Lsp = struct {
 
                     for (forest.chores.amps.items) |item| {
                         if (rubr.slc.lastPtr(item.ap.parts.items)) |part| {
-                            var label: []const u8 = &.{};
                             if (context.triggerCharacter) |_| {
-                                label = part.content;
                                 try completions.append(aaa, dto.CompletionItem{
-                                    .label = label,
+                                    .label = part.content,
                                     .kind = 14,
                                 });
-                            } else {
-                                var parts = [2][]const u8{ "&", part.content };
-                                label = try std.mem.concat(aaa, u8, &parts);
                             }
                         }
                     }
