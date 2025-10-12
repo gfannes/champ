@@ -245,14 +245,14 @@ pub const Lsp = struct {
                             var label: []const u8 = &.{};
                             if (context.triggerCharacter) |_| {
                                 label = part.content;
+                                try completions.append(aaa, dto.CompletionItem{
+                                    .label = label,
+                                    .kind = 14,
+                                });
                             } else {
                                 var parts = [2][]const u8{ "&", part.content };
                                 label = try std.mem.concat(aaa, u8, &parts);
                             }
-                            try completions.append(aaa, dto.CompletionItem{
-                                .label = label,
-                                .kind = 14,
-                            });
                         }
                     }
 
