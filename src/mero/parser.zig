@@ -114,7 +114,7 @@ pub const Parser = struct {
         switch (self.language) {
             Language.Markdown => try self.pop_md_text(&n),
             Language.Text => try self.pop_txt_text(&n),
-            Language.Cish, Language.Ruby, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
+            Language.Cish, Language.Ruby, Language.Python, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
         }
 
         return n;
@@ -695,7 +695,7 @@ pub const Parser = struct {
     fn is_comment(t: tkn.Token, language: Language) bool {
         return switch (language) {
             Language.Cish => t.symbol == tkn.Symbol.Slash and t.word.len >= 2,
-            Language.Ruby => t.symbol == tkn.Symbol.Hashtag,
+            Language.Ruby, Language.Python => t.symbol == tkn.Symbol.Hashtag,
             Language.Lua => t.symbol == tkn.Symbol.Minus and t.word.len >= 2,
             else => false,
         };

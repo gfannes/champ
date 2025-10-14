@@ -136,6 +136,7 @@ pub const Language = enum {
     Markdown,
     Cish,
     Ruby,
+    Python,
     Lua,
     Text,
 
@@ -145,6 +146,9 @@ pub const Language = enum {
 
         if (std.mem.eql(u8, ext, ".rb"))
             return Language.Ruby;
+
+        if (std.mem.eql(u8, ext, ".py"))
+            return Language.Python;
 
         if (std.mem.eql(u8, ext, ".lua"))
             return Language.Lua;
