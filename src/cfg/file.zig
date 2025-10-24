@@ -30,7 +30,7 @@ pub const Loader = struct {
                 return false;
         }
 
-        self.config = try std.zon.parse.fromSlice(Config, self.aa.allocator(), content, null, .{});
+        self.config = try std.zon.parse.fromSliceAlloc(Config, self.aa.allocator(), content, null, .{});
         self.hash = my_hash;
 
         try self.normalize();
@@ -42,7 +42,11 @@ pub const Loader = struct {
         defer file.close();
 
         // For some reason, std.zon.parse.fromSlice() expects a sentinel string
-        const content = try file.readToEndAllocOptions(self.aa.allocator(), std.math.maxInt(usize), null, .@"1", 0);
+        var readbuf: [1024]u8 = undefined;
+        var reader = file.reader(&readbuf);
+        const size = try reader.getSize();
+        const content: [:0]u8 = try self.aa.allocator().allocSentinel(u8, size, 0);
+        try reader.interface.readSliceAll(content);
 
         return try self.loadFromContent(content);
     }

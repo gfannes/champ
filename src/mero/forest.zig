@@ -188,7 +188,11 @@ pub const Forest = struct {
                         n.type = Node.Type.File;
                         n.path = try n.a.dupe(u8, path);
                         n.language = language;
-                        n.content = try file.readToEndAlloc(n.a, std.math.maxInt(usize));
+                        {
+                            var readbuf: [1024]u8 = undefined;
+                            var reader = file.reader(&readbuf);
+                            n.content = try reader.interface.readAlloc(n.a, stat.size);
+                        }
                         n.grove_id = my.cfg_grove.id;
 
                         var parser = try mero.Parser.init(entry.id, my.tree, my.tree.a);
