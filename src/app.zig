@@ -30,12 +30,12 @@ pub const App = struct {
     const GPA = std.heap.GeneralPurposeAllocator(.{});
     const FBA = std.heap.FixedBufferAllocator;
 
-    start_time: std.Io.Timestamp = undefined,
+    start_time: std.time.Instant = undefined,
 
     log: Log = .{},
     buffer: [1024]u8 = undefined,
     stdoutw: std.fs.File.Writer = undefined,
-    io: *std.Io.Writer = undefined,
+    witf: *std.Io.Writer = undefined,
 
     // gpa: 1075ms
     // fba: 640ms
@@ -45,6 +45,8 @@ pub const App = struct {
     maybe_fba: ?FBA = null,
 
     a: std.mem.Allocator = undefined,
+    ioctx: std.Io.Threaded = undefined,
+    io: std.Io = undefined,
 
     cli_args: cfg.cli.Args = .{},
 
@@ -53,27 +55,31 @@ pub const App = struct {
 
     // Instance should not be moved after init()
     pub fn init(self: *Self) !void {
-        self.start_time = try std.Io.Clock.real.now();
+        self.start_time = try std.time.Instant.now();
 
         self.log.init();
         self.stdoutw = std.fs.File.stdout().writer(&self.buffer);
-        self.io = &self.stdoutw.interface;
+        self.witf = &self.stdoutw.interface;
 
         self.gpaa = self.gpa.allocator();
         self.a = self.gpaa;
+
+        self.ioctx = std.Io.Threaded.init(self.a);
+        self.io = self.ioctx.io();
 
         try self.cli_args.init(self.gpaa);
     }
     pub fn deinit(self: *Self) void {
         if (self.config_loader) |*loader| loader.deinit();
         self.cli_args.deinit();
+        self.ioctx.deinit();
         if (self.maybe_fba) |fba| self.gpaa.free(fba.buffer);
         if (self.gpa.deinit() == .leak) std.debug.print("Found memory leak\n", .{});
 
         {
-            const stop_time = try std.Io.Clock.real.now();
-            const duration = self.start_time.durationTo(stop_time);
-            self.io.print("Duration: {}ms\n", .{duration.toMilliseconds()}) catch {};
+            const stop_time = std.time.Instant.now() catch self.start_time;
+            const duration_ms = stop_time.since(self.start_time) / 1000 / 1000;
+            self.witf.print("Duration: {}ms\n", .{duration_ms}) catch {};
         }
         self.log.deinit();
     }
@@ -94,7 +100,7 @@ pub const App = struct {
     }
 
     pub fn loadConfig(self: *Self) !bool {
-        self.config_loader = try cfg.file.Loader.init(self.gpaa);
+        self.config_loader = try cfg.file.Loader.init(self.gpaa, self.io);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
         // &todo: Replace hardcoded HOME folder
@@ -123,6 +129,7 @@ pub const App = struct {
                         .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
+                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();
@@ -134,6 +141,7 @@ pub const App = struct {
                         .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
+                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();
@@ -145,6 +153,7 @@ pub const App = struct {
                         .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
+                        .io = self.io,
                     };
                     try obj.call();
                 },
@@ -154,6 +163,7 @@ pub const App = struct {
                         .cli_args = &self.cli_args,
                         .log = &self.log,
                         .a = self.a,
+                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();

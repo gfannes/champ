@@ -18,11 +18,12 @@ pub const Test = struct {
     cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
+    io: std.Io,
 
     forest: mero.Forest = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest = mero.Forest.init(self.log, self.a);
+        self.forest = mero.Forest.init(self.log, self.a, self.io);
     }
     pub fn deinit(self: *Self) void {
         self.forest.deinit();

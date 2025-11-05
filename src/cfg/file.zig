@@ -10,10 +10,11 @@ pub const Loader = struct {
     hash: ?Hash = null,
 
     aa: std.heap.ArenaAllocator,
+    io: std.Io,
 
     // We hold an std.heap.ArenaAllocator: do not move me once an ArenaAllocator.allocator() is created/used
-    pub fn init(a: std.mem.Allocator) !Self {
-        return Self{ .aa = std.heap.ArenaAllocator.init(a) };
+    pub fn init(a: std.mem.Allocator, io: std.Io) !Self {
+        return Self{ .aa = std.heap.ArenaAllocator.init(a), .io = io };
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
@@ -43,7 +44,7 @@ pub const Loader = struct {
 
         // For some reason, std.zon.parse.fromSlice() expects a sentinel string
         var readbuf: [1024]u8 = undefined;
-        var reader = file.reader(&readbuf);
+        var reader = file.reader(self.io, &readbuf);
         const size = try reader.getSize();
         const content: [:0]u8 = try self.aa.allocator().allocSentinel(u8, size, 0);
         try reader.interface.readSliceAll(content);

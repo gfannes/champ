@@ -29,21 +29,22 @@ pub const Lsp = struct {
     cli_args: *const cfg.cli.Args,
     log: *const rubr.log.Log,
     a: std.mem.Allocator,
+    io: std.Io,
 
     forest_pp: ForestPP = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest_pp = ForestPP.init(self.cli_args, self.log, self.a);
+        self.forest_pp = ForestPP.init(self.cli_args, self.log, self.a, self.io);
     }
     pub fn deinit(self: *Self) void {
         self.forest_pp.deinit();
     }
 
     pub fn call(self: *Self) !void {
-        try self.log.info("Lsp server started {}\n", .{std.time.timestamp()});
+        try self.log.info("Lsp server started {}\n", .{(try std.time.Instant.now()).timestamp});
 
         var readbuf: [1024]u8 = undefined;
-        var cin = std.fs.File.stdin().reader(&readbuf);
+        var cin = std.fs.File.stdin().reader(self.io, &readbuf);
 
         var writebuf: [1024]u8 = undefined;
         var cout = std.fs.File.stdout().writer(&writebuf);
@@ -349,6 +350,7 @@ pub const ForestPP = struct {
     cli_args: *const cfg.cli.Args,
 
     a: std.mem.Allocator,
+    io: std.Io,
     config_loader: cfg.file.Loader,
 
     mutex: std.Thread.Mutex = .{},
@@ -361,8 +363,8 @@ pub const ForestPP = struct {
 
     reload_counter: usize = 0,
 
-    pub fn init(cli_args: *const cfg.cli.Args, log: *const rubr.log.Log, a: std.mem.Allocator) ForestPP {
-        return ForestPP{ .cli_args = cli_args, .a = a, .config_loader = try cfg.file.Loader.init(a), .pp = .{ mero.Forest.init(log, a), mero.Forest.init(log, a) } };
+    pub fn init(cli_args: *const cfg.cli.Args, log: *const rubr.log.Log, a: std.mem.Allocator, io: std.Io) ForestPP {
+        return ForestPP{ .cli_args = cli_args, .a = a, .io = io, .config_loader = try cfg.file.Loader.init(a, io), .pp = .{ mero.Forest.init(log, a, io), mero.Forest.init(log, a, io) } };
     }
     pub fn deinit(self: *Self) void {
         self.stopThread();
@@ -386,8 +388,8 @@ pub const ForestPP = struct {
                 self.mutex.unlock();
             }
 
-            const _10_ms = 10_000_000;
-            std.Thread.sleep(_10_ms);
+            try self.io.sleep(std.Io.Duration.fromMilliseconds(10), std.Io.Clock.real);
+            // std.Thread.sleep(_10_ms);
         }
     }
 
@@ -462,8 +464,7 @@ pub const ForestPP = struct {
                 }
             }
 
-            const _100_ms = 100_000_000;
-            std.Thread.sleep(_100_ms);
+            try self.io.sleep(std.Io.Duration.fromMilliseconds(100), std.Io.Clock.real);
         }
     }
 };

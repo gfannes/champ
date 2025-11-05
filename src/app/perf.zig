@@ -16,6 +16,7 @@ pub const Perf = struct {
     cli_args: *const cfg.cli.Args,
     log: *const Log,
     a: std.mem.Allocator,
+    io: std.Io,
 
     pub fn call(self: Self) !void {
         for (self.config.groves) |grove| {
@@ -25,7 +26,7 @@ pub const Perf = struct {
 
             std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.path });
 
-            var w = walker.Walker.init(self.a);
+            var w = walker.Walker.init(self.a, self.io);
             defer w.deinit();
 
             const String = std.ArrayList(u8);
@@ -40,6 +41,7 @@ pub const Perf = struct {
                 grove: *const cfg.file.Grove,
                 content: *String,
                 a: std.mem.Allocator,
+                io: std.Io,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
@@ -83,7 +85,10 @@ pub const Perf = struct {
                     // Read data: 160ms
                     {
                         try my.content.resize(my.a, stat.size);
-                        my.byte_count += try file.readAll(my.content.items);
+                        var buf: [1024]u8 = undefined;
+                        var reader = file.reader(my.io, &buf);
+                        try reader.interface.readSliceAll(my.content.items);
+                        my.byte_count += stat.size;
                     }
                     my.file_count += 1;
 
@@ -118,7 +123,7 @@ pub const Perf = struct {
                         }
                     }
                 }
-            }{ .outer = &self, .grove = &grove, .content = &content, .a = self.a };
+            }{ .outer = &self, .grove = &grove, .content = &content, .a = self.a, .io = self.io };
 
             var dir = try std.fs.openDirAbsolute(grove.path, .{});
             defer dir.close();

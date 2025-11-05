@@ -32,8 +32,9 @@ pub const Forest = struct {
     tree: Tree,
     chores: Chores,
     a: std.mem.Allocator,
+    io: std.Io,
 
-    pub fn init(log: *const Log, a: std.mem.Allocator) Self {
+    pub fn init(log: *const Log, a: std.mem.Allocator, io: std.Io) Self {
         // &perf: Using a FBA works a bit faster.
         // if (builtin.mode == .ReleaseFast) {
         //     if (self.config.max_memsize) |max_memsize| {
@@ -48,6 +49,7 @@ pub const Forest = struct {
             .tree = Tree.init(a),
             .chores = Chores.init(log, a),
             .a = a,
+            .io = io,
         };
     }
     pub fn deinit(self: *Self) void {
@@ -63,8 +65,9 @@ pub const Forest = struct {
     pub fn reinit(self: *Self) void {
         const log = self.log;
         const a = self.a;
+        const io = self.io;
         self.deinit();
-        self.* = Self.init(log, a);
+        self.* = Self.init(log, a, io);
     }
 
     pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
@@ -98,13 +101,13 @@ pub const Forest = struct {
     }
 
     fn loadGrove(self: *Self, cfg_grove: *const cfg.file.Grove) !void {
-        var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a);
+        var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a, self.io);
         defer cb.deinit();
 
         var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
         defer dir.close();
 
-        var w = walker.Walker.init(self.a);
+        var w = walker.Walker.init(self.a, self.io);
         defer w.deinit();
         try w.walk(dir, &cb);
     }
@@ -114,15 +117,17 @@ pub const Forest = struct {
         const Stack = std.ArrayList(usize);
 
         a: std.mem.Allocator,
+        io: std.Io,
         log: *const Log,
         cfg_grove: *const cfg.file.Grove,
         tree: *Tree,
         node_stack: Stack = .{},
         file_count: usize = 0,
 
-        pub fn init(log: *const Log, cfg_grove: *const cfg.file.Grove, tree: *Tree, a: std.mem.Allocator) Cb {
+        pub fn init(log: *const Log, cfg_grove: *const cfg.file.Grove, tree: *Tree, a: std.mem.Allocator, io: std.Io) Cb {
             return Cb{
                 .a = a,
+                .io = io,
                 .log = log,
                 .cfg_grove = cfg_grove,
                 .tree = tree,
@@ -190,7 +195,7 @@ pub const Forest = struct {
                         n.language = language;
                         {
                             var readbuf: [1024]u8 = undefined;
-                            var reader = file.reader(&readbuf);
+                            var reader = file.reader(my.io, &readbuf);
                             n.content = try reader.interface.readAlloc(n.a, stat.size);
                         }
                         n.grove_id = my.cfg_grove.id;
