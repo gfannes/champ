@@ -1,3 +1,5 @@
+# TODO Support resolving partial amp match if end is not ambiguous
+
 # TODO Reload Tree when an openend file is touched
 
 # TODO Make amps case-insensitive

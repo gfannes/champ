@@ -30,7 +30,7 @@ pub const App = struct {
     const GPA = std.heap.GeneralPurposeAllocator(.{});
     const FBA = std.heap.FixedBufferAllocator;
 
-    start_time: i64 = undefined,
+    start_time: std.Io.Timestamp = undefined,
 
     log: Log = .{},
     buffer: [1024]u8 = undefined,
@@ -53,7 +53,7 @@ pub const App = struct {
 
     // Instance should not be moved after init()
     pub fn init(self: *Self) !void {
-        self.start_time = std.time.milliTimestamp();
+        self.start_time = try std.Io.Clock.real.now();
 
         self.log.init();
         self.stdoutw = std.fs.File.stdout().writer(&self.buffer);
@@ -71,8 +71,9 @@ pub const App = struct {
         if (self.gpa.deinit() == .leak) std.debug.print("Found memory leak\n", .{});
 
         {
-            const stop_time = std.time.milliTimestamp();
-            self.io.print("Duration: {}ms\n", .{stop_time - self.start_time}) catch {};
+            const stop_time = try std.Io.Clock.real.now();
+            const duration = self.start_time.durationTo(stop_time);
+            self.io.print("Duration: {}ms\n", .{duration.toMilliseconds()}) catch {};
         }
         self.log.deinit();
     }
