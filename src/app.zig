@@ -1,12 +1,14 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Strange = @import("rubr").strange.Strange;
-const strings = @import("rubr").strings;
-const walker = @import("rubr").walker;
-const ignore = @import("rubr").ignore;
-const naft = @import("rubr").naft;
-const Log = @import("rubr").log.Log;
+const rubr = @import("rubr");
+const Strange = rubr.strange.Strange;
+const strings = rubr.strings;
+const walker = rubr.walker;
+const ignore = rubr.ignore;
+const naft = rubr.naft;
+const Log = rubr.Log;
+const Env = rubr.Env;
 
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
@@ -27,61 +29,48 @@ pub const Error = error{
 // Holds all the data that should not be moved anymore
 pub const App = struct {
     const Self = @This();
-    const GPA = std.heap.GeneralPurposeAllocator(.{});
     const FBA = std.heap.FixedBufferAllocator;
 
-    start_time: std.time.Instant = undefined,
+    env_inst: Env.Instance = .{},
+    env: Env = undefined,
 
-    log: Log = .{},
     buffer: [1024]u8 = undefined,
     stdoutw: std.fs.File.Writer = undefined,
     witf: *std.Io.Writer = undefined,
 
     // gpa: 1075ms
     // fba: 640ms
-    gpa: GPA = .{},
-    gpaa: std.mem.Allocator = undefined,
-
     maybe_fba: ?FBA = null,
 
-    a: std.mem.Allocator = undefined,
-    ioctx: std.Io.Threaded = undefined,
-    io: std.Io = undefined,
-
-    cli_args: cfg.cli.Args = .{},
+    cli_args: cfg.cli.Args = undefined,
 
     config_loader: ?cfg.file.Loader = null,
     config: cfg.file.Config = .{},
 
     // Instance should not be moved after init()
     pub fn init(self: *Self) !void {
-        self.start_time = try std.time.Instant.now();
+        self.env_inst.init();
+        self.env = self.env_inst.env();
 
-        self.log.init();
         self.stdoutw = std.fs.File.stdout().writer(&self.buffer);
         self.witf = &self.stdoutw.interface;
 
-        self.gpaa = self.gpa.allocator();
-        self.a = self.gpaa;
-
-        self.ioctx = std.Io.Threaded.init(self.a);
-        self.io = self.ioctx.io();
-
-        try self.cli_args.init(self.gpaa);
+        self.cli_args = .{ .env = self.env };
+        try self.cli_args.init();
     }
     pub fn deinit(self: *Self) void {
-        if (self.config_loader) |*loader| loader.deinit();
+        if (self.config_loader) |*loader|
+            loader.deinit();
+
         self.cli_args.deinit();
-        self.ioctx.deinit();
-        if (self.maybe_fba) |fba| self.gpaa.free(fba.buffer);
-        if (self.gpa.deinit() == .leak) std.debug.print("Found memory leak\n", .{});
+
+        if (self.maybe_fba) |fba|
+            self.env.a.free(fba.buffer);
 
         {
-            const stop_time = std.time.Instant.now() catch self.start_time;
-            const duration_ms = stop_time.since(self.start_time) / 1000 / 1000;
+            const duration_ms = self.env.duration_ns() / 1000 / 1000;
             self.witf.print("Duration: {}ms\n", .{duration_ms}) catch {};
         }
-        self.log.deinit();
     }
 
     pub fn parseOptions(self: *Self) !void {
@@ -91,16 +80,16 @@ pub const App = struct {
         };
 
         if (self.cli_args.logfile) |logfile| {
-            try self.log.toFile(logfile, .{});
+            try self.env_inst.log.toFile(logfile, .{});
         } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
             // &:zig:build:info Couple filename with build.zig.zon#name
             // &cleanup:log &todo Cleanup old log files
-            try self.log.toFile("/tmp/champ-%.log", .{ .autoclean = false });
+            try self.env_inst.log.toFile("/tmp/champ-%.log", .{ .autoclean = false });
         }
     }
 
     pub fn loadConfig(self: *Self) !bool {
-        self.config_loader = try cfg.file.Loader.init(self.gpaa, self.io);
+        self.config_loader = try cfg.file.Loader.init(self.env);
         const cfg_loader = &(self.config_loader orelse unreachable);
 
         // &todo: Replace hardcoded HOME folder
@@ -115,7 +104,7 @@ pub const App = struct {
 
     pub fn run(self: Self) void {
         self.run_() catch |err| {
-            self.log.err("Received '{}'\n", .{err}) catch {};
+            self.env.log.err("Received '{}'\n", .{err}) catch {};
         };
     }
     fn run_(self: Self) !void {
@@ -125,11 +114,9 @@ pub const App = struct {
             switch (mode) {
                 cfg.cli.Mode.Lsp => {
                     var obj = Lsp{
+                        .env = self.env,
                         .config = &self.config,
                         .cli_args = &self.cli_args,
-                        .log = &self.log,
-                        .a = self.a,
-                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();
@@ -137,11 +124,9 @@ pub const App = struct {
                 },
                 cfg.cli.Mode.Search => {
                     var obj = Search{
+                        .env = self.env,
                         .config = &self.config,
                         .cli_args = &self.cli_args,
-                        .log = &self.log,
-                        .a = self.a,
-                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();
@@ -149,21 +134,17 @@ pub const App = struct {
                 },
                 cfg.cli.Mode.Perf => {
                     var obj = Perf{
+                        .env = self.env,
                         .config = &self.config,
                         .cli_args = &self.cli_args,
-                        .log = &self.log,
-                        .a = self.a,
-                        .io = self.io,
                     };
                     try obj.call();
                 },
                 cfg.cli.Mode.Test => {
                     var obj = Test{
+                        .env = self.env,
                         .config = &self.config,
                         .cli_args = &self.cli_args,
-                        .log = &self.log,
-                        .a = self.a,
-                        .io = self.io,
                     };
                     try obj.init();
                     defer obj.deinit();

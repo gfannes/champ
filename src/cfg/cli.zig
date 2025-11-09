@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const rubr = @import("rubr");
+const Env = rubr.Env;
 
 const Error = error{
     CouldNotFindExeName,
@@ -20,6 +21,8 @@ pub const Args = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
+    env: Env,
+
     exe_name: []const u8 = &.{},
     print_help: bool = false,
     groves: Strings = undefined,
@@ -31,23 +34,18 @@ pub const Args = struct {
     extra: Strings = undefined,
 
     args: rubr.cli.Args = undefined,
-    aa: std.heap.ArenaAllocator = undefined,
 
-    pub fn init(self: *Self, ma: std.mem.Allocator) !void {
-        self.args = rubr.cli.Args.init(ma);
+    pub fn init(self: *Self) !void {
+        self.args = rubr.cli.Args{ .env = self.env };
         try self.args.setupFromOS();
 
-        self.aa = std.heap.ArenaAllocator.init(ma);
         self.groves = Strings{};
         self.extra = Strings{};
     }
-    pub fn deinit(self: *Self) void {
-        self.args.deinit();
-        self.aa.deinit();
-    }
+    pub fn deinit(_: *Self) void {}
 
     pub fn setLogfile(self: *Self, logfile: []const u8) !void {
-        self.logfile = try self.aa.allocator().dupe(u8, logfile);
+        self.logfile = try self.env.aa.dupe(u8, logfile);
     }
 
     pub fn parse(self: *Self) !void {
@@ -61,7 +59,7 @@ pub const Args = struct {
                     self.verbose = try x.as(usize);
             } else if (arg.is("-g", "--grove")) {
                 if (self.args.pop()) |x|
-                    try self.groves.append(self.aa.allocator(), x.arg);
+                    try self.groves.append(self.env.aa, x.arg);
             } else if (arg.is("-l", "--log")) {
                 if (self.args.pop()) |x|
                     self.logfile = x.arg;
@@ -72,7 +70,7 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        Mode.Search, Mode.Test => try self.extra.append(self.aa.allocator(), arg.arg),
+                        Mode.Search, Mode.Test => try self.extra.append(self.env.aa, arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;

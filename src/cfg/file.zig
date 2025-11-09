@@ -1,4 +1,6 @@
 const std = @import("std");
+const rubr = @import("rubr");
+const Env = rubr.Env;
 
 // Loads Config from a file in ZON format
 pub const Loader = struct {
@@ -9,12 +11,12 @@ pub const Loader = struct {
     config: ?Config = null,
     hash: ?Hash = null,
 
+    env: Env,
     aa: std.heap.ArenaAllocator,
-    io: std.Io,
 
     // We hold an std.heap.ArenaAllocator: do not move me once an ArenaAllocator.allocator() is created/used
-    pub fn init(a: std.mem.Allocator, io: std.Io) !Self {
-        return Self{ .aa = std.heap.ArenaAllocator.init(a), .io = io };
+    pub fn init(env: Env) !Self {
+        return Self{ .env = env, .aa = std.heap.ArenaAllocator.init(env.a) };
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
@@ -44,7 +46,7 @@ pub const Loader = struct {
 
         // For some reason, std.zon.parse.fromSlice() expects a sentinel string
         var readbuf: [1024]u8 = undefined;
-        var reader = file.reader(self.io, &readbuf);
+        var reader = file.reader(self.env.io, &readbuf);
         const size = try reader.getSize();
         const content: [:0]u8 = try self.aa.allocator().allocSentinel(u8, size, 0);
         try reader.interface.readSliceAll(content);
@@ -116,7 +118,11 @@ test "cfg" {
         \\}
     ;
 
-    var loader = try Loader.init(ut.allocator);
+    var env_inst = Env.Instance{};
+    env_inst.init();
+    defer env_inst.deinit();
+
+    var loader = try Loader.init(env_inst.env());
     defer loader.deinit();
 
     _ = try loader.loadFromContent(content);

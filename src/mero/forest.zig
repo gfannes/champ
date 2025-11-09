@@ -10,7 +10,7 @@ const amp = @import("../amp.zig");
 const Chores = @import("../chore.zig").Chores;
 
 const rubr = @import("rubr");
-const Log = rubr.log.Log;
+const Env = rubr.Env;
 const walker = rubr.walker;
 const strings = rubr.strings;
 
@@ -27,14 +27,12 @@ pub const Error = error{
 pub const Forest = struct {
     const Self = @This();
 
+    env: Env,
     valid: bool = false,
-    log: *const Log,
-    tree: Tree,
-    chores: Chores,
-    a: std.mem.Allocator,
-    io: std.Io,
+    tree: Tree = undefined,
+    chores: Chores = undefined,
 
-    pub fn init(log: *const Log, a: std.mem.Allocator, io: std.Io) Self {
+    pub fn init(self: *Self) void {
         // &perf: Using a FBA works a bit faster.
         // if (builtin.mode == .ReleaseFast) {
         //     if (self.config.max_memsize) |max_memsize| {
@@ -44,13 +42,9 @@ pub const Forest = struct {
         //         self.a = (self.maybe_fba orelse unreachable).allocator();
         //     }
         // }
-        return Self{
-            .log = log,
-            .tree = Tree.init(a),
-            .chores = Chores.init(log, a),
-            .a = a,
-            .io = io,
-        };
+        self.tree = Tree.init(self.env.a);
+        self.chores = Chores{ .env = self.env };
+        self.chores.init();
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
@@ -63,11 +57,12 @@ pub const Forest = struct {
         self.chores.deinit();
     }
     pub fn reinit(self: *Self) void {
-        const log = self.log;
-        const a = self.a;
-        const io = self.io;
+        const env = self.env;
+
         self.deinit();
-        self.* = Self.init(log, a, io);
+
+        self.* = Self{ .env = env };
+        self.init();
     }
 
     pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
@@ -101,13 +96,13 @@ pub const Forest = struct {
     }
 
     fn loadGrove(self: *Self, cfg_grove: *const cfg.file.Grove) !void {
-        var cb = Cb.init(self.log, cfg_grove, &self.tree, self.a, self.io);
+        var cb = Cb.init(self.env, cfg_grove, &self.tree);
         defer cb.deinit();
 
         var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
         defer dir.close();
 
-        var w = walker.Walker.init(self.a, self.io);
+        var w = walker.Walker{ .env = self.env };
         defer w.deinit();
         try w.walk(dir, &cb);
     }
@@ -116,25 +111,21 @@ pub const Forest = struct {
         const My = @This();
         const Stack = std.ArrayList(usize);
 
-        a: std.mem.Allocator,
-        io: std.Io,
-        log: *const Log,
+        env: Env,
         cfg_grove: *const cfg.file.Grove,
         tree: *Tree,
         node_stack: Stack = .{},
         file_count: usize = 0,
 
-        pub fn init(log: *const Log, cfg_grove: *const cfg.file.Grove, tree: *Tree, a: std.mem.Allocator, io: std.Io) Cb {
+        pub fn init(env: Env, cfg_grove: *const cfg.file.Grove, tree: *Tree) Cb {
             return Cb{
-                .a = a,
-                .io = io,
-                .log = log,
+                .env = env,
                 .cfg_grove = cfg_grove,
                 .tree = tree,
             };
         }
         pub fn deinit(my: *My) void {
-            my.node_stack.deinit(my.a);
+            my.node_stack.deinit(my.env.a);
         }
 
         pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
@@ -156,7 +147,7 @@ pub const Forest = struct {
                     n.type = node_type;
                     n.path = try n.a.dupe(u8, path);
 
-                    try my.node_stack.append(my.a, entry.id);
+                    try my.node_stack.append(my.env.a, entry.id);
                 },
                 walker.Kind.Leave => {
                     _ = my.node_stack.pop();
@@ -195,7 +186,7 @@ pub const Forest = struct {
                         n.language = language;
                         {
                             var readbuf: [1024]u8 = undefined;
-                            var reader = file.reader(my.io, &readbuf);
+                            var reader = file.reader(my.env.io, &readbuf);
                             n.content = try reader.interface.readAlloc(n.a, stat.size);
                         }
                         n.grove_id = my.cfg_grove.id;
@@ -205,7 +196,7 @@ pub const Forest = struct {
 
                         try parser.parse();
                     } else {
-                        try my.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+                        try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
                     }
                 },
             }
@@ -217,7 +208,7 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
-            a: std.mem.Allocator,
+            env: Env,
             tree: *const Tree,
             chores: *const Chores,
 
@@ -231,7 +222,7 @@ pub const Forest = struct {
                     for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
                         for (parent_amps) |parent_amp|
                             if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
-                                try n.agg_amps.append(my.a, parent_amp);
+                                try n.agg_amps.append(my.env.a, parent_amp);
                     }
                 }
             }
@@ -259,7 +250,7 @@ pub const Forest = struct {
                 }
                 return null;
             }
-        }{ .a = self.a, .tree = &self.tree, .chores = &self.chores };
+        }{ .env = self.env, .tree = &self.tree, .chores = &self.chores };
 
         try self.tree.dfsAll(true, &cb);
     }
@@ -284,10 +275,9 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
+            env: Env,
             tree: *const Tree,
             chores: *Chores,
-            log: *const Log,
-            a: std.mem.Allocator,
 
             terms: *const Terms = undefined,
             path: []const u8 = &.{},
@@ -318,14 +308,14 @@ pub const Forest = struct {
 
                             if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox or term.kind == Term.Kind.Capital) {
                                 var strange = rubr.strng.Strange{ .content = term.word };
-                                var path = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                                var path = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
                                 defer path.deinit();
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
-                                        try n.org_amps.append(my.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                        try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
                                     } else {
-                                        try my.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
+                                        try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }
                                 }
                             } else if (term.kind == Term.Kind.Newline) {
@@ -337,10 +327,9 @@ pub const Forest = struct {
                 }
             }
         }{
+            .env = self.env,
             .tree = &self.tree,
             .chores = &self.chores,
-            .log = self.log,
-            .a = self.a,
         };
         try self.tree.dfsAll(true, &cb);
     }
@@ -350,10 +339,9 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
+            env: Env,
             tree: *Tree,
             chores: *Chores,
-            log: *const Log,
-            a: std.mem.Allocator,
 
             terms: ?*const Terms = null,
             path: []const u8 = &.{},
@@ -418,7 +406,7 @@ pub const Forest = struct {
                     if (term.kind == Term.Kind.Amp) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var def_ap = try amp.Path.parse(&strange, my.a) orelse return Error.CouldNotParseAmp;
+                        var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
                         defer def_ap.deinit();
                         if (def_ap.is_definition) {
                             if (n.def != null)
@@ -444,7 +432,7 @@ pub const Forest = struct {
                                     try def_ap.prepend(parent_def);
                                     def_ap.is_definition = true;
                                 } else {
-                                    try my.log.warning("Could not find parent def for non-absolute '{f}', making it absolute as it is\n", .{def_ap});
+                                    try my.env.log.warning("Could not find parent def for non-absolute '{f}', making it absolute as it is\n", .{def_ap});
                                     def_ap.is_absolute = true;
                                 }
                             }
@@ -454,9 +442,9 @@ pub const Forest = struct {
                             const pos = mero.Node.Pos{ .row = line, .cols = cols };
                             if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
                                 n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
-                                try n.org_amps.append(my.a, mero.Node.Amp{ .ix = amp_ix, .pos = pos });
+                                try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = pos });
                             } else {
-                                try my.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                                try my.env.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
                     } else if (term.kind == Term.Kind.Newline) {
@@ -472,12 +460,12 @@ pub const Forest = struct {
                             // If the file is '_amp.md', it is copied to the Folder as well
                             if (try my.tree.parent(entry.id)) |file| {
                                 file.data.def = n.def;
-                                try file.data.org_amps.insertSlice(my.a, 0, n.org_amps.items);
+                                try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
                                 if (is_amp_md(file.data.path)) {
                                     if (try my.tree.parent(file.id)) |folder| {
                                         folder.data.def = n.def;
-                                        try folder.data.org_amps.insertSlice(my.a, 0, n.org_amps.items);
+                                        try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
                                     }
                                 }
                             }
@@ -486,7 +474,7 @@ pub const Forest = struct {
                     }
                 }
             }
-        }{ .tree = &self.tree, .chores = &self.chores, .log = self.log, .a = self.a };
+        }{ .env = self.env, .tree = &self.tree, .chores = &self.chores };
         try self.tree.dfsAll(true, &cb);
     }
 

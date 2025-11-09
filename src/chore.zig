@@ -4,7 +4,7 @@ const amp = @import("amp.zig");
 
 const rubr = @import("rubr");
 const naft = rubr.naft;
-const Log = rubr.log.Log;
+const Env = rubr.Env;
 
 const mero = @import("mero.zig");
 
@@ -128,9 +128,9 @@ pub const Chores = struct {
     };
     const TmpConcat = std.ArrayList([]const u8);
 
-    log: *const Log,
+    env: Env,
 
-    aa: std.heap.ArenaAllocator,
+    aa: std.heap.ArenaAllocator = undefined,
     // All resolved (non-template) AMPs
     amps: Amps = .{},
     list: List = .{},
@@ -139,12 +139,8 @@ pub const Chores = struct {
 
     tmp_concat: TmpConcat = .{},
 
-    pub fn init(log: *const Log, a: std.mem.Allocator) Self {
-        return Self{
-            .log = log,
-            // Do not use the arena allocator here since Self will still be moved
-            .aa = std.heap.ArenaAllocator.init(a),
-        };
+    pub fn init(self: *Self) void {
+        self.aa = std.heap.ArenaAllocator.init(self.env.a);
     }
     pub fn deinit(self: *Self) void {
         self.aa.deinit();
@@ -170,7 +166,7 @@ pub const Chores = struct {
     // Takes deep copy of def
     // For non-templates, the def is added to the list of AMPs as well
     pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.idx.Range) !?Amp.Ix {
-        if (self.log.level(1)) |w| {
+        if (self.env.log.level(1)) |w| {
             try w.print("appendDef() '{f}'\n", .{def_ap});
         }
 
@@ -182,7 +178,7 @@ pub const Chores = struct {
             }
         }{ .needle = &def_ap, .grove_id = grove_id };
         if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
-            try self.log.warning("Definition '{f}' is already present in Grove {}.\n", .{ def_ap, grove_id });
+            try self.env.log.warning("Definition '{f}' is already present in Grove {}.\n", .{ def_ap, grove_id });
             return null;
         }
 
@@ -243,11 +239,11 @@ pub const Chores = struct {
                         if (!is_ambiguous) {
                             // This is the first ambiguous match we find: report the initial match as well
                             const d = match.ix.ptr(self.defs.items);
-                            try self.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' from '{f}'\n", .{ ap, def.ap, d.ap });
+                            try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' from '{f}'\n", .{ ap, def.ap, d.ap });
                         }
                         is_ambiguous = true;
 
-                        try self.log.warning("Ambiguous AMP found: '{f}' fits with '{f}' from '{f}'\n", .{ ap, def.ap, def.ap });
+                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with '{f}' from '{f}'\n", .{ ap, def.ap, def.ap });
                     }
                     maybe_match = Match{ .ix = Def.Ix{ .ix = ix }, .grove_id = def.grove_id };
                 }
@@ -264,7 +260,7 @@ pub const Chores = struct {
             const def = match.ix.cptr(self.defs.items);
             if (ap.is_absolute) {
                 if (ap.parts.items.len != def.ap.parts.items.len) {
-                    try self.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ ap, def.ap });
+                    try self.env.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ ap, def.ap });
                     return null;
                 }
             } else {
@@ -280,7 +276,7 @@ pub const Chores = struct {
 
                 try self.amps.append(self.aa.allocator(), Amp{ .ap = try ap.copy(aaa), .def = catchall.ix });
             } else {
-                try self.log.warning("Could not resolve AMP '{f}' and not catch-all is present\n", .{ap});
+                try self.env.log.warning("Could not resolve AMP '{f}' and not catch-all is present\n", .{ap});
                 return null;
             }
         }
@@ -369,26 +365,27 @@ pub const Chores = struct {
 };
 
 test "chore" {
-    const ut = std.testing;
+    var env_inst = Env.Instance{};
+    env_inst.init();
+    defer env_inst.deinit();
 
-    var log = Log{};
-    log.init();
-    defer log.deinit();
+    const env = env_inst.env();
 
-    var cl = Chores.init(&log, ut.allocator);
+    var cl = Chores{ .env = env };
+    cl.init();
     defer cl.deinit();
 
-    var tree = mero.Tree.init(ut.allocator);
+    var tree = mero.Tree.init(env.a);
     defer tree.deinit();
 
     const ch0 = try tree.addChild(null);
-    ch0.data.* = mero.Node.init(ut.allocator);
+    ch0.data.* = mero.Node.init(env.a);
 
     const ch1 = try tree.addChild(null);
-    ch1.data.* = mero.Node.init(ut.allocator);
+    ch1.data.* = mero.Node.init(env.a);
 
     const ch2 = try tree.addChild(null);
-    ch2.data.* = mero.Node.init(ut.allocator);
+    ch2.data.* = mero.Node.init(env.a);
 
     _ = try cl.add(0, &tree);
     _ = try cl.add(1, &tree);

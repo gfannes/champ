@@ -1,9 +1,10 @@
 const std = @import("std");
 
-const strings = @import("rubr").strings;
-const walker = @import("rubr").walker;
-const naft = @import("rubr").naft;
-const Log = @import("rubr").log.Log;
+const rubr = @import("rubr");
+const strings = rubr.strings;
+const walker = rubr.walker;
+const naft = rubr.naft;
+const Env = rubr.Env;
 
 const cfg = @import("../cfg.zig");
 const tkn = @import("../tkn.zig");
@@ -12,11 +13,9 @@ const mero = @import("../mero.zig");
 pub const Perf = struct {
     const Self = @This();
 
+    env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
-    log: *const Log,
-    a: std.mem.Allocator,
-    io: std.Io,
 
     pub fn call(self: Self) !void {
         for (self.config.groves) |grove| {
@@ -26,22 +25,21 @@ pub const Perf = struct {
 
             std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.path });
 
-            var w = walker.Walker.init(self.a, self.io);
+            var w = walker.Walker{ .env = self.env };
             defer w.deinit();
 
             const String = std.ArrayList(u8);
             var content = String{};
-            defer content.deinit(self.a);
+            defer content.deinit(self.env.a);
 
             var cb = struct {
                 const Cb = @This();
                 const Buffer = std.ArrayList(u8);
 
+                env: Env,
                 outer: *const Self,
                 grove: *const cfg.file.Grove,
                 content: *String,
-                a: std.mem.Allocator,
-                io: std.Io,
 
                 file_count: usize = 0,
                 byte_count: usize = 0,
@@ -74,19 +72,19 @@ pub const Perf = struct {
                         if (my.file_count >= max_count)
                             return;
 
-                    if (my.outer.log.level(2)) |out| {
+                    if (my.env.log.level(2)) |out| {
                         try out.print("{s}\n", .{path});
                     }
-                    if (my.outer.log.level(3)) |out| {
+                    if (my.env.log.level(3)) |out| {
                         try out.print("  base: {s}\n", .{path[offsets.base..]});
                         try out.print("  name: {s}\n", .{path[offsets.name..]});
                     }
 
                     // Read data: 160ms
                     {
-                        try my.content.resize(my.a, stat.size);
+                        try my.content.resize(my.env.a, stat.size);
                         var buf: [1024]u8 = undefined;
-                        var reader = file.reader(my.io, &buf);
+                        var reader = file.reader(my.env.io, &buf);
                         try reader.interface.readSliceAll(my.content.items);
                         my.byte_count += stat.size;
                     }
@@ -103,17 +101,17 @@ pub const Perf = struct {
                     if (my.outer.cli_args.do_parse) {
                         const my_ext = std.fs.path.extension(name);
                         if (mero.Language.from_extension(my_ext)) |language| {
-                            var tree = mero.Tree.init(my.a);
+                            var tree = mero.Tree.init(my.env.a);
                             defer tree.deinit();
 
                             const f = try tree.addChild(null);
                             const n = f.data;
-                            n.* = mero.Node.init(my.a);
+                            n.* = mero.Node.init(my.env.a);
                             n.type = mero.Node.Type.File;
                             n.language = language;
                             n.content = try n.a.dupe(u8, my.content.items);
 
-                            var parser = try mero.Parser.init(f.id, &tree, my.a);
+                            var parser = try mero.Parser.init(f.id, &tree, my.env.a);
                             defer parser.deinit();
 
                             try parser.parse();
@@ -123,7 +121,7 @@ pub const Perf = struct {
                         }
                     }
                 }
-            }{ .outer = &self, .grove = &grove, .content = &content, .a = self.a, .io = self.io };
+            }{ .env = self.env, .outer = &self, .grove = &grove, .content = &content };
 
             var dir = try std.fs.openDirAbsolute(grove.path, .{});
             defer dir.close();

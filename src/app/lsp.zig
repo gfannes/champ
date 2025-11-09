@@ -5,6 +5,7 @@ const rubr = @import("rubr");
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 const fuzz = rubr.fuzz;
+const Env = rubr.Env;
 
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
@@ -25,31 +26,30 @@ pub const Error = error{
 pub const Lsp = struct {
     const Self = @This();
 
+    env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
-    log: *const rubr.log.Log,
-    a: std.mem.Allocator,
-    io: std.Io,
 
     forest_pp: ForestPP = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest_pp = ForestPP.init(self.cli_args, self.log, self.a, self.io);
+        self.forest_pp = .{ .env = self.env, .cli_args = self.cli_args };
+        self.forest_pp.init();
     }
     pub fn deinit(self: *Self) void {
         self.forest_pp.deinit();
     }
 
     pub fn call(self: *Self) !void {
-        try self.log.info("Lsp server started {}\n", .{(try std.time.Instant.now()).timestamp});
+        try self.env.log.info("Lsp server started {}\n", .{(try std.time.Instant.now()).timestamp});
 
         var readbuf: [1024]u8 = undefined;
-        var cin = std.fs.File.stdin().reader(self.io, &readbuf);
+        var cin = std.fs.File.stdin().reader(self.env.io, &readbuf);
 
         var writebuf: [1024]u8 = undefined;
         var cout = std.fs.File.stdout().writer(&writebuf);
 
-        var server = lsp.Server.init(&cin.interface, &cout.interface, self.log.writer(), self.a);
+        var server = lsp.Server.init(&cin.interface, &cout.interface, self.env.log.writer(), self.env.a);
         defer server.deinit();
 
         try self.forest_pp.startThread();
@@ -58,7 +58,7 @@ pub const Lsp = struct {
         var do_continue = true;
         var init_ok = false;
         while (do_continue) : (count += 1) {
-            try self.log.info("[Iteration](count:{})\n", .{count});
+            try self.env.log.info("[Iteration](count:{})\n", .{count});
 
             const request = try server.receive();
 
@@ -100,7 +100,7 @@ pub const Lsp = struct {
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
                     const position = params.position orelse return Error.ExpectedPosition;
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
@@ -149,7 +149,7 @@ pub const Lsp = struct {
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
                     const position = params.position orelse return Error.ExpectedPosition;
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
@@ -196,7 +196,7 @@ pub const Lsp = struct {
                     const params = request.params orelse return Error.ExpectedParams;
                     const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
@@ -210,7 +210,7 @@ pub const Lsp = struct {
                             continue;
 
                         if (rubr.slc.is_empty(chore.parts.items)) {
-                            try self.log.warning("Expected to find at least one AMP for Chore\n", .{});
+                            try self.env.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
 
@@ -235,7 +235,7 @@ pub const Lsp = struct {
                     const params = request.params orelse return Error.ExpectedParams;
                     const context = params.context orelse return Error.ExpectedContext;
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
@@ -257,18 +257,18 @@ pub const Lsp = struct {
                     const params = request.params orelse return Error.ExpectedParams;
                     const query = params.query orelse return Error.ExpectedQuery;
 
-                    var aa = std.heap.ArenaAllocator.init(self.a);
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol){};
 
-                    var q = qry.Query.init(self.a);
+                    var q = qry.Query.init(self.env.a);
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
                         if (rubr.slc.is_empty(chore.parts.items)) {
-                            try self.log.warning("Expected to find at least one AMP per Chore\n", .{});
+                            try self.env.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }
 
@@ -303,7 +303,7 @@ pub const Lsp = struct {
 
                     try server.send(workspace_symbols.items[0..size]);
                 } else {
-                    try self.log.warning("Unhandled request '{s}'\n", .{request.method});
+                    try self.env.log.warning("Unhandled request '{s}'\n", .{request.method});
                 }
             } else {
                 if (request.is("textDocument/didOpen")) {
@@ -316,7 +316,7 @@ pub const Lsp = struct {
                 } else if (request.is("exit")) {
                     do_continue = false;
                 } else {
-                    try self.log.warning("Unhandled notification '{s}'\n", .{request.method});
+                    try self.env.log.warning("Unhandled notification '{s}'\n", .{request.method});
                 }
             }
         }
@@ -347,24 +347,27 @@ pub const Lsp = struct {
 pub const ForestPP = struct {
     const Self = @This();
 
+    env: Env,
     cli_args: *const cfg.cli.Args,
 
-    a: std.mem.Allocator,
-    io: std.Io,
-    config_loader: cfg.file.Loader,
+    config_loader: cfg.file.Loader = undefined,
 
     mutex: std.Thread.Mutex = .{},
 
     thread: ?std.Thread = null,
     quit_thread: bool = false,
 
-    pp: [2]mero.Forest,
+    pp: [2]mero.Forest = undefined,
     ping_is_first: bool = true,
 
     reload_counter: usize = 0,
 
-    pub fn init(cli_args: *const cfg.cli.Args, log: *const rubr.log.Log, a: std.mem.Allocator, io: std.Io) ForestPP {
-        return ForestPP{ .cli_args = cli_args, .a = a, .io = io, .config_loader = try cfg.file.Loader.init(a, io), .pp = .{ mero.Forest.init(log, a, io), mero.Forest.init(log, a, io) } };
+    pub fn init(self: *Self) void {
+        self.config_loader = try cfg.file.Loader.init(self.env);
+        for (&self.pp) |*forest| {
+            forest.* = .{ .env = self.env };
+            forest.init();
+        }
     }
     pub fn deinit(self: *Self) void {
         self.stopThread();
@@ -388,7 +391,7 @@ pub const ForestPP = struct {
                 self.mutex.unlock();
             }
 
-            try self.io.sleep(std.Io.Duration.fromMilliseconds(10), std.Io.Clock.real);
+            try self.env.io.sleep(std.Io.Duration.fromMilliseconds(10), std.Io.Clock.real);
             // std.Thread.sleep(_10_ms);
         }
     }
@@ -464,7 +467,7 @@ pub const ForestPP = struct {
                 }
             }
 
-            try self.io.sleep(std.Io.Duration.fromMilliseconds(100), std.Io.Clock.real);
+            try self.env.io.sleep(std.Io.Duration.fromMilliseconds(100), std.Io.Clock.real);
         }
     }
 };

@@ -6,6 +6,7 @@ const lsp = rubr.lsp;
 const strings = rubr.strings;
 const Strange = rubr.strange.Strange;
 const naft = rubr.naft;
+const Env = rubr.Env;
 
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
@@ -14,16 +15,15 @@ const chore = @import("../chore.zig");
 pub const Test = struct {
     const Self = @This();
 
+    env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
-    log: *const Log,
-    a: std.mem.Allocator,
-    io: std.Io,
 
     forest: mero.Forest = undefined,
 
     pub fn init(self: *Self) !void {
-        self.forest = mero.Forest.init(self.log, self.a, self.io);
+        self.forest = .{ .env = self.env };
+        self.forest.init();
     }
     pub fn deinit(self: *Self) void {
         self.forest.deinit();
@@ -32,7 +32,7 @@ pub const Test = struct {
     pub fn call(self: *Self) !void {
         try self.forest.load(self.config, self.cli_args);
 
-        var root = naft.Node.init(self.log.writer());
+        var root = naft.Node.init(self.env.log.writer());
         defer root.deinit();
 
         self.forest.chores.write(&root);
