@@ -14,6 +14,24 @@ pub const lowers = [_][]const u8{ "todo", "next", "wip", "done", "question", "ca
 
 pub const Path = struct {
     const Self = @This();
+
+    // Part is assumed to be POD
+    pub const Part = struct {
+        // content is assumed to output self
+        content: []const u8,
+        is_exclusive: bool = false,
+        is_template: bool = false,
+
+        pub fn init(strange: *rubr.strng.Strange) Part {
+            const is_exclusive = strange.popChar('!');
+            const is_template_ = strange.popChar('~');
+            return Part{
+                .content = strange.str(),
+                .is_exclusive = is_exclusive,
+                .is_template = is_template_,
+            };
+        }
+    };
     const Parts = std.ArrayList(Part);
 
     a: std.mem.Allocator,
@@ -170,24 +188,6 @@ pub const Path = struct {
         }
         if (self.is_dependency)
             try io.print("&", .{});
-    }
-};
-
-// Part is assumed to be POD
-pub const Part = struct {
-    // content is assumed to output self
-    content: []const u8,
-    is_exclusive: bool = false,
-    is_template: bool = false,
-
-    pub fn init(strange: *rubr.strng.Strange) Part {
-        const is_exclusive = strange.popChar('!');
-        const is_template = strange.popChar('~');
-        return Part{
-            .content = strange.str(),
-            .is_exclusive = is_exclusive,
-            .is_template = is_template,
-        };
     }
 };
 

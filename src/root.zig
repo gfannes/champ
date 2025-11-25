@@ -6,6 +6,7 @@ pub const cfg = @import("cfg.zig");
 pub const mero = @import("mero.zig");
 pub const chore = @import("chore.zig");
 pub const amp = @import("amp.zig");
+pub const date = @import("date.zig");
 
 test {
     const ut = std.testing;
@@ -15,4 +16,5 @@ test {
     ut.refAllDecls(mero);
     ut.refAllDecls(chore);
     ut.refAllDecls(amp);
+    ut.refAllDecls(date);
 }
