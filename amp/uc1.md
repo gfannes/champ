@@ -1,4 +1,6 @@
-&&:uc1
+&&uc1
+
+Support collecting, finding and walking information.
 
 # Create project breakdown &&breakdown
 - Must support defining a tree of subtasks as AMP tags
@@ -86,16 +88,16 @@
 - [/] Support aggregation of AMP tags
 	- Rework Node.orgs
 		- [x] Keep refs to defs in chores
-		- [x] Use ?def, org and links (trailing!, maybe ancestral as well?)
+		- [x] Use ?def, org and links
 		- [x] Collect all tags as refs to defs in Node.agg
 	- [x] Tag distribution from root to leaf
 		- Def is also an org and should be used in aggregation etc
 			- Only for tags, not for templates or numbers etc.
 	- [x] Do not inherit ~status
 		- Do not inherit if there is already an AMP with the same def
-	- [/] Trailing ! indicates dependency: current Chore _uses_ AMP
+	- [/] Trailing `&` indicates dependency: current Chore _uses_ AMP
 		- Default behavior is that current Chore _is part of_ AMP
-		- Is this the same as a reverse tag?
+		- Is this the same as a reverse tag? Might be handy to push a start date from the logbook
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
 - [x] Support specification of AMP tags for a folder

@@ -3,16 +3,6 @@ Lose collection of requirements
 
 ## Fix detection of 'yamaha' in '2025-30.md'
 
-## Provide completion for amp and document links with LSP
-
-## Support use of prios
-- Post-fix start: `&3*`
-
-## Search
-- Sort search results by prio
-- Support searching in 'org' and 'agg'
-	- First search part searches in 'org', others search in 'agg'?
-
 ## Path DSL
 - [x] Replace `!` with `&` for definition and dependency
 - [x] Support trailing '.?!' as in `Should this work for &yamaha?`
