@@ -35,3 +35,9 @@ Support planning items on a timeline and finding the next item to work-on.
 ## Support working with durations
 - Design DSL for duration: `1m2w3d4h`
 - These aggregate leaf to root as sum
+
+## Create overview in temporary text file
+- [[File UI]], similar to [Magit](https://magit.vc/)
+
+## List prio items without start date
+- Eg from `champ check` verb, together with other analysis tools
