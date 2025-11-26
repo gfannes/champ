@@ -24,12 +24,12 @@ Support planning items on a timeline and finding the next item to work-on.
 - Sort search results by prio
 - Support searching in 'org' and 'agg'
 	- First search part searches in 'org', others search in 'agg'?
-- Design DSL for date:
+- [x] Design DSL for date:
 	- `20250210`
 	- `202502` => `20250201`
 	- `2025` => `20250101`
-	- `q3` => closest `XXXX0701`
-	- `w23` => closest year-week
+	- `y25q3` => `20250701`
+	- `y25w23`
 - Convert all dates internally to YYYYMMDD
 
 ## Support working with durations

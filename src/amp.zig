@@ -17,7 +17,6 @@ pub const Path = struct {
 
     // Part is assumed to be POD
     pub const Part = struct {
-        // content is assumed to output self
         content: []const u8,
         is_exclusive: bool = false,
         is_template: bool = false,
