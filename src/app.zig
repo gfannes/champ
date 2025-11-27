@@ -16,6 +16,7 @@ const cfg = @import("cfg.zig");
 
 const Lsp = @import("app/lsp.zig").Lsp;
 const Search = @import("app/search.zig").Search;
+const Plan = @import("app/plan.zig").Plan;
 const Perf = @import("app/perf.zig").Perf;
 const Test = @import("app/test.zig").Test;
 
@@ -71,6 +72,7 @@ pub const App = struct {
             const duration_ms = self.env.duration_ns() / 1000 / 1000;
             self.witf.print("Duration: {}ms\n", .{duration_ms}) catch {};
         }
+        self.env_inst.deinit();
     }
 
     pub fn parseOptions(self: *Self) !void {
@@ -78,6 +80,7 @@ pub const App = struct {
             std.debug.print("{}\n", .{err});
             self.cli_args.print_help = true;
         };
+        self.env_inst.log.setLevel(self.cli_args.verbose);
 
         if (self.cli_args.logfile) |logfile| {
             try self.env_inst.log.toFile(logfile, .{});
@@ -124,6 +127,16 @@ pub const App = struct {
                 },
                 cfg.cli.Mode.Search => {
                     var obj = Search{
+                        .env = self.env,
+                        .config = &self.config,
+                        .cli_args = &self.cli_args,
+                    };
+                    try obj.init();
+                    defer obj.deinit();
+                    try obj.call();
+                },
+                cfg.cli.Mode.Plan => {
+                    var obj = Plan{
                         .env = self.env,
                         .config = &self.config,
                         .cli_args = &self.cli_args,

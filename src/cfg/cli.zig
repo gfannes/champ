@@ -8,11 +8,13 @@ const Error = error{
     CouldNotFindExeName,
     UnknownMode,
     ModeDoesNotSupportExtra,
+    ExpectedNumber,
 };
 
 pub const Mode = enum {
     Search,
     Lsp,
+    Plan,
     Perf,
     Test,
 };
@@ -55,8 +57,8 @@ pub const Args = struct {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
             } else if (arg.is("-v", "--verbose")) {
-                if (self.args.pop()) |x|
-                    self.verbose = try x.as(usize);
+                const v = self.args.pop() orelse return Error.ExpectedNumber;
+                self.verbose = try v.as(usize);
             } else if (arg.is("-g", "--grove")) {
                 if (self.args.pop()) |x|
                     try self.groves.append(self.env.aa, x.arg);
@@ -70,7 +72,7 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        Mode.Search, Mode.Test => try self.extra.append(self.env.aa, arg.arg),
+                        Mode.Search, Mode.Plan, Mode.Test => try self.extra.append(self.env.aa, arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;
@@ -80,6 +82,8 @@ pub const Args = struct {
                     self.mode = Mode.Lsp;
                 } else if (arg.is("se", "search")) {
                     self.mode = Mode.Search;
+                } else if (arg.is("pl", "plan")) {
+                    self.mode = Mode.Plan;
                 } else if (arg.is("perf", "perf")) {
                     self.mode = Mode.Perf;
                 } else if (arg.is("test", "test")) {
@@ -106,6 +110,7 @@ pub const Args = struct {
             "  Commands:\n" ++
             "    lsp                  Lsp server\n" ++
             "    se/search            Search\n" ++
+            "    pl/plan              Plan\n" ++
             "    perf                 Performance tests\n" ++
             "    test                 Test\n" ++
             "Developed by Geert Fannes\n";
