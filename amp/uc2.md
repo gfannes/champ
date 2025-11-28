@@ -16,11 +16,17 @@ Support planning items on a timeline and finding the next item to work-on.
 	- optional digit is to swap order where necessary
 
 ## Automatically inject start date from logbook
+- [*] Inject dates automatically from log
+	- Rework into YYYY/MM/DD.md
 
 ## Support working with start date and prio
-- Create new verb `pl/plan`
-- Distribute start date from root to leaf, can be overruled by org
-- Retain chores with a start date before now
+- [x] Create new verb `pl/plan`
+- [x] Distribute start date from root to leaf, can be overruled by org
+- [x] Retain chores with a start date before now
+- [*] Print chore content
+	- Currently, only the amp.Paths are accessible, apparently
+	- Maybe collect selected nodes in a new Tree and print that
+		- Could also be used to extract subtrees for create a PR withouth amp annotations
 - Sort search results by prio
 - Support searching in 'org' and 'agg'
 	- First search part searches in 'org', others search in 'agg'?
@@ -30,7 +36,7 @@ Support planning items on a timeline and finding the next item to work-on.
 	- `2025` => `20250101`
 	- `y25q3` => `20250701`
 	- `y25w23`
-- Convert all dates internally to YYYYMMDD
+- [x] Convert all dates internally to std.time.epoch.YearAndDay
 
 ## Support working with durations
 - Design DSL for duration: `1m2w3d4h`
