@@ -16,8 +16,9 @@ Support planning items on a timeline and finding the next item to work-on.
 	- optional digit is to swap order where necessary
 
 ## Automatically inject start date from logbook
-- [*] Inject dates automatically from log
-	- Rework into YYYY/MM/DD.md
+- [x] Find date in filepath
+- [*] Add date to File node
+	- Probably as an Amp, but the systems seems not prepared for new amps
 
 ## Support working with start date and prio
 - [x] Create new verb `pl/plan`

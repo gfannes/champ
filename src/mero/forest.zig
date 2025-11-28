@@ -8,6 +8,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Chores = @import("../chore.zig").Chores;
+const date = @import("../date.zig");
 
 const rubr = @import("rubr");
 const Env = rubr.Env;
@@ -155,6 +156,13 @@ pub const Forest = struct {
                 walker.Kind.File => {
                     const offsets = maybe_offsets orelse return Error.ExpectedOffsets;
                     const name = path[offsets.name..];
+
+                    var d: ?rubr.date.Date = null;
+                    for (0..name.len) |ix| {
+                        d = date.parse(name[ix..], false);
+                        if (d != null)
+                            break;
+                    }
 
                     if (my.cfg_grove.include) |include| {
                         const ext = std.fs.path.extension(name);

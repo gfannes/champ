@@ -61,9 +61,9 @@ pub const Plan = struct {
                 if (ap.parts.items.len == 3) {
                     if (std.mem.eql(u8, ap.parts.items[1].content, "s")) {
                         const start_str = ap.parts.items[2].content;
-                        if (date.parse(start_str)) |s| {
+                        if (date.parse(start_str, true)) |s| {
                             if (s.epoch_day.day <= today.epoch_day.day) {
-                                const content = if (self.forest.tree.get(chore.node_id)) |n| "found node" else |_| "-";
+                                const content = if (self.forest.tree.get(chore.node_id)) |_| "found node" else |_| "-";
                                 try self.env.stdout.print("{s} => {s}\n", .{ chore.str, content });
                             }
                         } else {
