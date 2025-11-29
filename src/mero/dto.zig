@@ -107,8 +107,8 @@ pub const Node = struct {
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
-    path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`
-    content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`
+    path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
+    content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: subslices are present many times
     terms: Terms = .{},
 
     content_rows: idx.Range = .{},

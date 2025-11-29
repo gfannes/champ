@@ -4,7 +4,7 @@ const rubr = @import("rubr");
 const naft = rubr.naft;
 
 const tkn = @import("../tkn.zig");
-const capitals = @import("../amp.zig").capitals;
+const Status = @import("../amp.zig").Status;
 
 const dto = @import("dto.zig");
 const Language = dto.Language;
@@ -32,6 +32,7 @@ pub const Parser = struct {
     tree: *Tree,
     language: Language,
     content: []const u8,
+    path: []const u8,
     tokenizer: tkn.Tokenizer,
 
     pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
@@ -43,6 +44,7 @@ pub const Parser = struct {
             .tree = tree,
             .language = language,
             .content = r.content,
+            .path = r.path,
             .tokenizer = tkn.Tokenizer.init(r.content),
         };
     }
@@ -105,7 +107,7 @@ pub const Parser = struct {
 
     fn pop_line(self: *Self) !?Node {
         const first_token = self.tokenizer.peek() orelse return null;
-        const ptr = first_token.word.ptr;
+        var content = first_token.word;
 
         var n = Node{ .a = self.a };
         errdefer n.deinit();
@@ -117,12 +119,32 @@ pub const Parser = struct {
             Language.Cish, Language.Ruby, Language.Python, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
         }
 
-        const len = if (self.tokenizer.peek()) |last_token|
-            last_token.word.ptr - ptr
-        else
-            self.content.len - (ptr - self.content.ptr);
+        if (self.tokenizer.peek()) |last_token| {
+            content.len = last_token.word.ptr - content.ptr;
+        } else {
+            const start_offset: usize = content.ptr - self.content.ptr;
+            content.len = self.content.len - start_offset;
+        }
 
-        n.content = ptr[0..len];
+        // Strip leading/trailing whitespace and newlines
+        while (content.len > 0) {
+            switch (content[0]) {
+                '\n', '\r', ' ', '\t' => {
+                    content.ptr += 1;
+                    content.len -= 1;
+                },
+                else => break,
+            }
+        }
+        while (content.len > 0) {
+            switch (content[content.len - 1]) {
+                '\n', '\r', ' ', '\t' => content.len -= 1,
+                else => break,
+            }
+        }
+
+        n.content = content;
+        n.path = self.path;
 
         return n;
     }
@@ -562,7 +584,7 @@ pub const Parser = struct {
         if (self.tokenizer.peek()) |token| {
             if (token.symbol != tkn.Symbol.Word)
                 return null;
-            if (!rubr.strings.contains(u8, &capitals, token.word))
+            if (Status.fromCapital(token.word) == null)
                 return null;
 
             const capital = Term{ .word = token.word, .kind = Term.Kind.Capital };

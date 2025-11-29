@@ -12,10 +12,36 @@ pub const Error = error{
     UnsupportedTemplate,
 };
 
-// Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
-pub const capitals = [_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FORWARD", "CANCELED" };
-// Lower-case variant. Infinite lifetime is important: amp.Path.Part blindly assumes its content lives long enough.
-pub const lowers = [_][]const u8{ "todo", "next", "wip", "done", "question", "callout", "forward", "canceled" };
+pub const Status = enum(usize) {
+    Todo,
+    Next,
+    Wip,
+    Done,
+    Question,
+    Callout,
+    Forward,
+    Canceled,
+
+    // Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
+    const capitals = [_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "CALLOUT", "FORWARD", "CANCELED" };
+    // Lower-case variant. Infinite lifetime is important: amp.Path.Part blindly assumes its content lives long enough.
+    const lowers = [_][]const u8{ "todo", "next", "wip", "done", "question", "callout", "forward", "canceled" };
+
+    pub fn fromLower(str: []const u8) ?Status {
+        if (rubr.strings.index(u8, &lowers, str)) |ix0|
+            return @enumFromInt(ix0);
+        return null;
+    }
+    pub fn fromCapital(str: []const u8) ?Status {
+        if (rubr.strings.index(u8, &capitals, str)) |ix0|
+            return @enumFromInt(ix0);
+        return null;
+    }
+
+    pub fn lower(self: @This()) []const u8 {
+        return lowers[@intFromEnum(self)];
+    }
+};
 
 pub const Path = struct {
     const Self = @This();
@@ -23,6 +49,7 @@ pub const Path = struct {
     // Part is assumed to be POD
     pub const Part = struct {
         content: []const u8,
+        status: ?Status = null,
         date: ?datex.Date = null,
         is_exclusive: bool = false,
         is_template: bool = false,
@@ -70,10 +97,10 @@ pub const Path = struct {
             const self_part: *const Part = self_rit.nextPtr() orelse return false;
             if (self_part.is_template) {
                 if (std.mem.eql(u8, self_part.content, "status")) {
-                    if (!rubr.strings.contains(u8, &lowers, rhs_part.content))
+                    if (Status.fromLower(rhs_part.content) == null)
                         return false;
                 } else if (std.mem.eql(u8, self_part.content, "date")) {
-                    if (datex.parse(rhs_part.content, true) == null)
+                    if (datex.parse(rhs_part.content, .{}) == null)
                         return false;
                 } else {
                     // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
@@ -111,12 +138,9 @@ pub const Path = struct {
             if (!src.is_template)
                 continue;
             if (std.mem.eql(u8, src.content, "status")) {
-                if (!rubr.strings.contains(u8, &lowers, dst.content))
-                    return Error.ExpectedStatus;
+                dst.status = Status.fromLower(dst.content) orelse return Error.ExpectedStatus;
             } else if (std.mem.eql(u8, src.content, "date")) {
-                dst.date = datex.parse(dst.content, true);
-                if (dst.date == null)
-                    return Error.ExpectedDate;
+                dst.date = datex.parse(dst.content, .{}) orelse return Error.ExpectedDate;
             } else {
                 std.debug.print("Unsupported template '{s}'\n", .{src.content});
                 return Error.UnsupportedTemplate;
@@ -180,11 +204,11 @@ pub const Path = struct {
             }
 
             path.deinit();
-        } else if (rubr.strings.index(u8, &capitals, strange.str())) |ix| {
+        } else if (Status.fromCapital(strange.str())) |status| {
             var path = Path.init(a);
             errdefer path.deinit();
 
-            var s = rubr.strng.Strange{ .content = lowers[ix] };
+            var s = rubr.strng.Strange{ .content = status.lower() };
             try path.parts.append(a, Part.init(&s));
 
             return path;

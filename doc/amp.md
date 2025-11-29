@@ -1,4 +1,4 @@
-&&:amp
+&&amp
 
 # AMP DSL &&dsl
 

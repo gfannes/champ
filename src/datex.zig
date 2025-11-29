@@ -3,17 +3,32 @@ const rubr = @import("rubr");
 
 pub const Date = rubr.datex.Date;
 
-pub fn parse(str: []const u8, strict_end: bool) ?Date {
+pub const Options = struct {
+    strict_end: bool = true,
+    allow_yyyy: bool = true,
+};
+
+pub fn findDate(str: []const u8, options: Options) ?Date {
+    for (0..str.len) |ix| {
+        if (parse(str[ix..], options)) |date|
+            return date;
+    }
+    return null;
+}
+
+pub fn parse(str: []const u8, options: Options) ?Date {
     var strange = rubr.strng.Strange{ .content = str };
 
     // YEAR
     var year: u16 = 0;
+    var is_yyyy: bool = false;
     if (strange.popChar('y')) {
         year = strange.popInt(u16) orelse return null;
         if (year < 100)
             year += 2000;
     } else if (strange.popFront(4)) |yyyy| {
         year = std.fmt.parseInt(u16, yyyy, 10) catch return null;
+        is_yyyy = true;
     } else {
         // We expect a year to be given
         return null;
@@ -44,6 +59,8 @@ pub fn parse(str: []const u8, strict_end: bool) ?Date {
         } else if (week > 1) {
             days += (7 - offset_w1) + 7 * (week - 2);
         }
+
+        is_yyyy = false;
     } else {
         for (1970..year) |y|
             days += std.time.epoch.getDaysInYear(@intCast(y));
@@ -60,6 +77,8 @@ pub fn parse(str: []const u8, strict_end: bool) ?Date {
                 4 => days += 31 + 28 + leap + 31 + 30 + 31 + 30 + 31 + 31 + 30,
                 else => return null,
             }
+
+            is_yyyy = false;
         } else {
             if (strange.popIntMaxCount(u16, 2)) |month| {
                 if (month < 1 or month > 12)
@@ -75,11 +94,16 @@ pub fn parse(str: []const u8, strict_end: bool) ?Date {
                         return null;
                     days += (day - 1);
                 }
+
+                is_yyyy = false;
             }
         }
     }
 
-    if (strict_end and !strange.empty())
+    if (options.strict_end and !strange.empty())
+        return null;
+
+    if (!options.allow_yyyy and is_yyyy)
         return null;
 
     return Date.fromEpochDays(days);
@@ -91,7 +115,7 @@ test "date" {
     const Scn = struct {
         str: []const u8,
         exp: ?[]const u8,
-        strict_end: bool = true,
+        options: Options = .{},
     };
 
     const scns = [_]Scn{
@@ -119,13 +143,13 @@ test "date" {
         .{ .str = "2025-01-02", .exp = "20250102" },
         .{ .str = "2025-1-2", .exp = "20250102" },
         .{ .str = "2025-2", .exp = "20250201" },
-        .{ .str = "2025-2 ", .exp = "20250201", .strict_end = false },
-        .{ .str = "2025-01-02rest", .exp = "20250102", .strict_end = false },
+        .{ .str = "2025-2 ", .exp = "20250201", .options = .{ .strict_end = false } },
+        .{ .str = "2025-01-02rest", .exp = "20250102", .options = .{ .strict_end = false } },
     };
 
     for (&scns) |scn| {
         std.debug.print("[Scn](str:{s})(exp:{?s})\n", .{ scn.str, scn.exp });
-        if (parse(scn.str, scn.strict_end)) |date| {
+        if (parse(scn.str, scn.options)) |date| {
             var aw = std.Io.Writer.Allocating.init(ut.allocator);
             try aw.writer.print("{f}", .{date});
             const act = try aw.toOwnedSlice();

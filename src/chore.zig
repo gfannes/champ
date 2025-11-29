@@ -35,7 +35,7 @@ pub const Chore = struct {
     const Parts = std.ArrayList(Part);
 
     a: std.mem.Allocator,
-    node_id: usize,
+    node_id: usize, // Id for forest.tree
     path: []const u8 = &.{},
     // String repr of Node.org_amps + Node.agg_amps
     str: []const u8 = &.{},
@@ -61,6 +61,19 @@ pub const Chore = struct {
                 return true;
         }
         return false;
+    }
+
+    pub const Where = enum { Org, Any };
+    pub fn value(self: Self, key: []const u8, where: Where) ?*const amp.Path.Part {
+        const count = switch (where) {
+            .Org => self.org_count,
+            .Any => self.parts.items.len,
+        };
+        for (self.parts.items[0..count]) |part| {
+            if (part.ap.value_at(&[_][]const u8{key})) |p|
+                return p;
+        }
+        return null;
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {

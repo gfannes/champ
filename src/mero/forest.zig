@@ -170,13 +170,6 @@ pub const Forest = struct {
                     const offsets = maybe_offsets orelse return Error.ExpectedOffsets;
                     const name = path[offsets.name..];
 
-                    var date: ?datex.Date = null;
-                    for (0..name.len) |ix| {
-                        date = datex.parse(name[ix..], false);
-                        if (date != null)
-                            break;
-                    }
-
                     if (my.cfg_grove.include) |include| {
                         const ext = std.fs.path.extension(name);
                         if (!strings.contains(u8, include, ext))
@@ -295,6 +288,7 @@ pub const Forest = struct {
             const My = @This();
 
             env: Env,
+            aa: std.mem.Allocator,
             tree: *const Tree,
             chores: *Chores,
 
@@ -315,6 +309,22 @@ pub const Forest = struct {
                         if (n.grove_id == null)
                             return Error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
+
+                        if (datex.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
+                            var w = std.Io.Writer.Allocating.init(my.aa);
+                            defer w.deinit();
+                            try w.writer.print("&:s:{f}", .{date});
+                            const content = try w.toOwnedSlice();
+                            var strange = rubr.strng.Strange{ .content = content };
+                            var path = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
+                            defer path.deinit();
+                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
+                            if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
+                                try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = 0, .cols = .{} } });
+                            } else {
+                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
+                            }
+                        }
                     },
                     else => {
                         var line: usize = n.content_rows.begin;
@@ -347,6 +357,7 @@ pub const Forest = struct {
             }
         }{
             .env = self.env,
+            .aa = self.aral.allocator(),
             .tree = &self.tree,
             .chores = &self.chores,
         };
