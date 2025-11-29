@@ -26,25 +26,25 @@ pub const Parser = struct {
     const Self = @This();
     const Strings = std.ArrayList([]const u8);
 
+    a: std.mem.Allocator,
+
     root_id: Tree.Id,
     tree: *Tree,
     language: Language,
+    content: []const u8,
     tokenizer: tkn.Tokenizer,
-    a: std.mem.Allocator,
 
-    pub fn init(root_id: Tree.Id, tree: *Tree, a: std.mem.Allocator) !Self {
+    pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
         const r = tree.ptr(root_id);
         const language = r.language orelse return Error.ExpectedLanguage;
         return Self{
+            .a = a,
             .root_id = root_id,
             .tree = tree,
             .language = language,
+            .content = r.content,
             .tokenizer = tkn.Tokenizer.init(r.content),
-            .a = a,
         };
-    }
-    pub fn deinit(self: *Self) void {
-        _ = self;
     }
 
     pub fn parse(self: *Self) !void {
@@ -104,10 +104,10 @@ pub const Parser = struct {
     }
 
     fn pop_line(self: *Self) !?Node {
-        if (self.tokenizer.empty())
-            return null;
+        const first_token = self.tokenizer.peek() orelse return null;
+        const ptr = first_token.word.ptr;
 
-        var n = Node.init(self.a);
+        var n = Node{ .a = self.a };
         errdefer n.deinit();
         n.type = Node.Type.Line;
 
@@ -116,6 +116,13 @@ pub const Parser = struct {
             Language.Text => try self.pop_txt_text(&n),
             Language.Cish, Language.Ruby, Language.Python, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
         }
+
+        const len = if (self.tokenizer.peek()) |last_token|
+            last_token.word.ptr - ptr
+        else
+            self.content.len - (ptr - self.content.ptr);
+
+        n.content = ptr[0..len];
 
         return n;
     }
@@ -731,6 +738,10 @@ pub const Parser = struct {
 test "Parser.parse()" {
     const ut = std.testing;
 
+    var aral = std.heap.ArenaAllocator.init(ut.allocator);
+    defer aral.deinit();
+    const aa = aral.allocator();
+
     var tree = Tree.init(ut.allocator);
     defer {
         for (tree.nodes.items) |*node|
@@ -751,8 +762,8 @@ test "Parser.parse()" {
     }) |scn| {
         const f = try tree.addChild(null);
         const n = f.data;
-        n.* = Node.init(ut.allocator);
-        n.content = try tree.a.dupe(u8, scn.content);
+        n.* = Node{ .a = ut.allocator };
+        n.content = try aa.dupe(u8, scn.content);
         n.language = scn.language;
 
         var parser = try Parser.init(f.id, &tree, ut.allocator);

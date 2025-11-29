@@ -8,7 +8,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Chores = @import("../chore.zig").Chores;
-const date = @import("../date.zig");
+const datex = @import("../datex.zig");
 
 const rubr = @import("rubr");
 const Env = rubr.Env;
@@ -29,6 +29,7 @@ pub const Forest = struct {
     const Self = @This();
 
     env: Env,
+    aral: std.heap.ArenaAllocator = undefined,
     valid: bool = false,
     tree: Tree = undefined,
     chores: Chores = undefined,
@@ -43,6 +44,7 @@ pub const Forest = struct {
         //         self.a = (self.maybe_fba orelse unreachable).allocator();
         //     }
         // }
+        self.aral = std.heap.ArenaAllocator.init(self.env.a);
         self.tree = Tree.init(self.env.a);
         self.chores = Chores{ .env = self.env };
         self.chores.init();
@@ -56,6 +58,7 @@ pub const Forest = struct {
         self.tree.each(&cb) catch {};
         self.tree.deinit();
         self.chores.deinit();
+        self.aral.deinit();
     }
     pub fn reinit(self: *Self) void {
         const env = self.env;
@@ -79,11 +82,19 @@ pub const Forest = struct {
             if (strings.contains(u8, wanted_groves, cfg_grove.name))
                 try self.loadGrove(&cfg_grove);
         }
+        std.debug.print("Loaded groves\n", .{});
 
         try self.collectDefs();
+        std.debug.print("Collected defs\n", .{});
+
         try self.resolveAmps();
+        std.debug.print("Resolved Amps\n", .{});
+
         try self.aggregateAmps();
+        std.debug.print("Aggregated Amps\n", .{});
+
         try self.createChores();
+        std.debug.print("Created chores\n", .{});
 
         self.valid = true;
     }
@@ -97,7 +108,7 @@ pub const Forest = struct {
     }
 
     fn loadGrove(self: *Self, cfg_grove: *const cfg.file.Grove) !void {
-        var cb = Cb.init(self.env, cfg_grove, &self.tree);
+        var cb = Cb.init(self.env, self.aral.allocator(), cfg_grove, &self.tree);
         defer cb.deinit();
 
         var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
@@ -113,14 +124,16 @@ pub const Forest = struct {
         const Stack = std.ArrayList(usize);
 
         env: Env,
+        aa: std.mem.Allocator,
         cfg_grove: *const cfg.file.Grove,
         tree: *Tree,
         node_stack: Stack = .{},
         file_count: usize = 0,
 
-        pub fn init(env: Env, cfg_grove: *const cfg.file.Grove, tree: *Tree) Cb {
+        pub fn init(env: Env, aa: std.mem.Allocator, cfg_grove: *const cfg.file.Grove, tree: *Tree) Cb {
             return Cb{
                 .env = env,
+                .aa = aa,
                 .cfg_grove = cfg_grove,
                 .tree = tree,
             };
@@ -144,9 +157,9 @@ pub const Forest = struct {
 
                     const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                     const n = entry.data;
-                    n.* = Node.init(my.tree.a);
+                    n.* = Node{ .a = my.env.a };
                     n.type = node_type;
-                    n.path = try n.a.dupe(u8, path);
+                    n.path = try my.aa.dupe(u8, path);
 
                     try my.node_stack.append(my.env.a, entry.id);
                 },
@@ -157,10 +170,10 @@ pub const Forest = struct {
                     const offsets = maybe_offsets orelse return Error.ExpectedOffsets;
                     const name = path[offsets.name..];
 
-                    var d: ?rubr.date.Date = null;
+                    var date: ?datex.Date = null;
                     for (0..name.len) |ix| {
-                        d = date.parse(name[ix..], false);
-                        if (d != null)
+                        date = datex.parse(name[ix..], false);
+                        if (date != null)
                             break;
                     }
 
@@ -188,20 +201,18 @@ pub const Forest = struct {
 
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
-                        n.* = Node.init(my.tree.a);
+                        n.* = Node{ .a = my.env.a };
                         n.type = Node.Type.File;
-                        n.path = try n.a.dupe(u8, path);
+                        n.path = try my.aa.dupe(u8, path);
                         n.language = language;
                         {
                             var readbuf: [1024]u8 = undefined;
                             var reader = file.reader(my.env.io, &readbuf);
-                            n.content = try reader.interface.readAlloc(n.a, stat.size);
+                            n.content = try reader.interface.readAlloc(my.aa, stat.size);
                         }
                         n.grove_id = my.cfg_grove.id;
 
-                        var parser = try mero.Parser.init(entry.id, my.tree, my.tree.a);
-                        defer parser.deinit();
-
+                        var parser = try mero.Parser.init(my.env.a, entry.id, my.tree);
                         try parser.parse();
                     } else {
                         try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });

@@ -1,4 +1,5 @@
+&&:s:~date
 &&:champ
 
-- [ ] Something todo for today &s:20251128 aoeaou
+- [ ] Something todo for today &s:2025q1 aoeaou
 	- aoeuaoue

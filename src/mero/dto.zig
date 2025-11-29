@@ -91,6 +91,8 @@ pub const Node = struct {
 
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
 
+    a: std.mem.Allocator,
+
     type: Type = Type.Unknown,
     language: ?Language = null,
 
@@ -105,8 +107,8 @@ pub const Node = struct {
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},
-    path: []const u8 = &.{},
-    content: []const u8 = &.{},
+    path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`
+    content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`
     terms: Terms = .{},
 
     content_rows: idx.Range = .{},
@@ -114,21 +116,12 @@ pub const Node = struct {
 
     grove_id: ?usize = null,
 
-    a: std.mem.Allocator,
-
-    pub fn init(a: std.mem.Allocator) Self {
-        return Self{
-            .a = a,
-        };
-    }
     pub fn deinit(self: *Self) void {
         self.org_amps.deinit(self.a);
         self.agg_amps.deinit(self.a);
         for (self.terms.items) |*item|
             item.deinit();
         self.terms.deinit(self.a);
-        self.a.free(self.path);
-        self.a.free(self.content);
     }
 };
 

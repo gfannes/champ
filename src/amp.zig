@@ -1,10 +1,15 @@
 const std = @import("std");
 
 const rubr = @import("rubr");
+const datex = @import("datex.zig");
 
 pub const Error = error{
     CannotExtendAbsolutePath,
     CannotShrink,
+    ExpectedSameLen,
+    ExpectedStatus,
+    ExpectedDate,
+    UnsupportedTemplate,
 };
 
 // Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
@@ -18,6 +23,7 @@ pub const Path = struct {
     // Part is assumed to be POD
     pub const Part = struct {
         content: []const u8,
+        date: ?datex.Date = null,
         is_exclusive: bool = false,
         is_template: bool = false,
 
@@ -66,6 +72,9 @@ pub const Path = struct {
                 if (std.mem.eql(u8, self_part.content, "status")) {
                     if (!rubr.strings.contains(u8, &lowers, rhs_part.content))
                         return false;
+                } else if (std.mem.eql(u8, self_part.content, "date")) {
+                    if (datex.parse(rhs_part.content, true) == null)
+                        return false;
                 } else {
                     // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
                     return false;
@@ -80,6 +89,39 @@ pub const Path = struct {
             return false;
 
         return true;
+    }
+
+    pub fn value_at(self: Self, key: []const []const u8) ?*const Part {
+        if (self.parts.items.len != key.len + 1)
+            return null;
+
+        for (self.parts.items[0..key.len], key) |part, k| {
+            if (!std.mem.eql(u8, part.content, k))
+                return null;
+        }
+
+        return &self.parts.items[key.len];
+    }
+
+    pub fn evaluate(self: Self, ap: *Path) !void {
+        if (self.parts.items.len != ap.parts.items.len)
+            return Error.ExpectedSameLen;
+
+        for (self.parts.items, ap.parts.items) |src, *dst| {
+            if (!src.is_template)
+                continue;
+            if (std.mem.eql(u8, src.content, "status")) {
+                if (!rubr.strings.contains(u8, &lowers, dst.content))
+                    return Error.ExpectedStatus;
+            } else if (std.mem.eql(u8, src.content, "date")) {
+                dst.date = datex.parse(dst.content, true);
+                if (dst.date == null)
+                    return Error.ExpectedDate;
+            } else {
+                std.debug.print("Unsupported template '{s}'\n", .{src.content});
+                return Error.UnsupportedTemplate;
+            }
+        }
     }
 
     pub fn is_template(self: Self) bool {

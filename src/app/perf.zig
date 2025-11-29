@@ -106,13 +106,12 @@ pub const Perf = struct {
 
                             const f = try tree.addChild(null);
                             const n = f.data;
-                            n.* = mero.Node.init(my.env.a);
+                            n.* = mero.Node{ .a = my.env.a };
                             n.type = mero.Node.Type.File;
                             n.language = language;
                             n.content = try n.a.dupe(u8, my.content.items);
 
-                            var parser = try mero.Parser.init(f.id, &tree, my.env.a);
-                            defer parser.deinit();
+                            var parser = try mero.Parser.init(my.env.a, f.id, &tree);
 
                             try parser.parse();
                         } else {

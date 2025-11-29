@@ -18,14 +18,17 @@ Support planning items on a timeline and finding the next item to work-on.
 ## Automatically inject start date from logbook
 - [x] Find date in filepath
 - [*] Add date to File node
-	- Probably as an Amp, but the systems seems not prepared for new amps
+	- [x] Should an amp.Path.Part support non-string data?
+	- [x] Rework to use ArenaAllocator to avoid memory handling
+		- [x] aa is used for Node.path and Node.content
 
 ## Support working with start date and prio
 - [x] Create new verb `pl/plan`
 - [x] Distribute start date from root to leaf, can be overruled by org
 - [x] Retain chores with a start date before now
-- [*] Print chore content
+- [x] Print chore content
 	- Currently, only the amp.Paths are accessible, apparently
+	- [x] Always setup Node.content, requires use of aa to manage memory
 	- Maybe collect selected nodes in a new Tree and print that
 		- Could also be used to extract subtrees for create a PR withouth amp annotations
 - Sort search results by prio

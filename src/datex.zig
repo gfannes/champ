@@ -1,7 +1,9 @@
 const std = @import("std");
 const rubr = @import("rubr");
 
-pub fn parse(str: []const u8, strict_end: bool) ?rubr.date.Date {
+pub const Date = rubr.datex.Date;
+
+pub fn parse(str: []const u8, strict_end: bool) ?Date {
     var strange = rubr.strng.Strange{ .content = str };
 
     // YEAR
@@ -80,7 +82,7 @@ pub fn parse(str: []const u8, strict_end: bool) ?rubr.date.Date {
     if (strict_end and !strange.empty())
         return null;
 
-    return rubr.date.Date.fromEpochDays(days);
+    return Date.fromEpochDays(days);
 }
 
 test "date" {

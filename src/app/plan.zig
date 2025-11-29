@@ -8,7 +8,7 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
-const date = @import("../date.zig");
+const datex = @import("../datex.zig");
 
 pub const Plan = struct {
     const Self = @This();
@@ -28,7 +28,7 @@ pub const Plan = struct {
     }
 
     pub fn call(self: *Self) !void {
-        const today = try rubr.date.Date.today();
+        const today = try rubr.datex.Date.today();
 
         try self.forest.load(self.config, self.cli_args);
         if (self.env.log.level(1)) |w| {
@@ -58,16 +58,12 @@ pub const Plan = struct {
                 const part = chore.parts.items[ix0];
                 const ap = part.ap;
                 // try self.env.stdout.print("\t{f}\n", .{ap});
-                if (ap.parts.items.len == 3) {
-                    if (std.mem.eql(u8, ap.parts.items[1].content, "s")) {
-                        const start_str = ap.parts.items[2].content;
-                        if (date.parse(start_str, true)) |s| {
-                            if (s.epoch_day.day <= today.epoch_day.day) {
-                                const content = if (self.forest.tree.get(chore.node_id)) |_| "found node" else |_| "-";
-                                try self.env.stdout.print("{s} => {s}\n", .{ chore.str, content });
-                            }
-                        } else {
-                            try self.env.log.warning("Could not parse date from '{s}'\n", .{start_str});
+
+                if (ap.value_at(&[_][]const u8{"s"})) |value| {
+                    if (value.date) |date| {
+                        if (date.epoch_day.day <= today.epoch_day.day) {
+                            const content = if (self.forest.tree.get(chore.node_id)) |n| n.content else |_| "-";
+                            try self.env.stdout.print("{s} => {s}\n", .{ chore.str, content });
                         }
                     }
                 }

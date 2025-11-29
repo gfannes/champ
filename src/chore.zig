@@ -130,7 +130,7 @@ pub const Chores = struct {
 
     env: Env,
 
-    aa: std.heap.ArenaAllocator = undefined,
+    aral: std.heap.ArenaAllocator = undefined,
     // All resolved (non-template) AMPs
     amps: Amps = .{},
     list: List = .{},
@@ -140,22 +140,22 @@ pub const Chores = struct {
     tmp_concat: TmpConcat = .{},
 
     pub fn init(self: *Self) void {
-        self.aa = std.heap.ArenaAllocator.init(self.env.a);
+        self.aral = std.heap.ArenaAllocator.init(self.env.a);
     }
     pub fn deinit(self: *Self) void {
-        self.aa.deinit();
+        self.aral.deinit();
     }
 
     pub fn setupCatchAll(self: *Self, name: []const u8) !void {
         if (self.catchall != null)
             return Error.ExpectedNoCatchAll;
 
-        const aaa = self.aa.allocator();
+        const aa = self.aral.allocator();
 
-        const content = try std.mem.concat(aaa, u8, &[_][]const u8{ "&:", name });
+        const content = try std.mem.concat(aa, u8, &[_][]const u8{ "&:", name });
 
         var strange = rubr.strng.Strange{ .content = content };
-        const ap = try amp.Path.parse(&strange, aaa) orelse return Error.CouldNotParseAmp;
+        const ap = try amp.Path.parse(&strange, aa) orelse return Error.CouldNotParseAmp;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
         _ = try self.appendDef(ap, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
@@ -182,26 +182,27 @@ pub const Chores = struct {
             return null;
         }
 
-        const aaa = self.aa.allocator();
+        const aa = self.aral.allocator();
 
         const def_ix = Def.Ix.init(self.defs.items.len);
-        try self.defs.append(self.aa.allocator(), Def{
-            .ap = try def_ap.copy(aaa),
-            .str = try std.fmt.allocPrint(aaa, "{f}", .{def_ap}),
+        try self.defs.append(aa, Def{
+            .ap = try def_ap.copy(aa),
+            .str = try std.fmt.allocPrint(aa, "{f}", .{def_ap}),
             .path = path,
             .grove_id = grove_id,
             .row = row,
             .cols = cols,
         });
 
-        if (def_ap.is_template())
+        if (def_ap.is_template()) {
             // Templates are not added to the list of resolved AMPs
             return null;
+        }
 
         const amp_ix = Amp.Ix.init(self.amps.items.len);
-        var a = try def_ap.copy(aaa);
+        var a = try def_ap.copy(aa);
         a.is_definition = false;
-        try self.amps.append(self.aa.allocator(), Amp{ .ap = a, .def = def_ix });
+        try self.amps.append(aa, Amp{ .ap = a, .def = def_ix });
 
         return amp_ix;
     }
@@ -239,11 +240,9 @@ pub const Chores = struct {
                         if (!is_ambiguous) {
                             // This is the first ambiguous match we find: report the initial match as well
                             const d = match.ix.ptr(self.defs.items);
-                            try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' from '{f}'\n", .{ ap, def.ap, d.ap });
+                            try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ ap, def.ap, d.ap });
                         }
                         is_ambiguous = true;
-
-                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with '{f}' from '{f}'\n", .{ ap, def.ap, def.ap });
                     }
                     maybe_match = Match{ .ix = Def.Ix{ .ix = ix }, .grove_id = def.grove_id };
                 }
@@ -253,7 +252,7 @@ pub const Chores = struct {
         if (is_ambiguous)
             return null;
 
-        const aaa = self.aa.allocator();
+        const aa = self.aral.allocator();
 
         const amp_ix = Amp.Ix.init(self.amps.items.len);
         if (maybe_match) |match| {
@@ -267,14 +266,21 @@ pub const Chores = struct {
                 try ap.extend(def.ap);
                 ap.is_definition = false;
             }
-            try self.amps.append(self.aa.allocator(), Amp{ .ap = try ap.copy(aaa), .def = match.ix });
+
+            if (def.ap.is_template()) {
+                // try self.env.log.warning("{f} matches with template {f}\n", .{ ap, def.ap });
+                try def.ap.evaluate(ap);
+            }
+
+            try self.amps.append(aa, Amp{ .ap = try ap.copy(aa), .def = match.ix });
         } else {
+            // No match found, use the catchall as def
             if (self.catchall) |catchall| {
                 try ap.prepend(catchall.ap);
                 ap.is_absolute = true;
                 ap.is_definition = false;
 
-                try self.amps.append(self.aa.allocator(), Amp{ .ap = try ap.copy(aaa), .def = catchall.ix });
+                try self.amps.append(aa, Amp{ .ap = try ap.copy(aa), .def = catchall.ix });
             } else {
                 try self.env.log.warning("Could not resolve AMP '{f}' and not catch-all is present\n", .{ap});
                 return null;
@@ -292,25 +298,25 @@ pub const Chores = struct {
             // This is not a Chore
             return false;
 
-        const aaa = self.aa.allocator();
+        const aa = self.aral.allocator();
 
-        try self.tmp_concat.resize(aaa, 0);
+        try self.tmp_concat.resize(aa, 0);
         var sep: []const u8 = "";
         var org_count: usize = 0;
         for (node.org_amps.items) |org| {
             const a = org.ix.cptr(self.amps.items);
-            try self.tmp_concat.append(self.aa.allocator(), try std.fmt.allocPrint(aaa, "{s}{f}", .{ sep, a.ap }));
+            try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
             org_count += 1;
             sep = " ";
         }
         for (node.agg_amps.items) |org| {
             const a = org.ix.cptr(self.amps.items);
-            try self.tmp_concat.append(self.aa.allocator(), try std.fmt.allocPrint(aaa, "{s}{f}", .{ sep, a.ap }));
+            try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
             sep = " ";
         }
 
-        var chore = Chore.init(node_id, aaa);
-        chore.str = try std.mem.concat(aaa, u8, self.tmp_concat.items);
+        var chore = Chore.init(node_id, aa);
+        chore.str = try std.mem.concat(aa, u8, self.tmp_concat.items);
         chore.org_count = org_count;
 
         var offset: usize = 0;
@@ -326,7 +332,7 @@ pub const Chores = struct {
                     str.ptr += 1;
 
                 const a = org.ix.cptr(self.amps.items);
-                try chore.parts.append(self.aa.allocator(), Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
+                try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
             }
         }
 
@@ -344,7 +350,7 @@ pub const Chores = struct {
                 maybe_id = null;
         }
 
-        try self.list.append(self.aa.allocator(), chore);
+        try self.list.append(aa, chore);
 
         return true;
     }
