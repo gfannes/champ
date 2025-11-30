@@ -42,7 +42,7 @@ Support planning items on a timeline and finding the next item to work-on.
 	- [x] Should an amp.Path.Part support non-string data?
 	- [x] Rework to use ArenaAllocator to avoid memory handling
 		- [x] aa is used for Node.path and Node.content
-- [*] When multiple s.~date, take org
+- [x] When multiple s.~date, take org
 
 ## Support working with start date and prio
 - [x] Create new verb `pl/plan`
