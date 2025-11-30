@@ -9,6 +9,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
 const datex = @import("../datex.zig");
+const Prio = @import("../amp/Prio.zig");
 
 pub const Plan = struct {
     const Self = @This();
@@ -29,17 +30,30 @@ pub const Plan = struct {
 
     pub fn call(self: *Self) !void {
         const today = try rubr.datex.Date.today();
+        const prio_threshold = if (self.cli_args.prio) |prio_str|
+            Prio.parse(prio_str, .{ .index = .Inf })
+        else
+            null;
 
         try self.forest.load(self.config, self.cli_args);
 
-        var path: []const u8 = &.{};
+        const Entry = struct {
+            path: []const u8,
+            content: []const u8,
+            amps: []const u8,
+            prio: ?Prio,
+        };
+        var all_entries: std.ArrayList(Entry) = .{};
+        defer all_entries.deinit(self.env.a);
+
+        // Collect all chores
         for (self.forest.chores.list.items, 0..) |chore, ix| {
             _ = ix;
 
             // Check that this is a todo, wip or next chore
             const status_value = chore.value("status", .Org) orelse continue;
             const status = status_value.status orelse continue;
-            switch (status) {
+            switch (status.kind) {
                 .Todo, .Wip, .Next => {},
                 else => continue,
             }
@@ -50,16 +64,58 @@ pub const Plan = struct {
             if (start_date.epoch_day.day > today.epoch_day.day)
                 continue;
 
+            const myprio: ?Prio = if (chore.value("p", .Any)) |value|
+                value.prio
+            else
+                null;
+
+            if (Prio.isLess(prio_threshold, myprio))
+                continue;
+
             // Skip files
             const n = try self.forest.tree.get(chore.node_id);
             if (n.type == .File)
                 continue;
 
-            if (!std.mem.eql(u8, path, n.path)) {
-                path = n.path;
-                try self.env.stdout.print("## {s}\n", .{path});
+            try all_entries.append(self.env.a, .{ .path = n.path, .content = n.content, .amps = chore.str, .prio = myprio });
+        }
+
+        // Sort according to prio, if any
+        const Ctx = struct {
+            pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
+                _ = ctx;
+                return Prio.isLess(a.prio, b.prio);
             }
-            try self.env.stdout.print("    {s}\n", .{n.content});
+        };
+        std.sort.block(Entry, all_entries.items, Ctx{}, Ctx.call);
+
+        const Segment = struct {
+            path: []const u8,
+            entries: []const Entry,
+        };
+        var segments: std.ArrayList(Segment) = .{};
+        defer segments.deinit(self.env.a);
+        for (all_entries.items, 0..) |entry, ix0| {
+            const prev_path = if (segments.items.len == 0) "" else segments.items[segments.items.len - 1].path;
+            if (!std.mem.eql(u8, prev_path, entry.path)) {
+                try segments.append(self.env.a, Segment{ .path = entry.path, .entries = all_entries.items[ix0 .. ix0 + 1] });
+            } else {
+                segments.items[segments.items.len - 1].entries.len += 1;
+            }
+        }
+
+        if (!self.cli_args.reverse)
+            std.mem.reverse(Segment, segments.items);
+
+        // Showtime
+        for (segments.items) |segment| {
+            try self.env.stdout.print("## {s}\n", .{segment.path});
+            for (segment.entries) |entry| {
+                try self.env.stdout.print("    {s}", .{entry.content});
+                if (self.cli_args.details)
+                    try self.env.stdout.print(" ({s})", .{entry.amps});
+                try self.env.stdout.print("\n", .{});
+            }
         }
     }
 };

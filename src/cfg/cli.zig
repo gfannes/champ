@@ -9,6 +9,7 @@ const Error = error{
     UnknownMode,
     ModeDoesNotSupportExtra,
     ExpectedNumber,
+    ExpectedPrio,
 };
 
 pub const Mode = enum {
@@ -33,6 +34,9 @@ pub const Args = struct {
     do_parse: bool = false,
     verbose: usize = 0,
     mode: ?Mode = null,
+    prio: ?[]const u8 = null,
+    reverse: bool = false,
+    details: bool = false,
     extra: Strings = undefined,
 
     args: rubr.cli.Args = undefined,
@@ -57,7 +61,7 @@ pub const Args = struct {
             if (arg.is("-h", "--help")) {
                 self.print_help = true;
             } else if (arg.is("-v", "--verbose")) {
-                const v = self.args.pop() orelse return Error.ExpectedNumber;
+                const v = self.args.pop() orelse return error.ExpectedNumber;
                 self.verbose = try v.as(usize);
             } else if (arg.is("-g", "--grove")) {
                 if (self.args.pop()) |x|
@@ -67,8 +71,15 @@ pub const Args = struct {
                     self.logfile = x.arg;
             } else if (arg.is("-s", "--scan")) {
                 self.do_scan = true;
-            } else if (arg.is("-p", "--parse")) {
+            } else if (arg.is("-P", "--parse")) {
                 self.do_parse = true;
+            } else if (arg.is("-p", "--prio")) {
+                const prio = self.args.pop() orelse return error.ExpectedPrio;
+                self.prio = prio.arg;
+            } else if (arg.is("-r", "--reverse")) {
+                self.reverse = true;
+            } else if (arg.is("-d", "--details")) {
+                self.details = true;
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
@@ -106,7 +117,10 @@ pub const Args = struct {
             "    -g  --grove   NAME   Use grove NAME\n" ++
             "    -l  --log     FILE   Log to FILE\n" ++
             "    -s  --scan           Scan\n" ++
-            "    -p  --parse          Parse\n" ++
+            "    -P  --parse          Parse\n" ++
+            "    -p  --prio           Prio (top: a0)\n" ++
+            "    -r  --reverse        Reverse\n" ++
+            "    -d  --details        Details\n" ++
             "  Commands:\n" ++
             "    lsp                  Lsp server\n" ++
             "    se/search            Search\n" ++
