@@ -1,6 +1,7 @@
 pub const Path = @import("amp/Path.zig");
 pub const Status = @import("amp/Status.zig");
 pub const Prio = @import("amp/Prio.zig");
+pub const Date = @import("amp/Date.zig");
 
 test {
     const ut = @import("std").testing;
@@ -8,4 +9,5 @@ test {
     ut.refAllDecls(Path);
     ut.refAllDecls(Status);
     ut.refAllDecls(Prio);
+    ut.refAllDecls(Date);
 }

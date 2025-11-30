@@ -62,7 +62,7 @@ pub fn isLess(maybe_a: ?Self, maybe_b: ?Self) bool {
     return false;
 }
 
-test "Prio" {
+test "amp.Prio" {
     const ut = std.testing;
 
     const Scn = struct {

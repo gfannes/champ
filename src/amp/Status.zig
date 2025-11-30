@@ -1,3 +1,4 @@
+const std = @import("std");
 const rubr = @import("rubr");
 
 const Self = @This();
@@ -33,4 +34,9 @@ pub fn fromCapital(str: []const u8) ?Self {
 
 pub fn lower(self: Self) []const u8 {
     return lowers[@intFromEnum(self.kind)];
+}
+
+test "amp.Status" {
+    const ut = std.testing;
+    try ut.expect(false);
 }

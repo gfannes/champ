@@ -1,14 +1,16 @@
 const std = @import("std");
 const rubr = @import("rubr");
 
-pub const Date = rubr.datex.Date;
+const Self = @This();
+
+date: rubr.datex.Date,
 
 pub const Options = struct {
     strict_end: bool = true,
     allow_yyyy: bool = true,
 };
 
-pub fn findDate(str: []const u8, options: Options) ?Date {
+pub fn findDate(str: []const u8, options: Options) ?Self {
     for (0..str.len) |ix| {
         if (parse(str[ix..], options)) |date|
             return date;
@@ -16,7 +18,7 @@ pub fn findDate(str: []const u8, options: Options) ?Date {
     return null;
 }
 
-pub fn parse(str: []const u8, options: Options) ?Date {
+pub fn parse(str: []const u8, options: Options) ?Self {
     var strange = rubr.strng.Strange{ .content = str };
 
     // YEAR
@@ -106,10 +108,14 @@ pub fn parse(str: []const u8, options: Options) ?Date {
     if (!options.allow_yyyy and is_yyyy)
         return null;
 
-    return Date.fromEpochDays(days);
+    return Self{ .date = rubr.datex.Date.fromEpochDays(days) };
 }
 
-test "date" {
+pub fn format(self: Self, w: *std.Io.Writer) !void {
+    try self.date.format(w);
+}
+
+test "amp.Date" {
     const ut = std.testing;
 
     const Scn = struct {

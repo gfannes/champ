@@ -8,8 +8,8 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
-const datex = @import("../datex.zig");
 const Prio = @import("../amp/Prio.zig");
+const Date = @import("../amp/Date.zig");
 
 pub const Plan = struct {
     const Self = @This();
@@ -61,7 +61,7 @@ pub const Plan = struct {
             // Check that its start date is before today
             const start_value = chore.value("s", .Any) orelse continue;
             const start_date = start_value.date orelse continue;
-            if (start_date.epoch_day.day > today.epoch_day.day)
+            if (start_date.date.epoch_day.day > today.epoch_day.day)
                 continue;
 
             const myprio: ?Prio = if (chore.value("p", .Any)) |value|

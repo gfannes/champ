@@ -1,9 +1,9 @@
 const std = @import("std");
 
 const rubr = @import("rubr");
-const datex = @import("../datex.zig");
 const Status = @import("Status.zig");
 const Prio = @import("Prio.zig");
+const Date = @import("Date.zig");
 
 pub const Error = error{
     CannotExtendAbsolutePath,
@@ -21,7 +21,7 @@ const Self = @This();
 pub const Part = struct {
     content: []const u8,
     status: ?Status = null,
-    date: ?datex.Date = null,
+    date: ?Date = null,
     prio: ?Prio = null,
     is_exclusive: bool = false,
     is_template: bool = false,
@@ -72,7 +72,7 @@ pub fn isFit(self: Self, rhs: Self) bool {
                 if (Status.fromLower(rhs_part.content) == null)
                     return false;
             } else if (std.mem.eql(u8, self_part.content, "date")) {
-                if (datex.parse(rhs_part.content, .{}) == null)
+                if (Date.parse(rhs_part.content, .{}) == null)
                     return false;
             } else if (std.mem.eql(u8, self_part.content, "prio")) {
                 if (Prio.parse(rhs_part.content, .{}) == null)
@@ -115,7 +115,7 @@ pub fn evaluate(self: Self, ap: *Self) !void {
         if (std.mem.eql(u8, src.content, "status")) {
             dst.status = Status.fromLower(dst.content) orelse return Error.ExpectedStatus;
         } else if (std.mem.eql(u8, src.content, "date")) {
-            dst.date = datex.parse(dst.content, .{}) orelse return Error.ExpectedDate;
+            dst.date = Date.parse(dst.content, .{}) orelse return Error.ExpectedDate;
         } else if (std.mem.eql(u8, src.content, "prio")) {
             dst.prio = Prio.parse(dst.content, .{}) orelse return Error.ExpectedPrio;
         } else {
@@ -232,7 +232,7 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
         try io.print("&", .{});
 }
 
-test "amp" {
+test "amp.Path" {
     const ut = std.testing;
 
     const Scn = struct {

@@ -9,7 +9,7 @@ Support planning items on a timeline and finding the next item to work-on.
 - [*] Inherit dependencies from defs to inject their metadata into this local extension
 	- When linking to a def, take the `minimal ~date`, `top ~prio` and `local ~status` between parent and that def
 - [x] Add support for `~prio` to fine-tune the order of the task list &p:a
-	- [ ] Move datex into amp folder as well to handle all templated metadata in the same namespace
+	- [x] Move datex into amp folder as well to handle all templated metadata in the same namespace
 - [x] Improve display of chores for search and plan
 	- [x] Collect all chores, sort, segment per different path and print these segments in reverse order
 		- [x] Support using normal order with `-r`

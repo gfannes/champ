@@ -8,7 +8,6 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Chores = @import("../chore.zig").Chores;
-const datex = @import("../datex.zig");
 
 const rubr = @import("rubr");
 const Env = rubr.Env;
@@ -312,7 +311,7 @@ pub const Forest = struct {
                         my.grove_id = n.grove_id;
                         my.is_new_file = true;
 
-                        if (datex.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
+                        if (amp.Date.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
                             var w = std.Io.Writer.Allocating.init(my.aa);
                             defer w.deinit();
                             try w.writer.print("&:s:{f}", .{date});
