@@ -295,6 +295,7 @@ pub const Forest = struct {
             terms: *const Terms = undefined,
             path: []const u8 = &.{},
             grove_id: ?usize = null,
+            is_new_file: bool = false,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
@@ -309,6 +310,7 @@ pub const Forest = struct {
                         if (n.grove_id == null)
                             return Error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
+                        my.is_new_file = true;
 
                         if (datex.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
                             var w = std.Io.Writer.Allocating.init(my.aa);
@@ -327,6 +329,8 @@ pub const Forest = struct {
                         }
                     },
                     else => {
+                        defer my.is_new_file = false;
+
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
@@ -342,7 +346,21 @@ pub const Forest = struct {
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
                                     if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
-                                        try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } });
+                                        const org_amp = mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } };
+                                        try n.org_amps.append(my.env.a, org_amp);
+
+                                        if (my.is_new_file and n.type == .Paragraph) {
+                                            // Push org amps on the first (non-title) line to the file level. For _amp.md, also to the folder level.
+                                            if (try my.tree.parent(entry.id)) |file| {
+                                                try file.data.org_amps.append(my.env.a, org_amp);
+
+                                                if (is_amp_md(file.data.path)) {
+                                                    if (try my.tree.parent(file.id)) |folder| {
+                                                        try folder.data.org_amps.append(my.env.a, org_amp);
+                                                    }
+                                                }
+                                            }
+                                        }
                                     } else {
                                         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }

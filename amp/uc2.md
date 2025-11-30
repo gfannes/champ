@@ -1,13 +1,11 @@
-&&uc2
-
-# &s:202511
+&&uc2 &s:202511
 
 Support planning items on a timeline and finding the next item to work-on.
 
-- [ ] Support setting `&s:` on first line in this file
-- [*] When aggregating amps, retain max one amp per def to take the `org ~status/~date` over the parent &p:a
+- [x] Support setting `&s:` on first line in this file
+- [x] When aggregating amps, retain max one amp per def to take the `org ~status/~date` over the parent &p:a
 	- Allows pushing tasks into the future when the start date comes from the filename (and is thus difficult to update)
-		- [ ] Cleanup current false-positive todos
+- [ ] Cleanup current false-positive todos
 - [*] Inherit dependencies from defs to inject their metadata into this local extension
 	- When linking to a def, take the `minimal ~date`, `top ~prio` and `local ~status` between parent and that def
 - [x] Add support for `~prio` to fine-tune the order of the task list &p:a
