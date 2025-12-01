@@ -76,6 +76,7 @@ pub const Lsp = struct {
                             .documentSymbolProvider = true,
                             .workspaceSymbolProvider = true,
                             .definitionProvider = true,
+                            .declarationProvider = true,
                             .referencesProvider = true,
                             .workspace = dto.ServerCapabilities.Workspace{
                                 .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
@@ -93,6 +94,59 @@ pub const Lsp = struct {
                 } else if (request.is("shutdown")) {
                     try server.send(null);
                 } else if (request.is("textDocument/definition")) {
+                    // &cleanup common func between textDocument/definition and textDocument/references
+                    // &cleanup by moving some func to Chores
+
+                    const params = request.params orelse return Error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+                    const position = params.position orelse return Error.ExpectedPosition;
+
+                    var aa = std.heap.ArenaAllocator.init(self.env.a);
+                    defer aa.deinit();
+                    const aaa = aa.allocator();
+
+                    var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
+
+                    // Find Amp
+                    var maybe_ap: ?amp.Path = null;
+                    for (forest.chores.list.items) |chore| {
+                        if (!std.mem.endsWith(u8, src_filename, chore.path))
+                            continue;
+
+                        for (chore.parts.items) |part| {
+                            if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                                maybe_ap = part.ap;
+                            }
+                        }
+                    }
+
+                    // Find filename and location of definition
+                    var dst_filename: ?[]const u8 = null;
+                    var range = dto.Range{};
+                    if (maybe_ap) |e| {
+                        for (forest.chores.defs.items) |def| {
+                            if (def.ap.isFit(e)) {
+                                dst_filename = def.path;
+                                range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
+                                range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
+                            }
+                        }
+                    } else {
+                        std.debug.print("Could not find AMP at {s} {}\n", .{ src_filename, position });
+                    }
+
+                    if (dst_filename) |filename| {
+                        const uri = try pathToUri_(filename, aaa);
+
+                        const location = dto.Location{ .uri = uri, .range = range };
+
+                        try server.send(location);
+                    } else {
+                        try server.send(null);
+                    }
+                } else if (request.is("textDocument/declaration")) {
+                    // &todo: Abuse for planning
                     // &cleanup common func between textDocument/definition and textDocument/references
                     // &cleanup by moving some func to Chores
 
