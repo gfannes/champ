@@ -3,6 +3,7 @@
 Support planning items on a timeline and finding the next item to work-on.
 
 - [x] Support setting `&s:` on first line in this file
+	- [*] Requires a trailing space in `2024-02-28 Bitstream review.md`
 - [x] When aggregating amps, retain max one amp per def to take the `org ~status/~date` over the parent &p:a
 	- Allows pushing tasks into the future when the start date comes from the filename (and is thus difficult to update)
 - [ ] Cleanup current false-positive todos

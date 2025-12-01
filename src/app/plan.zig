@@ -13,38 +13,33 @@ const Date = @import("../amp/Date.zig");
 
 pub const Plan = struct {
     const Self = @This();
+    const Entry = struct {
+        path: []const u8,
+        content: []const u8,
+        amps: []const u8,
+        prio: ?Prio,
+        rows: rubr.idx.Range,
+        cols: rubr.idx.Range,
+    };
+    const Segment = struct {
+        path: []const u8,
+        entries: []const Entry,
+    };
 
     env: Env,
-    config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
+    forest: *const mero.Forest,
 
-    forest: mero.Forest = undefined,
+    segments: std.ArrayList(Segment) = .{},
+    all_entries: std.ArrayList(Entry) = .{},
 
-    pub fn init(self: *Self) !void {
-        self.forest = mero.Forest{ .env = self.env };
-        self.forest.init();
-    }
     pub fn deinit(self: *Self) void {
-        self.forest.deinit();
+        self.segments.deinit(self.env.a);
+        self.all_entries.deinit(self.env.a);
     }
 
-    pub fn call(self: *Self) !void {
+    pub fn call(self: *Self, prio_threshold: ?Prio, reverse: bool) !void {
         const today = try rubr.datex.Date.today();
-        const prio_threshold = if (self.cli_args.prio) |prio_str|
-            Prio.parse(prio_str, .{ .index = .Inf })
-        else
-            null;
-
-        try self.forest.load(self.config, self.cli_args);
-
-        const Entry = struct {
-            path: []const u8,
-            content: []const u8,
-            amps: []const u8,
-            prio: ?Prio,
-        };
-        var all_entries: std.ArrayList(Entry) = .{};
-        defer all_entries.deinit(self.env.a);
 
         // Collect all chores
         for (self.forest.chores.list.items, 0..) |chore, ix| {
@@ -73,11 +68,21 @@ pub const Plan = struct {
                 continue;
 
             // Skip files
-            const n = try self.forest.tree.get(chore.node_id);
+            const n = try self.forest.tree.cget(chore.node_id);
             if (n.type == .File)
                 continue;
 
-            try all_entries.append(self.env.a, .{ .path = n.path, .content = n.content, .amps = chore.str, .prio = myprio });
+            try self.all_entries.append(
+                self.env.a,
+                Entry{
+                    .path = n.path,
+                    .content = n.content,
+                    .amps = chore.str,
+                    .prio = myprio,
+                    .rows = n.content_rows,
+                    .cols = n.content_cols,
+                },
+            );
         }
 
         // Sort according to prio, if any
@@ -87,32 +92,28 @@ pub const Plan = struct {
                 return Prio.isLess(a.prio, b.prio);
             }
         };
-        std.sort.block(Entry, all_entries.items, Ctx{}, Ctx.call);
+        std.sort.block(Entry, self.all_entries.items, Ctx{}, Ctx.call);
 
-        const Segment = struct {
-            path: []const u8,
-            entries: []const Entry,
-        };
-        var segments: std.ArrayList(Segment) = .{};
-        defer segments.deinit(self.env.a);
-        for (all_entries.items, 0..) |entry, ix0| {
-            const prev_path = if (segments.items.len == 0) "" else segments.items[segments.items.len - 1].path;
+        for (self.all_entries.items, 0..) |entry, ix0| {
+            const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
             if (!std.mem.eql(u8, prev_path, entry.path)) {
-                try segments.append(self.env.a, Segment{ .path = entry.path, .entries = all_entries.items[ix0 .. ix0 + 1] });
+                try self.segments.append(self.env.a, Segment{ .path = entry.path, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
             } else {
-                segments.items[segments.items.len - 1].entries.len += 1;
+                if (rubr.slc.lastPtr(self.segments.items)) |ptr|
+                    ptr.entries.len += 1;
             }
         }
 
-        if (!self.cli_args.reverse)
-            std.mem.reverse(Segment, segments.items);
+        if (reverse)
+            std.mem.reverse(Segment, self.segments.items);
+    }
 
-        // Showtime
-        for (segments.items) |segment| {
+    pub fn show(self: Self, details: bool) !void {
+        for (self.segments.items) |segment| {
             try self.env.stdout.print("## {s}\n", .{segment.path});
             for (segment.entries) |entry| {
                 try self.env.stdout.print("    {s}", .{entry.content});
-                if (self.cli_args.details)
+                if (details)
                     try self.env.stdout.print(" ({s})", .{entry.amps});
                 try self.env.stdout.print("\n", .{});
             }

@@ -19,6 +19,7 @@ const Search = @import("app/search.zig").Search;
 const Plan = @import("app/plan.zig").Plan;
 const Perf = @import("app/perf.zig").Perf;
 const Test = @import("app/test.zig").Test;
+const Prio = @import("amp/Prio.zig");
 
 pub const Error = error{
     UnknownFileType,
@@ -136,14 +137,25 @@ pub const App = struct {
                     try obj.call();
                 },
                 cfg.cli.Mode.Plan => {
+                    var forest = mero.Forest{ .env = self.env };
+                    forest.init();
+                    defer forest.deinit();
+
+                    try forest.load(&self.config, &self.cli_args);
+
                     var obj = Plan{
                         .env = self.env,
-                        .config = &self.config,
                         .cli_args = &self.cli_args,
+                        .forest = &forest,
                     };
-                    try obj.init();
                     defer obj.deinit();
-                    try obj.call();
+
+                    const prio_threshold = if (self.cli_args.prio) |prio_str|
+                        Prio.parse(prio_str, .{ .index = .Inf })
+                    else
+                        null;
+                    try obj.call(prio_threshold, !self.cli_args.reverse);
+                    try obj.show(self.cli_args.details);
                 },
                 cfg.cli.Mode.Perf => {
                     var obj = Perf{

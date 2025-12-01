@@ -16,6 +16,10 @@ endof: EndOf,
 
 index: u24,
 
+pub fn max(endof: EndOf) Self {
+    return Self{ .endof = endof, .index = std.math.maxInt(u24) };
+}
+
 pub const Options = struct {
     pub const Index = enum { Default, Inf };
     index: Index = .Default,
