@@ -2,9 +2,11 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
-- [ ] Support injecting metadata from deps
-	- [*] Merge Chore amps and defs and catchall to make it easier to couple Chore amps to Node amps
-	- [ ] Create reverse-lookup from Chore def-amp to Node while resolving in forest.resolveAmps() &&reverselookup
+- [x] Support injecting metadata from deps
+	- [x] Merge Chore amps and defs and catchall to make it easier to couple Chore amps to Node amps
+	- [x] Create reverse-lookup from Chore def-amp to Node while resolving in forest.resolveAmps() &&reverselookup
+	- For now, we just keep adding deps into agg. Chore.value() knowns it should take the smallest prio, if any.
+		- [ ] Support taking the earliest `s`
 
 - [ ] Create FUI to configure `plan` in LSP
 	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org

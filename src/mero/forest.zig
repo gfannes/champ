@@ -7,6 +7,8 @@ const Node = @import("dto.zig").Node;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
+const chore = @import("../chore.zig");
+const filex = @import("../filex.zig");
 const Chores = @import("../chore.zig").Chores;
 
 const rubr = @import("rubr");
@@ -16,11 +18,9 @@ const strings = rubr.strings;
 
 pub const Error = error{
     ExpectedOffsets,
-    ExpectedAbsoluteDef,
     OnlyOneDefAllowed,
     ExpectedAtLeastOneGrove,
     CouldNotParseAmp,
-    CatchAllAmpAlreadyExists,
     ExpectedGroveId,
 };
 
@@ -31,6 +31,7 @@ pub const Forest = struct {
     aral: std.heap.ArenaAllocator = undefined,
     valid: bool = false,
     tree: Tree = undefined,
+    defmgr: amp.DefMgr = undefined,
     chores: Chores = undefined,
 
     pub fn init(self: *Self) void {
@@ -45,7 +46,9 @@ pub const Forest = struct {
         // }
         self.aral = std.heap.ArenaAllocator.init(self.env.a);
         self.tree = Tree.init(self.env.a);
-        self.chores = Chores{ .env = self.env };
+        self.defmgr = .{ .env = self.env, .phony_prefix = "?" };
+        self.defmgr.init();
+        self.chores = .{ .env = self.env };
         self.chores.init();
     }
     pub fn deinit(self: *Self) void {
@@ -57,6 +60,7 @@ pub const Forest = struct {
         self.tree.each(&cb) catch {};
         self.tree.deinit();
         self.chores.deinit();
+        self.defmgr.deinit();
         self.aral.deinit();
     }
     pub fn reinit(self: *Self) void {
@@ -75,7 +79,7 @@ pub const Forest = struct {
                 wanted_groves = default;
         }
         if (rubr.slc.is_empty(wanted_groves))
-            return Error.ExpectedAtLeastOneGrove;
+            return error.ExpectedAtLeastOneGrove;
 
         for (config.groves) |cfg_grove| {
             if (strings.contains(u8, wanted_groves, cfg_grove.name))
@@ -161,7 +165,7 @@ pub const Forest = struct {
                     _ = my.node_stack.pop();
                 },
                 walker.Kind.File => {
-                    const offsets = maybe_offsets orelse return Error.ExpectedOffsets;
+                    const offsets = maybe_offsets orelse return error.ExpectedOffsets;
                     const name = path[offsets.name..];
 
                     if (my.cfg_grove.include) |include| {
@@ -216,7 +220,7 @@ pub const Forest = struct {
 
             env: Env,
             tree: *const Tree,
-            chores: *const Chores,
+            defmgr: *const amp.DefMgr,
 
             update_count: u64 = 0,
 
@@ -227,38 +231,58 @@ pub const Forest = struct {
                     return;
 
                 if (my.parent(entry.id)) |parent_node| {
-                    for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
-                        // Iterate in reverse to ensure that items that were added to File level via 'amp on first line' take prio over those from the filename.
-                        var rit = std.mem.reverseIterator(parent_amps);
-                        while (rit.next()) |parent_amp|
-                            if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp)) {
-                                try n.agg_amps.append(my.env.a, parent_amp);
-                                my.update_count += 1;
-                            };
+                    try my.inject_metadata(parent_node, n);
+                }
+
+                for (n.org_amps.items) |org| {
+                    const def = org.ix.cptr(my.defmgr.defs.items);
+                    if (def.location) |location| {
+                        const def_node = my.tree.cget(location.node_id) catch continue;
+                        try my.inject_metadata(def_node, n);
                     }
                 }
 
-                // &todo &reverselookup: Add amps from defs
-                // for (&[_][]const Node.Amp{ n.org_amps.items, n.agg_amps.items }) |my_amps| {
-                //     for (my_amps) |my_amp| {
-                //         const chore_amp = my.chores.amps.items[my_amp.ix];
-                //     }
-                // }
+                for (n.agg_amps.items) |agg| {
+                    const def = agg.cptr(my.defmgr.defs.items);
+                    if (def.location) |location| {
+                        const def_node = my.tree.cget(location.node_id) catch continue;
+                        try my.inject_metadata(def_node, n);
+                    }
+                }
             }
 
-            fn is_present(my: My, haystack: []const Node.Amp, needle: Node.Amp) bool {
-                const needle_ap = needle.ix.cptr(my.chores.amps.items);
-                for (haystack) |h| {
-                    const h_ap = h.ix.cptr(my.chores.amps.items);
-                    if (needle_ap == h_ap)
-                        // These AMPs are the same
+            fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
+                // Inject src.orgs into dst.aggs
+                // Iterate in reverse to ensure that items that were added to File level via 'amp on first line' take prio over those from the filename.
+                var rit = std.mem.reverseIterator(src.org_amps.items);
+                while (rit.next()) |src_org| {
+                    if (!is_present(dst, src_org.ix)) {
+                        try dst.agg_amps.append(my.env.a, src_org.ix);
+                        my.update_count += 1;
+                    }
+                }
+
+                // Inject src.aggs into dst.aggs
+                for (src.agg_amps.items) |src_agg_ix| {
+                    if (!is_present(dst, src_agg_ix)) {
+                        try dst.agg_amps.append(my.env.a, src_agg_ix);
+                        my.update_count += 1;
+                    }
+                }
+            }
+
+            fn is_present(node: *const Node, needle: Node.DefIx) bool {
+                for (node.org_amps.items) |org| {
+                    if (org.ix.ix == needle.ix)
                         return true;
-                    if (needle_ap.def.eql(h_ap.def))
-                        // These AMPs have the same def: both are eg the same ~status
+                }
+                for (node.agg_amps.items) |agg| {
+                    if (agg.ix == needle.ix)
                         return true;
                 }
                 return false;
             }
+
             fn parent(my: My, child_id: usize) ?*const Node {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
@@ -269,7 +293,7 @@ pub const Forest = struct {
                 }
                 return null;
             }
-        }{ .env = self.env, .tree = &self.tree, .chores = &self.chores };
+        }{ .env = self.env, .tree = &self.tree, .defmgr = &self.defmgr };
 
         for (0..100) |ix| {
             std.debug.print("Starting DFS loop {}\n", .{ix});
@@ -286,25 +310,24 @@ pub const Forest = struct {
 
             chores: *Chores,
             tree: *const Tree,
+            defmgr: *const amp.DefMgr,
 
             pub fn call(my: *My, entry: Tree.Entry) !void {
-                _ = try my.chores.add(entry.id, my.tree);
+                _ = try my.chores.add(entry.id, my.tree, my.defmgr.*);
             }
-        }{ .chores = &self.chores, .tree = &self.tree };
+        }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(true, &cb);
     }
 
-    // Setup Node.org_amps and Chores for data found in Node.line.terms
+    // Setup Node.org_amps and amp.DefMgr for data found in Node.line.terms
     fn resolveAmps(self: *Self) !void {
-        try self.chores.setupCatchAll("?");
-
         var cb = struct {
             const My = @This();
 
             env: Env,
             aa: std.mem.Allocator,
             tree: *const Tree,
-            chores: *Chores,
+            defmgr: *amp.DefMgr,
 
             terms: *const Terms = undefined,
             path: []const u8 = &.{},
@@ -322,7 +345,7 @@ pub const Forest = struct {
                         my.path = n.path;
                         my.terms = &n.terms;
                         if (n.grove_id == null)
-                            return Error.ExpectedGroveId;
+                            return error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
                         my.is_new_file = true;
 
@@ -332,11 +355,11 @@ pub const Forest = struct {
                             try w.writer.print("&:s:{f}", .{date});
                             const content = try w.toOwnedSlice();
                             var strange = rubr.strng.Strange{ .content = content };
-                            var path = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
+                            var path = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
                             defer path.deinit();
-                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                            if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
-                                try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = 0, .cols = .{} } });
+                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                            if (try my.defmgr.resolve(&path, grove_id)) |amp_ix| {
+                                try n.org_amps.append(my.env.a, .{ .ix = amp_ix, .pos = .{} });
                             } else {
                                 try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                             }
@@ -354,22 +377,22 @@ pub const Forest = struct {
 
                             if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox or term.kind == Term.Kind.Capital) {
                                 var strange = rubr.strng.Strange{ .content = term.word };
-                                var path = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
+                                var path = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
                                 defer path.deinit();
                                 if (!path.is_definition) {
-                                    const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                                    if (try my.chores.resolve(&path, grove_id)) |amp_ix| {
-                                        const org_amp = mero.Node.Amp{ .ix = amp_ix, .pos = mero.Node.Pos{ .row = line, .cols = cols } };
-                                        try n.org_amps.append(my.env.a, org_amp);
+                                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                                    if (try my.defmgr.resolve(&path, grove_id)) |defix| {
+                                        const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols } };
+                                        try n.org_amps.append(my.env.a, def);
 
                                         if (my.is_new_file and n.type == .Paragraph) {
                                             // Push org amps on the first (non-title) line to the file level. For _amp.md, also to the folder level.
                                             if (try my.tree.parent(entry.id)) |file| {
-                                                try file.data.org_amps.append(my.env.a, org_amp);
+                                                try file.data.org_amps.append(my.env.a, def);
 
                                                 if (is_amp_md(file.data.path)) {
                                                     if (try my.tree.parent(file.id)) |folder| {
-                                                        try folder.data.org_amps.append(my.env.a, org_amp);
+                                                        try folder.data.org_amps.append(my.env.a, def);
                                                     }
                                                 }
                                             }
@@ -390,7 +413,7 @@ pub const Forest = struct {
             .env = self.env,
             .aa = self.aral.allocator(),
             .tree = &self.tree,
-            .chores = &self.chores,
+            .defmgr = &self.defmgr,
         };
         try self.tree.dfsAll(true, &cb);
     }
@@ -402,7 +425,7 @@ pub const Forest = struct {
 
             env: Env,
             tree: *Tree,
-            chores: *Chores,
+            defmgr: *amp.DefMgr,
 
             terms: ?*const Terms = null,
             path: []const u8 = &.{},
@@ -435,7 +458,7 @@ pub const Forest = struct {
                         defer my.path = n.path;
                         my.terms = &n.terms;
                         my.is_new_file = true;
-                        my.grove_id = n.grove_id orelse return Error.ExpectedGroveId;
+                        my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
                         my.do_process_other = if (is_amp_md(n.path)) my.do_process_amp_md else true;
                     },
@@ -467,11 +490,11 @@ pub const Forest = struct {
                     if (term.kind == Term.Kind.Amp) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return Error.CouldNotParseAmp;
+                        var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
                         defer def_ap.deinit();
                         if (def_ap.is_definition) {
                             if (n.def != null)
-                                return Error.OnlyOneDefAllowed;
+                                return error.OnlyOneDefAllowed;
                             // Make the def amp absolute, if necessary
                             if (!def_ap.is_absolute) {
                                 var child_id = entry.id;
@@ -479,7 +502,7 @@ pub const Forest = struct {
                                 const maybe_parent_def: ?amp.Path = block: while (true) {
                                     if (try my.tree.parent(child_id)) |parent| {
                                         if (parent.data.def) |d| {
-                                            const pdef = d.ix.cptr(my.chores.amps.items);
+                                            const pdef = d.ix.cptr(my.defmgr.defs.items);
                                             break :block pdef.ap;
                                         } else {
                                             child_id = parent.id;
@@ -499,11 +522,11 @@ pub const Forest = struct {
                             }
 
                             // Collect all defs in a separate struct
-                            const grove_id = my.grove_id orelse return Error.ExpectedGroveId;
-                            const pos = mero.Node.Pos{ .row = line, .cols = cols };
-                            if (try my.chores.appendDef(def_ap, my.path, grove_id, pos.row, pos.cols)) |amp_ix| {
-                                n.def = mero.Node.Amp{ .ix = amp_ix, .pos = pos };
-                                try n.org_amps.append(my.env.a, mero.Node.Amp{ .ix = amp_ix, .pos = pos });
+                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                            const pos = filex.Pos{ .row = line, .cols = cols };
+                            if (try my.defmgr.appendDef(def_ap, grove_id, my.path, entry.id, pos)) |amp_ix| {
+                                n.def = .{ .ix = amp_ix, .pos = pos };
+                                try n.org_amps.append(my.env.a, n.def.?);
                             } else {
                                 try my.env.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
@@ -535,7 +558,7 @@ pub const Forest = struct {
                     }
                 }
             }
-        }{ .env = self.env, .tree = &self.tree, .chores = &self.chores };
+        }{ .env = self.env, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(true, &cb);
     }
 

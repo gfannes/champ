@@ -17,6 +17,7 @@ const cfg = @import("cfg.zig");
 const Lsp = @import("app/lsp.zig").Lsp;
 const Search = @import("app/search.zig").Search;
 const Plan = @import("app/plan.zig").Plan;
+const Check = @import("app/check.zig").Check;
 const Perf = @import("app/perf.zig").Perf;
 const Test = @import("app/test.zig").Test;
 const Prio = @import("amp/Prio.zig");
@@ -160,6 +161,19 @@ pub const App = struct {
                     else
                         null;
                     try obj.call(prio_threshold, !self.cli_args.reverse);
+                    try obj.show(self.cli_args.details);
+                },
+                cfg.cli.Mode.Check => {
+                    const forest = try self.loadForest();
+
+                    var obj = Check{
+                        .env = self.env,
+                        .cli_args = &self.cli_args,
+                        .forest = forest,
+                    };
+                    defer obj.deinit();
+
+                    try obj.call();
                     try obj.show(self.cli_args.details);
                 },
                 cfg.cli.Mode.Perf => {

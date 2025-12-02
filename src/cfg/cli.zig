@@ -16,6 +16,7 @@ pub const Mode = enum {
     Search,
     Lsp,
     Plan,
+    Check,
     Perf,
     Test,
 };
@@ -83,22 +84,24 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        Mode.Search, Mode.Plan, Mode.Test => try self.extra.append(self.env.aa, arg.arg),
+                        .Search, .Plan, .Test => try self.extra.append(self.env.aa, arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;
                         },
                     }
                 } else if (arg.is("lsp", "lsp")) {
-                    self.mode = Mode.Lsp;
+                    self.mode = .Lsp;
                 } else if (arg.is("se", "search")) {
-                    self.mode = Mode.Search;
+                    self.mode = .Search;
                 } else if (arg.is("pl", "plan")) {
-                    self.mode = Mode.Plan;
+                    self.mode = .Plan;
+                } else if (arg.is("ch", "check")) {
+                    self.mode = .Check;
                 } else if (arg.is("perf", "perf")) {
-                    self.mode = Mode.Perf;
+                    self.mode = .Perf;
                 } else if (arg.is("test", "test")) {
-                    self.mode = Mode.Test;
+                    self.mode = .Test;
                 } else {
                     std.debug.print("Unknown mode '{s}'\n", .{arg.arg});
                     return error.UnknownMode;
@@ -125,6 +128,7 @@ pub const Args = struct {
             "    lsp                  Lsp server\n" ++
             "    se/search            Search\n" ++
             "    pl/plan              Plan\n" ++
+            "    ch/check             Check\n" ++
             "    perf                 Performance tests\n" ++
             "    test                 Test\n" ++
             "Developed by Geert Fannes\n";

@@ -101,9 +101,9 @@ pub const Lsp = struct {
                     // &cleanup common func between textDocument/definition and textDocument/references
                     // &cleanup by moving some func to Chores
 
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
-                    const position = params.position orelse return Error.ExpectedPosition;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return error.ExpectedTextDocument;
+                    const position = params.position orelse return error.ExpectedPosition;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -112,29 +112,33 @@ pub const Lsp = struct {
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
 
-                    // Find Amp
+                    // Find Amp corresponding to this src_filename and position
                     var maybe_ap: ?amp.Path = null;
                     for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
                         for (chore.parts.items[0..chore.org_count]) |part| {
-                            if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                            const pos = part.pos;
+                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, part.ap });
                                 maybe_ap = part.ap;
                             }
                         }
                     }
 
-                    // Find filename and location of definition
+                    // Find filename and location of definition, if any
                     var dst_filename: ?[]const u8 = null;
                     var range = dto.Range{};
                     if (maybe_ap) |e| {
-                        for (forest.chores.defs.items) |def| {
+                        for (forest.defmgr.defs.items) |def| {
                             if (def.ap.isFit(e)) {
-                                dst_filename = def.path;
-                                range.start = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.begin) };
-                                range.end = dto.Position{ .line = @intCast(def.row), .character = @intCast(def.cols.end) };
+                                if (def.location) |location| {
+                                    dst_filename = location.path;
+                                    const pos = location.pos;
+                                    range.start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) };
+                                    range.end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) };
+                                }
                             }
                         }
                     } else {
@@ -155,8 +159,8 @@ pub const Lsp = struct {
                     // Implementation: Show each task in all files
                     // TypeDefinition: Show only the first task per segment in all files
 
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return error.ExpectedTextDocument;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -196,9 +200,9 @@ pub const Lsp = struct {
                     }
                     try server.send(locations.items);
                 } else if (request.is("textDocument/references")) {
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
-                    const position = params.position orelse return Error.ExpectedPosition;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return error.ExpectedTextDocument;
+                    const position = params.position orelse return error.ExpectedPosition;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -215,7 +219,8 @@ pub const Lsp = struct {
 
                         // We only check the org parts for references, not all inherited agg parts
                         for (chore.parts.items[0..chore.org_count]) |part| {
-                            if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                            const pos = part.pos;
+                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 if (maybe_ap) |ap|
                                     std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}' part count {}\n", .{ ap, src_filename, chore.path, chore.org_count });
                                 maybe_ap = part.ap;
@@ -230,9 +235,10 @@ pub const Lsp = struct {
                             for (chore.parts.items[0..chore.org_count]) |part| {
                                 if (ap.isFit(part.ap)) {
                                     const uri = try pathToUri_(chore.path, aaa);
+                                    const pos = part.pos;
                                     const range = dto.Range{
-                                        .start = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.begin) },
-                                        .end = dto.Position{ .line = @intCast(part.row), .character = @intCast(part.cols.end) },
+                                        .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
+                                        .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
                                     };
                                     const location = dto.Location{ .uri = uri, .range = range };
                                     try locations.append(aaa, location);
@@ -244,8 +250,8 @@ pub const Lsp = struct {
                         try server.send(null);
                     }
                 } else if (request.is("textDocument/documentSymbol")) {
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const textdoc = params.textDocument orelse return Error.ExpectedTextDocument;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const textdoc = params.textDocument orelse return error.ExpectedTextDocument;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -271,8 +277,8 @@ pub const Lsp = struct {
                         const first_amp = &chore.parts.items[0];
                         const last_amp = &chore.parts.items[chore.org_count - 1];
                         const range = dto.Range{
-                            .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
-                            .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
+                            .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
+                            .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
                         };
                         try document_symbols.append(aaa, dto.DocumentSymbol{
                             .name = chore.str,
@@ -283,8 +289,8 @@ pub const Lsp = struct {
 
                     try server.send(document_symbols.items);
                 } else if (request.is("textDocument/completion")) {
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const context = params.context orelse return Error.ExpectedContext;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const context = params.context orelse return error.ExpectedContext;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -292,7 +298,7 @@ pub const Lsp = struct {
 
                     var completions = std.ArrayList(dto.CompletionItem){};
 
-                    for (forest.chores.amps.items) |item| {
+                    for (forest.defmgr.defs.items) |item| {
                         if (rubr.slc.lastPtr(item.ap.parts.items)) |part| {
                             if (context.triggerCharacter) |_| {
                                 try completions.append(aaa, dto.CompletionItem{
@@ -305,8 +311,8 @@ pub const Lsp = struct {
 
                     try server.send(completions.items);
                 } else if (request.is("workspace/symbol")) {
-                    const params = request.params orelse return Error.ExpectedParams;
-                    const query = params.query orelse return Error.ExpectedQuery;
+                    const params = request.params orelse return error.ExpectedParams;
+                    const query = params.query orelse return error.ExpectedQuery;
 
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
@@ -327,8 +333,8 @@ pub const Lsp = struct {
                             const first_amp = &chore.parts.items[0];
                             const last_amp = &chore.parts.items[chore.org_count - 1];
                             const range = dto.Range{
-                                .start = dto.Position{ .line = @intCast(first_amp.row), .character = @intCast(first_amp.cols.begin) },
-                                .end = dto.Position{ .line = @intCast(last_amp.row), .character = @intCast(last_amp.cols.end) },
+                                .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
+                                .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
                             };
                             try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
                                 .name = chore.str,
@@ -378,7 +384,7 @@ pub const Lsp = struct {
         const prefix = "file://";
 
         if (!std.mem.startsWith(u8, uri, prefix))
-            return Error.UnexpectedFilenameFormat;
+            return error.UnexpectedFilenameFormat;
 
         const size = std.mem.replacementSize(u8, uri[prefix.len..], "%20", " ");
 
@@ -434,7 +440,7 @@ pub const ForestPP = struct {
                 self.mutex.lock();
                 if (self.quit_thread) {
                     self.mutex.unlock();
-                    return Error.ThreadNotRunning;
+                    return error.ThreadNotRunning;
                 }
                 const forest = self.ping();
                 if (forest.valid)
@@ -504,7 +510,7 @@ pub const ForestPP = struct {
             }
 
             if (reload) {
-                const config = self.config_loader.config orelse return Error.CouldNotLoadConfig;
+                const config = self.config_loader.config orelse return error.CouldNotLoadConfig;
 
                 const forest = self.pong();
                 forest.reinit();

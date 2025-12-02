@@ -7,12 +7,7 @@ const naft = rubr.naft;
 const Env = rubr.Env;
 
 const mero = @import("mero.zig");
-
-pub const Error = error{
-    CouldNotParseAmp,
-    CouldNotAppendCatchall,
-    ExpectedNoCatchAll,
-};
+const filex = @import("filex.zig");
 
 // A Tree node that contains AMP info (both def and non-defs)
 // &cleanup naming conventions
@@ -21,15 +16,14 @@ pub const Chore = struct {
     const Part = struct {
         ap: amp.Path,
         str: []const u8,
-        row: usize,
-        cols: rubr.idx.Range,
+        pos: filex.Pos,
         pub fn write(self: Part, parent: *naft.Node) void {
             var n = parent.node("Chore.Part");
             defer n.deinit();
             n.attr("str", self.str);
-            n.attr("row", self.row);
-            n.attr("cols.begin", self.cols.begin);
-            n.attr("cols.end", self.cols.end);
+            n.attr("row", self.pos.row);
+            n.attr("cols.begin", self.pos.cols.begin);
+            n.attr("cols.end", self.pos.cols.end);
         }
     };
     const Parts = std.ArrayList(Part);
@@ -49,7 +43,6 @@ pub const Chore = struct {
     }
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
-        self.defs.deinit();
     }
 
     pub fn isDone(self: Self) bool {
@@ -65,15 +58,24 @@ pub const Chore = struct {
 
     pub const Where = enum { Org, Any };
     pub fn value(self: Self, key: []const u8, where: Where) ?*const amp.Path.Part {
+        var res: ?*const amp.Path.Part = null;
+
         const count = switch (where) {
             .Org => self.org_count,
             .Any => self.parts.items.len,
         };
         for (self.parts.items[0..count]) |part| {
-            if (part.ap.value_at(&[_][]const u8{key})) |p|
-                return p;
+            if (part.ap.value_at(&[_][]const u8{key})) |p| {
+                if (res) |r| {
+                    if (amp.Prio.isLess(p.prio, r.prio))
+                        res = p;
+                } else {
+                    res = p;
+                }
+            }
         }
-        return null;
+
+        return res;
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {
@@ -88,67 +90,16 @@ pub const Chore = struct {
     }
 };
 
-pub const Def = struct {
-    const Self = @This();
-    pub const Ix = rubr.idx.Ix(@This());
-
-    ap: amp.Path,
-    str: []const u8,
-    path: []const u8,
-    grove_id: usize,
-    row: usize,
-    cols: rubr.idx.Range,
-
-    pub fn deinit(self: *Self) void {
-        self.ap.deinit();
-    }
-
-    pub fn write(self: Def, parent: *naft.Node) void {
-        var n = parent.node("Def");
-        defer n.deinit();
-        n.attr("str", self.str);
-        n.attr("path", self.path);
-        n.attr("row", self.row);
-        n.attr("cols.begin", self.cols.begin);
-        n.attr("cols.end", self.cols.end);
-    }
-};
-
-pub const Amp = struct {
-    pub const Ix = rubr.idx.Ix(@This());
-
-    ap: amp.Path,
-    def: Def.Ix,
-
-    pub fn write(self: Amp, parent: *naft.Node) void {
-        var n = parent.node("Amp");
-        defer n.deinit();
-        n.attr("path", self.ap);
-        n.attr("def", self.def);
-    }
-};
-
-// Keeps track of all AMP info and its string repr without the need for tree traversal
+// Keeps track of all def-amps and its string repr without the need for tree traversal
 pub const Chores = struct {
     const Self = @This();
-    const Amps = std.ArrayList(Amp);
     const List = std.ArrayList(Chore);
-    const Defs = std.ArrayList(Def);
-    const Catchall = struct {
-        ap: amp.Path,
-        str: []const u8,
-        ix: Def.Ix,
-    };
     const TmpConcat = std.ArrayList([]const u8);
 
     env: Env,
 
     aral: std.heap.ArenaAllocator = undefined,
-    // All resolved (non-template) AMPs
-    amps: Amps = .{},
     list: List = .{},
-    defs: Defs = .{},
-    catchall: ?Catchall = null,
 
     tmp_concat: TmpConcat = .{},
 
@@ -159,152 +110,8 @@ pub const Chores = struct {
         self.aral.deinit();
     }
 
-    pub fn setupCatchAll(self: *Self, name: []const u8) !void {
-        if (self.catchall != null)
-            return Error.ExpectedNoCatchAll;
-
-        const aa = self.aral.allocator();
-
-        const content = try std.mem.concat(aa, u8, &[_][]const u8{ "&:", name });
-
-        var strange = rubr.strng.Strange{ .content = content };
-        const ap = try amp.Path.parse(&strange, aa) orelse return Error.CouldNotParseAmp;
-
-        const def_ix = Def.Ix.init(self.defs.items.len);
-        _ = try self.appendDef(ap, &.{}, std.math.maxInt(usize), 0, .{}) orelse return Error.CouldNotAppendCatchall;
-
-        self.catchall = Catchall{ .ap = ap, .str = content, .ix = def_ix };
-    }
-
-    // Takes deep copy of def
-    // For non-templates, the def is added to the list of AMPs as well
-    pub fn appendDef(self: *Self, def_ap: amp.Path, path: []const u8, grove_id: usize, row: usize, cols: rubr.idx.Range) !?Amp.Ix {
-        if (self.env.log.level(1)) |w| {
-            try w.print("appendDef() '{f}'\n", .{def_ap});
-        }
-
-        const check_fit = struct {
-            needle: *const amp.Path,
-            grove_id: usize,
-            pub fn call(my: @This(), other: Def) bool {
-                return other.ap.isFit(my.needle.*) and my.grove_id == other.grove_id;
-            }
-        }{ .needle = &def_ap, .grove_id = grove_id };
-        if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
-            try self.env.log.warning("Definition '{f}' is already present in Grove {}.\n", .{ def_ap, grove_id });
-            return null;
-        }
-
-        const aa = self.aral.allocator();
-
-        const def_ix = Def.Ix.init(self.defs.items.len);
-        try self.defs.append(aa, Def{
-            .ap = try def_ap.copy(aa),
-            .str = try std.fmt.allocPrint(aa, "{f}", .{def_ap}),
-            .path = path,
-            .grove_id = grove_id,
-            .row = row,
-            .cols = cols,
-        });
-
-        if (def_ap.is_template()) {
-            // Templates are not added to the list of resolved AMPs
-            return null;
-        }
-
-        const amp_ix = Amp.Ix.init(self.amps.items.len);
-        var a = try def_ap.copy(aa);
-        a.is_definition = false;
-        try self.amps.append(aa, Amp{ .ap = a, .def = def_ix });
-
-        return amp_ix;
-    }
-
-    pub fn resolve(self: *Self, ap: *amp.Path, grove_id: usize) !?Amp.Ix {
-        // Find match in already resolved AMPs
-        for (self.amps.items, 0..) |e, ix| {
-            if (e.ap.isFit(ap.*)) {
-                try ap.extend(e.ap);
-                return Amp.Ix.init(ix);
-            }
-        }
-
-        // No direct match found: find a matching def
-        const Match = struct {
-            ix: Def.Ix,
-            grove_id: usize,
-        };
-        var maybe_match: ?Match = null;
-
-        var is_ambiguous = false;
-        for (&[_]bool{ true, false }) |grove_id_must_match| {
-            if (grove_id_must_match == false and maybe_match != null)
-                // We found a match within the Grove of 'path': do not check for matches outside this Grove.
-                continue;
-
-            for (self.defs.items, 0..) |def, ix| {
-                // We first check for a match within the Grove of 'path', in a second iteration, we check for matches outside.
-                const grove_id_is_same = (def.grove_id == grove_id);
-                if (grove_id_must_match != grove_id_is_same)
-                    continue;
-
-                if (def.ap.isFit(ap.*)) {
-                    if (maybe_match) |match| {
-                        if (!is_ambiguous) {
-                            // This is the first ambiguous match we find: report the initial match as well
-                            const d = match.ix.ptr(self.defs.items);
-                            try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ ap, def.ap, d.ap });
-                        }
-                        is_ambiguous = true;
-                    }
-                    maybe_match = Match{ .ix = Def.Ix{ .ix = ix }, .grove_id = def.grove_id };
-                }
-            }
-        }
-
-        if (is_ambiguous)
-            return null;
-
-        const aa = self.aral.allocator();
-
-        const amp_ix = Amp.Ix.init(self.amps.items.len);
-        if (maybe_match) |match| {
-            const def = match.ix.cptr(self.defs.items);
-            if (ap.is_absolute) {
-                if (ap.parts.items.len != def.ap.parts.items.len) {
-                    try self.env.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ ap, def.ap });
-                    return null;
-                }
-            } else {
-                try ap.extend(def.ap);
-                ap.is_definition = false;
-            }
-
-            if (def.ap.is_template()) {
-                // try self.env.log.warning("{f} matches with template {f}\n", .{ ap, def.ap });
-                try def.ap.evaluate(ap);
-            }
-
-            try self.amps.append(aa, Amp{ .ap = try ap.copy(aa), .def = match.ix });
-        } else {
-            // No match found, use the catchall as def
-            if (self.catchall) |catchall| {
-                try ap.prepend(catchall.ap);
-                ap.is_absolute = true;
-                ap.is_definition = false;
-
-                try self.amps.append(aa, Amp{ .ap = try ap.copy(aa), .def = catchall.ix });
-            } else {
-                try self.env.log.warning("Could not resolve AMP '{f}' and not catch-all is present\n", .{ap});
-                return null;
-            }
-        }
-
-        return amp_ix;
-    }
-
     // Returns true if tree[node_id] is an actual Chore and was thus added
-    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree) !bool {
+    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree, defmgr: amp.DefMgr) !bool {
         const node = tree.cptr(node_id);
 
         if (rubr.slc.is_empty(node.org_amps.items))
@@ -317,13 +124,13 @@ pub const Chores = struct {
         var sep: []const u8 = "";
         var org_count: usize = 0;
         for (node.org_amps.items) |org| {
-            const a = org.ix.cptr(self.amps.items);
+            const a = org.ix.cptr(defmgr.defs.items);
             try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
             org_count += 1;
             sep = " ";
         }
-        for (node.agg_amps.items) |org| {
-            const a = org.ix.cptr(self.amps.items);
+        for (node.agg_amps.items) |agg| {
+            const a = agg.cptr(defmgr.defs.items);
             try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
             sep = " ";
         }
@@ -334,19 +141,31 @@ pub const Chores = struct {
 
         var offset: usize = 0;
         var ix: usize = 0;
-        for (&[_][]mero.Node.Amp{ node.org_amps.items, node.agg_amps.items }) |amps| {
-            for (amps) |org| {
-                defer ix += 1;
 
-                var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
-                offset += str.len;
-                if (ix > 0)
-                    // Drop the sep
-                    str.ptr += 1;
+        for (node.org_amps.items) |org| {
+            defer ix += 1;
 
-                const a = org.ix.cptr(self.amps.items);
-                try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .row = org.pos.row, .cols = org.pos.cols });
-            }
+            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
+            offset += str.len;
+            if (ix > 0)
+                // Drop the sep
+                str.ptr += 1;
+
+            const a = org.ix.cptr(defmgr.defs.items);
+            try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .pos = org.pos });
+        }
+
+        for (node.agg_amps.items) |agg| {
+            defer ix += 1;
+
+            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
+            offset += str.len;
+            if (ix > 0)
+                // Drop the sep
+                str.ptr += 1;
+
+            const a = agg.cptr(defmgr.defs.items);
+            try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .pos = .{} });
         }
 
         // Lookup path
@@ -371,12 +190,6 @@ pub const Chores = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chores");
         defer n.deinit();
-        for (self.defs.items) |e| {
-            e.write(&n);
-        }
-        for (self.amps.items) |e| {
-            e.write(&n);
-        }
         for (self.list.items) |e| {
             e.write(&n);
         }

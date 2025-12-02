@@ -202,6 +202,11 @@ pub fn prepend(self: *Self, prefix: Self) !void {
     try self.parts.insertSlice(self.a, 0, prefix.parts.items);
 }
 
+pub fn prependString(self: *Self, str: []const u8) !void {
+    const part = Part{ .content = str };
+    try self.parts.insert(self.a, 0, part);
+}
+
 pub fn extend(self: *Self, rhs: Self) !void {
     if (self.is_absolute) {
         if (self.parts.items.len != rhs.parts.items.len)

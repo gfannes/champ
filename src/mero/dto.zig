@@ -6,6 +6,7 @@ const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Parser = @import("parser.zig").Parser;
 const chore = @import("../chore.zig");
+const filex = @import("../filex.zig");
 
 const rubr = @import("rubr");
 const naft = rubr.naft;
@@ -79,15 +80,13 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-    pub const Pos = struct {
-        row: usize,
-        cols: rubr.idx.Range,
+    pub const DefIx = amp.Def.Ix;
+    pub const DefIxs = std.ArrayList(DefIx);
+    pub const Def = struct {
+        ix: DefIx,
+        pos: filex.Pos,
     };
-    pub const Amp = struct {
-        ix: chore.Amp.Ix,
-        pos: Pos,
-    };
-    const Amps = std.ArrayList(Amp);
+    pub const Defs = std.ArrayList(Def);
 
     pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
 
@@ -98,12 +97,12 @@ pub const Node = struct {
 
     // Ref to a definition that is directly present in this Node
     // Is also added to org_amps
-    def: ?Amp = null,
+    def: ?Def = null,
     // Refs to resolved AMPs that are directly present in this Node
     // Only the first can be a def
-    org_amps: Amps = .{},
+    org_amps: Defs = .{},
     // Refs to resolved AMPs that are inherited
-    agg_amps: Amps = .{},
+    agg_amps: DefIxs = .{},
 
     // &perf: Only activate relevant fields depending on type
     line: Line = .{},

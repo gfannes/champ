@@ -12,7 +12,7 @@ desc 'Install'
 task :install, :variant do |_task, args|
     variant = args[:variant]&.to_sym || :zig
 
-    mode = :safe
+    # mode = :safe
     mode = :fast
     # mode = :debug
 
