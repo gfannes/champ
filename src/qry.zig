@@ -37,9 +37,6 @@ pub const Query = struct {
     only_status: bool = false,
     parts: Parts = .{},
 
-    pub fn init(a: std.mem.Allocator) Self {
-        return .{ .a = a };
-    }
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|
             self.a.free(part);
@@ -127,7 +124,7 @@ pub const Query = struct {
                 for (c_part.ap.parts.items) |a_part| {
                     var skip_count: usize = undefined;
                     const score = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
-                    // std.debug.print("\t'{s}' {} {}\n", .{ a_part.content, score, skip_count });
+                    // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
                     if (skip_count > 0)
                         continue;
                     if (maybe_min_score) |*min_score| {

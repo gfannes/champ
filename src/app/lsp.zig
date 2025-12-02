@@ -118,8 +118,9 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        for (chore.parts.items) |part| {
+                        for (chore.parts.items[0..chore.org_count]) |part| {
                             if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
+                                try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, part.ap });
                                 maybe_ap = part.ap;
                             }
                         }
@@ -216,7 +217,7 @@ pub const Lsp = struct {
                         for (chore.parts.items[0..chore.org_count]) |part| {
                             if (part.row == position.line and (part.cols.begin <= position.character and position.character <= part.cols.end)) {
                                 if (maybe_ap) |ap|
-                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}' part count {}\n", .{ ap, src_filename, chore.path, chore.parts.items.len });
+                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}' part count {}\n", .{ ap, src_filename, chore.path, chore.org_count });
                                 maybe_ap = part.ap;
                             }
                         }
@@ -259,7 +260,7 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.slc.is_empty(chore.parts.items)) {
+                        if (rubr.slc.is_empty(chore.parts.items[0..chore.org_count])) {
                             try self.env.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
@@ -312,12 +313,12 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol){};
 
-                    var q = qry.Query.init(self.env.a);
+                    var q = qry.Query{ .a = self.env.a };
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (rubr.slc.is_empty(chore.parts.items)) {
+                        if (rubr.slc.is_empty(chore.parts.items[0..chore.org_count])) {
                             try self.env.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }

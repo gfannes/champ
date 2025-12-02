@@ -2,8 +2,20 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+- [ ] Support injecting metadata from deps
+	- [*] Merge Chore amps and defs and catchall to make it easier to couple Chore amps to Node amps
+	- [ ] Create reverse-lookup from Chore def-amp to Node while resolving in forest.resolveAmps() &&reverselookup
+
+- [ ] Create FUI to configure `plan` in LSP
+	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org
+
+- [ ] Explain use of search in help
+
+- [ ] Find method to express 'using namespace':
+	- Indicate in log that some part (eg `shop`) should be resolved in `auro`.
+
 - [x] Support setting `&s:` on first line in this file
-	- [*] Requires a trailing space in `2024-02-28 Bitstream review.md`
+	- [x] Requires a trailing space in `2024-02-28 Bitstream review.md`: due to CarriageReturn not handled properly
 - [x] When aggregating amps, retain max one amp per def to take the `org ~status/~date` over the parent &p:a
 	- Allows pushing tasks into the future when the start date comes from the filename (and is thus difficult to update)
 - [ ] Cleanup current false-positive todos
@@ -65,7 +77,7 @@ Support planning items on a timeline and finding the next item to work-on.
 	- `y25w23`
 - [x] Convert all dates internally to std.time.epoch.YearAndDay
 - [*] Merge `search` and `plan`
-- [*] Create LSP command for this
+- [x] Create LSP command for this
 	- Goto def/goto decl could be used for todo items in local file and workspace
 	- Diagnostics will probably not work in Helix due to only diagnostics for open files are retained
 

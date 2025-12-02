@@ -26,6 +26,7 @@ pub const Error = error{
     ModeNotSet,
     NotImplemented,
     CouldNotLoadConfig,
+    ExpectedForest,
 };
 
 // Holds all the data that should not be moved anymore
@@ -49,6 +50,8 @@ pub const App = struct {
     config_loader: ?cfg.file.Loader = null,
     config: cfg.file.Config = .{},
 
+    maybe_forest: ?mero.Forest = null,
+
     // Instance should not be moved after init()
     pub fn init(self: *Self) !void {
         self.env_inst.init();
@@ -61,6 +64,9 @@ pub const App = struct {
         try self.cli_args.init();
     }
     pub fn deinit(self: *Self) void {
+        if (self.maybe_forest) |*forest|
+            forest.deinit();
+
         if (self.config_loader) |*loader|
             loader.deinit();
 
@@ -106,12 +112,12 @@ pub const App = struct {
         return ret;
     }
 
-    pub fn run(self: Self) void {
+    pub fn run(self: *Self) void {
         self.run_() catch |err| {
             self.env.log.err("Received '{}'\n", .{err}) catch {};
         };
     }
-    fn run_(self: Self) !void {
+    fn run_(self: *Self) !void {
         if (self.cli_args.print_help) {
             std.debug.print("{s}", .{self.cli_args.help()});
         } else if (self.cli_args.mode) |mode| {
@@ -127,26 +133,25 @@ pub const App = struct {
                     try obj.call();
                 },
                 cfg.cli.Mode.Search => {
+                    const forest = try self.loadForest();
+
                     var obj = Search{
                         .env = self.env,
                         .config = &self.config,
-                        .cli_args = &self.cli_args,
+                        .forest = forest,
                     };
-                    try obj.init();
                     defer obj.deinit();
-                    try obj.call();
+
+                    try obj.call(self.cli_args.extra.items, !self.cli_args.reverse);
+                    try obj.show(self.cli_args.details);
                 },
                 cfg.cli.Mode.Plan => {
-                    var forest = mero.Forest{ .env = self.env };
-                    forest.init();
-                    defer forest.deinit();
-
-                    try forest.load(&self.config, &self.cli_args);
+                    const forest = try self.loadForest();
 
                     var obj = Plan{
                         .env = self.env,
                         .cli_args = &self.cli_args,
-                        .forest = &forest,
+                        .forest = forest,
                     };
                     defer obj.deinit();
 
@@ -177,5 +182,18 @@ pub const App = struct {
                 },
             }
         } else return Error.ModeNotSet;
+    }
+
+    fn loadForest(self: *Self) !*const mero.Forest {
+        if (self.maybe_forest) |*forest|
+            return forest;
+
+        self.maybe_forest = mero.Forest{ .env = self.env };
+
+        var forest = if (self.maybe_forest) |*ptr| ptr else return error.ExpectedForest;
+        forest.init();
+        try forest.load(&self.config, &self.cli_args);
+
+        return forest;
     }
 };

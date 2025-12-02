@@ -86,13 +86,13 @@ pub const Plan = struct {
         }
 
         // Sort according to prio, if any
-        const Ctx = struct {
+        const Fn = struct {
             pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
                 _ = ctx;
                 return Prio.isLess(a.prio, b.prio);
             }
         };
-        std.sort.block(Entry, self.all_entries.items, Ctx{}, Ctx.call);
+        std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
 
         for (self.all_entries.items, 0..) |entry, ix0| {
             const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
@@ -110,9 +110,9 @@ pub const Plan = struct {
 
     pub fn show(self: Self, details: bool) !void {
         for (self.segments.items) |segment| {
-            try self.env.stdout.print("## {s}\n", .{segment.path});
+            try self.env.stdout.print("\n{s}\n", .{segment.path});
             for (segment.entries) |entry| {
-                try self.env.stdout.print("    {s}", .{entry.content});
+                try self.env.stdout.print("  {s}", .{entry.content});
                 if (details)
                     try self.env.stdout.print(" ({s})", .{entry.amps});
                 try self.env.stdout.print("\n", .{});

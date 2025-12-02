@@ -218,6 +218,8 @@ pub const Forest = struct {
             tree: *const Tree,
             chores: *const Chores,
 
+            update_count: u64 = 0,
+
             pub fn call(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
 
@@ -229,10 +231,19 @@ pub const Forest = struct {
                         // Iterate in reverse to ensure that items that were added to File level via 'amp on first line' take prio over those from the filename.
                         var rit = std.mem.reverseIterator(parent_amps);
                         while (rit.next()) |parent_amp|
-                            if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
+                            if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp)) {
                                 try n.agg_amps.append(my.env.a, parent_amp);
+                                my.update_count += 1;
+                            };
                     }
                 }
+
+                // &todo &reverselookup: Add amps from defs
+                // for (&[_][]const Node.Amp{ n.org_amps.items, n.agg_amps.items }) |my_amps| {
+                //     for (my_amps) |my_amp| {
+                //         const chore_amp = my.chores.amps.items[my_amp.ix];
+                //     }
+                // }
             }
 
             fn is_present(my: My, haystack: []const Node.Amp, needle: Node.Amp) bool {
@@ -260,7 +271,13 @@ pub const Forest = struct {
             }
         }{ .env = self.env, .tree = &self.tree, .chores = &self.chores };
 
-        try self.tree.dfsAll(true, &cb);
+        for (0..100) |ix| {
+            std.debug.print("Starting DFS loop {}\n", .{ix});
+            cb.update_count = 0;
+            try self.tree.dfsAll(true, &cb);
+            if (cb.update_count == 0)
+                break;
+        }
     }
 
     fn createChores(self: *Self) !void {
@@ -277,6 +294,7 @@ pub const Forest = struct {
         try self.tree.dfsAll(true, &cb);
     }
 
+    // Setup Node.org_amps and Chores for data found in Node.line.terms
     fn resolveAmps(self: *Self) !void {
         try self.chores.setupCatchAll("?");
 
