@@ -81,19 +81,14 @@ pub const Forest = struct {
             if (strings.contains(u8, wanted_groves, cfg_grove.name))
                 try self.loadGrove(&cfg_grove);
         }
-        std.debug.print("Loaded groves\n", .{});
 
         try self.collectDefs();
-        std.debug.print("Collected defs\n", .{});
 
         try self.resolveAmps();
-        std.debug.print("Resolved Amps\n", .{});
 
         try self.aggregateAmps();
-        std.debug.print("Aggregated Amps\n", .{});
 
         try self.createChores();
-        std.debug.print("Created chores\n", .{});
 
         self.valid = true;
     }
@@ -231,7 +226,9 @@ pub const Forest = struct {
 
                 if (my.parent(entry.id)) |parent_node| {
                     for (&[_][]const Node.Amp{ parent_node.org_amps.items, parent_node.agg_amps.items }) |parent_amps| {
-                        for (parent_amps) |parent_amp|
+                        // Iterate in reverse to ensure that items that were added to File level via 'amp on first line' take prio over those from the filename.
+                        var rit = std.mem.reverseIterator(parent_amps);
+                        while (rit.next()) |parent_amp|
                             if (!my.is_present(n.org_amps.items, parent_amp) and !my.is_present(n.agg_amps.items, parent_amp))
                                 try n.agg_amps.append(my.env.a, parent_amp);
                     }
@@ -334,7 +331,6 @@ pub const Forest = struct {
                         var cols: rubr.idx.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                             const term = &my.terms.items[term_ix];
-
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 

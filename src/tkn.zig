@@ -148,8 +148,7 @@ pub const Symbol = enum(u8) {
     Backtick,
     Slash,
     BackSlash,
-    Newline,
-    CarriageReturn,
+    Newline, // and CarriageReturn as well
 
     pub fn from(ch: u8) Symbol {
         return ch__symbol[ch];
@@ -194,7 +193,7 @@ const ch__symbol: [256]Symbol = blk: {
     t['/'] = Symbol.Slash;
     t['\\'] = Symbol.BackSlash;
     t['\n'] = Symbol.Newline;
-    t['\r'] = Symbol.CarriageReturn;
+    t['\r'] = Symbol.Newline;
 
     break :blk t;
 };
