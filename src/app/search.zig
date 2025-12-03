@@ -91,6 +91,7 @@ pub const Search = struct {
             }
         }
 
+        // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
         if (reverse)
             std.mem.reverse(Segment, self.segments.items);
     }

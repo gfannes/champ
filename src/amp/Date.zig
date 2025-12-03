@@ -115,6 +115,17 @@ pub fn format(self: Self, w: *std.Io.Writer) !void {
     try self.date.format(w);
 }
 
+pub fn isLess(maybe_a: ?Self, maybe_b: ?Self) bool {
+    if (maybe_a) |a| {
+        if (maybe_b) |b| {
+            return a.date.epoch_day.day < b.date.epoch_day.day;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
 test "amp.Date" {
     const ut = std.testing;
 

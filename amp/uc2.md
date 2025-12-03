@@ -2,6 +2,9 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+- [ ] Print plan in color depending on prio
+- [ ] Use `s` to break prio ties
+
 - [x] Support injecting metadata from deps
 	- [x] Merge Chore amps and defs and catchall to make it easier to couple Chore amps to Node amps
 	- [x] Create reverse-lookup from Chore def-amp to Node while resolving in forest.resolveAmps() &&reverselookup

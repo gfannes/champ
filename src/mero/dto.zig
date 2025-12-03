@@ -102,6 +102,8 @@ pub const Node = struct {
     // Only the first can be a def
     org_amps: Defs = .{},
     // Refs to resolved AMPs that are inherited
+    // Move to Chore to gain 250MB memory
+    // Maybe replace with a set. Do take into account that in Chore.value, the order currently influences ~status
     agg_amps: DefIxs = .{},
 
     // &perf: Only activate relevant fields depending on type

@@ -67,7 +67,11 @@ pub const Chore = struct {
         for (self.parts.items[0..count]) |part| {
             if (part.ap.value_at(&[_][]const u8{key})) |p| {
                 if (res) |r| {
+                    // For ~status, we keep the first occurence
+
                     if (amp.Prio.isLess(p.prio, r.prio))
+                        res = p;
+                    if (amp.Date.isLess(p.date, r.date))
                         res = p;
                 } else {
                     res = p;

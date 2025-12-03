@@ -86,6 +86,8 @@ pub const Forest = struct {
                 try self.loadGrove(&cfg_grove);
         }
 
+        // &todo: Measure/print performance
+
         try self.collectDefs();
 
         try self.resolveAmps();
@@ -253,9 +255,7 @@ pub const Forest = struct {
 
             fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
                 // Inject src.orgs into dst.aggs
-                // Iterate in reverse to ensure that items that were added to File level via 'amp on first line' take prio over those from the filename.
-                var rit = std.mem.reverseIterator(src.org_amps.items);
-                while (rit.next()) |src_org| {
+                for (src.org_amps.items) |src_org| {
                     if (!is_present(dst, src_org.ix)) {
                         try dst.agg_amps.append(my.env.a, src_org.ix);
                         my.update_count += 1;
