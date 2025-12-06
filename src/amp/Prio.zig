@@ -51,19 +51,19 @@ pub fn parse(str: []const u8, options: Options) ?Self {
     return .{ .endof = category, .index = index };
 }
 
-pub fn isLess(maybe_a: ?Self, maybe_b: ?Self) bool {
+pub fn order(maybe_a: ?Self, maybe_b: ?Self) std.math.Order {
     if (maybe_a) |a| {
         if (maybe_b) |b| {
-            const endof_a = @intFromEnum(a.endof);
-            const endof_b = @intFromEnum(b.endof);
-            if (endof_a != endof_b)
-                return endof_a < endof_b;
-            return a.index < b.index;
+            const ord = std.math.order(@intFromEnum(a.endof), @intFromEnum(b.endof));
+            if (ord != .eq)
+                return ord;
+            return std.math.order(a.index, b.index);
         } else {
-            return true;
+            return .lt;
         }
+    } else {
+        return if (maybe_b) |_| .gt else .eq;
     }
-    return false;
 }
 
 test "amp.Prio" {

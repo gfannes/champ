@@ -115,15 +115,16 @@ pub fn format(self: Self, w: *std.Io.Writer) !void {
     try self.date.format(w);
 }
 
-pub fn isLess(maybe_a: ?Self, maybe_b: ?Self) bool {
+pub fn order(maybe_a: ?Self, maybe_b: ?Self) std.math.Order {
     if (maybe_a) |a| {
         if (maybe_b) |b| {
-            return a.date.epoch_day.day < b.date.epoch_day.day;
+            return std.math.order(a.date.epoch_day.day, b.date.epoch_day.day);
         } else {
-            return true;
+            return .lt;
         }
+    } else {
+        return if (maybe_b) |_| .gt else .eq;
     }
-    return false;
 }
 
 test "amp.Date" {

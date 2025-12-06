@@ -80,11 +80,11 @@ pub const Chore = struct {
                             if (res_where == current_where) {
                                 // For ~status, we keep the first occurence
 
-                                if (amp.Prio.isLess(p.prio, r.prio)) {
+                                if (amp.Prio.order(p.prio, r.prio) == .lt) {
                                     res = p;
                                     res_where = current_where;
                                 }
-                                if (amp.Date.isLess(p.date, r.date)) {
+                                if (amp.Date.order(p.date, r.date) == .lt) {
                                     res = p;
                                     res_where = current_where;
                                 }

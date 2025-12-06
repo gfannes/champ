@@ -4,7 +4,7 @@ Support planning items on a timeline and finding the next item to work-on.
 
 - [ ] Support wikilinks
 - [ ] Print plan in color depending on prio
-- [ ] Use `s` to break prio ties
+- [x] Use `s` to break prio ties
 
 - [x] Support injecting metadata from deps
 	- [x] Merge Chore amps and defs and catchall to make it easier to couple Chore amps to Node amps
@@ -25,7 +25,7 @@ Support planning items on a timeline and finding the next item to work-on.
 - [x] When aggregating amps, retain max one amp per def to take the `org ~status/~date` over the parent &p:a
 	- Allows pushing tasks into the future when the start date comes from the filename (and is thus difficult to update)
 - [ ] Cleanup current false-positive todos
-- [*] Inherit dependencies from defs to inject their metadata into this local extension
+- [x] Inherit dependencies from defs to inject their metadata into this local extension
 	- When linking to a def, take the `minimal ~date`, `top ~prio` and `local ~status` between parent and that def
 - [x] Add support for `~prio` to fine-tune the order of the task list &p:a
 	- [x] Move datex into amp folder as well to handle all templated metadata in the same namespace
@@ -37,7 +37,7 @@ Support planning items on a timeline and finding the next item to work-on.
 	- [ ] Use _end of period_ iso begin (eg 2025q1 should be 20250331 iso 20250101)
 - [ ] Add CLI option `-t` for text search into `n.content`
 - [x] Add CLI option `-d` for details to display amp metadata as well
-- [ ] Push local amps to def when this is a dependency to support scheduling defs from the agenda
+- [*] Push local amps to def when this is a dependency to support scheduling defs from the agenda
 - [ ] Merge search and plan
 	- Search uses fuzzy matching, plan uses prio and hard filter...
 		- Maybe use some common layer but keep the different verbs

@@ -17,6 +17,7 @@ pub const Plan = struct {
         path: []const u8,
         content: []const u8,
         amps: []const u8,
+        date: Date,
         prio: ?Prio,
         rows: rubr.idx.Range,
         cols: rubr.idx.Range,
@@ -64,7 +65,7 @@ pub const Plan = struct {
             else
                 null;
 
-            if (Prio.isLess(prio_threshold, myprio))
+            if (Prio.order(prio_threshold, myprio) == .lt)
                 continue;
 
             // Skip files
@@ -78,6 +79,7 @@ pub const Plan = struct {
                     .path = n.path,
                     .content = n.content,
                     .amps = chore.str,
+                    .date = start_date,
                     .prio = myprio,
                     .rows = n.content_rows,
                     .cols = n.content_cols,
@@ -89,7 +91,13 @@ pub const Plan = struct {
         const Fn = struct {
             pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
                 _ = ctx;
-                return Prio.isLess(a.prio, b.prio);
+                return order(a, b) == .lt;
+            }
+            fn order(a: Entry, b: Entry) std.math.Order {
+                const ord = Prio.order(a.prio, b.prio);
+                if (ord != .eq)
+                    return ord;
+                return Date.order(a.date, b.date);
             }
         };
         std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
