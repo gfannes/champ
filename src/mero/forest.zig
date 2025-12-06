@@ -22,6 +22,7 @@ pub const Error = error{
     ExpectedAtLeastOneGrove,
     CouldNotParseAmp,
     ExpectedGroveId,
+    TooManyIterations,
 };
 
 pub const Forest = struct {
@@ -256,16 +257,28 @@ pub const Forest = struct {
             fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
                 // Inject src.orgs into dst.aggs, making sure only the last is inserted for each different template
                 for (src.org_amps.items, 0..) |src_org, ix0| {
-                    const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                    if (src_org_def.template) |template| {
-                        if (ix0 + 1 < src.org_amps.items.len) {
-                            for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
-                                if (other_src_org.ix.eql(template))
-                                    continue;
+                    var is_last_of_kind: bool = true;
+                    {
+                        // &todo: Move to function, maybe create some helper util to convert between Node.DefIx and amp.Def
+                        // &perf: Maybe keep track of the last amp per template kind?
+                        // Check if there is another amp with the same template. If so, we take that.
+                        const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                        if (src_org_def.template) |src_template| {
+                            if (ix0 + 1 < src.org_amps.items.len) {
+                                for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
+                                    const other_src_org_def = other_src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                                    if (other_src_org_def.template) |other_src_template| {
+                                        if (other_src_template.eql(src_template)) {
+                                            is_last_of_kind = false;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    if (!my.is_present(dst, src_org.ix)) {
+
+                    if (is_last_of_kind and !my.is_present(dst, src_org.ix)) {
                         try dst.agg_amps.append(my.env.a, src_org.ix);
                         my.update_count += 1;
                     }
@@ -281,7 +294,6 @@ pub const Forest = struct {
             }
 
             fn is_present(my: My, node: *const Node, needle: Node.DefIx) bool {
-                std.debug.print("Looking for {f}\n", .{needle});
                 for (node.org_amps.items) |org| {
                     if (org.ix.ix == needle.ix)
                         return true;
@@ -291,7 +303,6 @@ pub const Forest = struct {
                     if (needle_def.template) |needle_template| {
                         if (org_def.template) |org_template| {
                             if (needle_template.eql(org_template)) {
-                                std.debug.print("Org {f}-{f} is blocking needle {f}-{f}\n", .{ org.ix, org_template, needle, needle_template });
                                 return true;
                             }
                         }
@@ -316,12 +327,16 @@ pub const Forest = struct {
             }
         }{ .env = self.env, .tree = &self.tree, .defmgr = &self.defmgr };
 
-        for (0..100) |ix| {
-            std.debug.print("Starting DFS loop {}\n", .{ix});
+        const n = 10;
+        for (0..n) |ix| {
             cb.update_count = 0;
             try self.tree.dfsAll(true, &cb);
             if (cb.update_count == 0)
                 break;
+            if (ix + 1 == n) {
+                try self.env.stderr.print("Did not converge after {} iterations\n", .{n});
+                return error.TooManyIterations;
+            }
         }
     }
 
