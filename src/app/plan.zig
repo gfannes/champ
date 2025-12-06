@@ -56,6 +56,7 @@ pub const Plan = struct {
             // Check that its start date is before today
             const start_value = chore.value("s", .Any) orelse continue;
             const start_date = start_value.date orelse continue;
+            std.debug.print("start_date: {f}\n", .{start_date});
             if (start_date.date.epoch_day.day > today.epoch_day.day)
                 continue;
 

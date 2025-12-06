@@ -58,23 +58,48 @@ pub const Chore = struct {
 
     pub const Where = enum { Org, Any };
     pub fn value(self: Self, key: []const u8, where: Where) ?*const amp.Path.Part {
+        std.debug.print("Looking for {s} in {}\n", .{ key, where });
         var res: ?*const amp.Path.Part = null;
 
         const count = switch (where) {
             .Org => self.org_count,
             .Any => self.parts.items.len,
         };
-        for (self.parts.items[0..count]) |part| {
-            if (part.ap.value_at(&[_][]const u8{key})) |p| {
-                if (res) |r| {
-                    // For ~status, we keep the first occurence
 
-                    if (amp.Prio.isLess(p.prio, r.prio))
-                        res = p;
-                    if (amp.Date.isLess(p.date, r.date))
-                        res = p;
+        var res_where: Where = .Org;
+        for (self.parts.items[0..count], 0..) |part, ix0| {
+            if (part.ap.value_at(&[_][]const u8{key})) |p| {
+                const current_where: Where = if (ix0 < self.org_count) .Org else .Any;
+                std.debug.print("  Considering {s} from {}\n", .{ p.content, current_where });
+
+                if (res) |r| {
+                    switch (current_where) {
+                        .Org => {
+                            std.debug.print("  Found update org: {s}\n", .{p.content});
+                            res = p;
+                            res_where = current_where;
+                        },
+                        .Any => {
+                            if (res_where == current_where) {
+                                // For ~status, we keep the first occurence
+
+                                if (amp.Prio.isLess(p.prio, r.prio)) {
+                                    std.debug.print("  Found update agg: {s}\n", .{p.content});
+                                    res = p;
+                                    res_where = current_where;
+                                }
+                                if (amp.Date.isLess(p.date, r.date)) {
+                                    std.debug.print("  Found update agg: {s}\n", .{p.content});
+                                    res = p;
+                                    res_where = current_where;
+                                }
+                            }
+                        },
+                    }
                 } else {
+                    std.debug.print("  Found first: {s}\n", .{p.content});
                     res = p;
+                    res_where = current_where;
                 }
             }
         }

@@ -254,9 +254,18 @@ pub const Forest = struct {
             }
 
             fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
-                // Inject src.orgs into dst.aggs
-                for (src.org_amps.items) |src_org| {
-                    if (!is_present(dst, src_org.ix)) {
+                // Inject src.orgs into dst.aggs, making sure only the last is inserted for each different template
+                for (src.org_amps.items, 0..) |src_org, ix0| {
+                    const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                    if (src_org_def.template) |template| {
+                        if (ix0 + 1 < src.org_amps.items.len) {
+                            for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
+                                if (other_src_org.ix.eql(template))
+                                    continue;
+                            }
+                        }
+                    }
+                    if (!my.is_present(dst, src_org.ix)) {
                         try dst.agg_amps.append(my.env.a, src_org.ix);
                         my.update_count += 1;
                     }
@@ -264,17 +273,29 @@ pub const Forest = struct {
 
                 // Inject src.aggs into dst.aggs
                 for (src.agg_amps.items) |src_agg_ix| {
-                    if (!is_present(dst, src_agg_ix)) {
+                    if (!my.is_present(dst, src_agg_ix)) {
                         try dst.agg_amps.append(my.env.a, src_agg_ix);
                         my.update_count += 1;
                     }
                 }
             }
 
-            fn is_present(node: *const Node, needle: Node.DefIx) bool {
+            fn is_present(my: My, node: *const Node, needle: Node.DefIx) bool {
+                std.debug.print("Looking for {f}\n", .{needle});
                 for (node.org_amps.items) |org| {
                     if (org.ix.ix == needle.ix)
                         return true;
+                    // Orgs block all template data with the same key
+                    const needle_def = needle.cget(my.defmgr.defs.items) orelse return false;
+                    const org_def = org.ix.cget(my.defmgr.defs.items) orelse return false;
+                    if (needle_def.template) |needle_template| {
+                        if (org_def.template) |org_template| {
+                            if (needle_template.eql(org_template)) {
+                                std.debug.print("Org {f}-{f} is blocking needle {f}-{f}\n", .{ org.ix, org_template, needle, needle_template });
+                                return true;
+                            }
+                        }
+                    }
                 }
                 for (node.agg_amps.items) |agg| {
                     if (agg.ix == needle.ix)

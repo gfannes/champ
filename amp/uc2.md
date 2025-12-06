@@ -2,6 +2,7 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+- [ ] Support wikilinks
 - [ ] Print plan in color depending on prio
 - [ ] Use `s` to break prio ties
 
