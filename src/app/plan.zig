@@ -119,9 +119,26 @@ pub const Plan = struct {
 
     pub fn show(self: Self, details: bool) !void {
         for (self.segments.items) |segment| {
-            try self.env.stdout.print("\n{s}\n", .{segment.path});
+            const filename_style = rubr.ansi.Style{ .fg = .{ .color = .White, .intense = true }, .underline = true };
+            const reset_style = rubr.ansi.Style{ .reset = true };
+            try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
             for (segment.entries) |entry| {
-                try self.env.stdout.print("  {s}", .{entry.content});
+                var entry_style = rubr.ansi.Style{ .fg = .{ .color = .White } };
+                if (entry.prio) |prio| {
+                    switch (prio.endof) {
+                        .Hour => entry_style.fg.?.color = .Green,
+                        .Day => entry_style.fg.?.color = .Magenta,
+                        .Week => entry_style.fg.?.color = .Yellow,
+                        .Month => entry_style.fg.?.color = .Cyan,
+                        .Quarter => entry_style.fg.?.color = .Blue,
+                        else => {},
+                    }
+                    if (prio.index == 0) {
+                        entry_style.fg.?.intense = true;
+                        entry_style.bold = true;
+                    }
+                }
+                try self.env.stdout.print("  {f}{s}{f}", .{ entry_style, entry.content, reset_style });
                 if (details)
                     try self.env.stdout.print(" ({s})", .{entry.amps});
                 try self.env.stdout.print("\n", .{});
