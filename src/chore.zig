@@ -111,6 +111,12 @@ pub const Chore = struct {
         for (self.parts.items) |e|
             e.write(&n);
     }
+
+    pub fn format(self: Self, w: *std.Io.Writer) !void {
+        var root = naft.Node{ .w = w };
+        defer root.deinit();
+        self.write(&root);
+    }
 };
 
 // Keeps track of all def-amps and its string repr without the need for tree traversal

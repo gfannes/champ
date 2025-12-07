@@ -47,7 +47,7 @@ pub const Check = struct {
         }
 
         {
-            var root = rubr.naft.Node.init(self.env.stdout);
+            var root = rubr.naft.Node{ .w = self.env.stdout };
             self.forest.chores.write(&root);
         }
     }

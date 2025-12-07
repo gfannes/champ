@@ -151,7 +151,6 @@ pub const App = struct {
 
                     var obj = Plan{
                         .env = self.env,
-                        .cli_args = &self.cli_args,
                         .forest = forest,
                     };
                     defer obj.deinit();
@@ -160,7 +159,7 @@ pub const App = struct {
                         Prio.parse(prio_str, .{ .index = .Inf })
                     else
                         null;
-                    try obj.call(prio_threshold, !self.cli_args.reverse);
+                    try obj.call(prio_threshold, self.cli_args.extra.items, !self.cli_args.reverse);
                     try obj.show(self.cli_args.details);
                 },
                 cfg.cli.Mode.Check => {

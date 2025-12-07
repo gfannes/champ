@@ -28,7 +28,6 @@ pub const Plan = struct {
     };
 
     env: Env,
-    cli_args: *const cfg.cli.Args,
     forest: *const mero.Forest,
 
     segments: std.ArrayList(Segment) = .{},
@@ -39,8 +38,12 @@ pub const Plan = struct {
         self.all_entries.deinit(self.env.a);
     }
 
-    pub fn call(self: *Self, prio_threshold: ?Prio, reverse: bool) !void {
+    pub fn call(self: *Self, prio_threshold: ?Prio, query_input: [][]const u8, reverse: bool) !void {
         const today = try rubr.datex.Date.today();
+
+        var query = qry.Query{ .a = self.env.a };
+        defer query.deinit();
+        try query.setup(query_input);
 
         // Collect all chores
         for (self.forest.chores.list.items, 0..) |chore, ix| {
@@ -66,6 +69,10 @@ pub const Plan = struct {
                 null;
 
             if (Prio.order(prio_threshold, myprio) == .lt)
+                continue;
+
+            const distance = query.distance(chore) orelse continue;
+            if (distance > 1.0)
                 continue;
 
             // Skip files

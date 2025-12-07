@@ -171,13 +171,12 @@ pub const Lsp = struct {
 
                     var plan = Plan{
                         .env = self.env,
-                        .cli_args = self.cli_args,
                         .forest = forest,
                     };
                     defer plan.deinit();
                     const prio = Prio.max(.Week);
                     _ = prio;
-                    try plan.call(null, false);
+                    try plan.call(null, &.{}, false);
 
                     var locations = std.ArrayList(dto.Location){};
                     for (plan.segments.items) |segment| {

@@ -32,7 +32,7 @@ pub const Test = struct {
     pub fn call(self: *Self) !void {
         try self.forest.load(self.config, self.cli_args);
 
-        var root = naft.Node.init(self.env.log.writer());
+        var root = naft.Node{ .w = self.env.log.writer() };
         defer root.deinit();
 
         self.forest.chores.write(&root);
