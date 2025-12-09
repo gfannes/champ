@@ -85,6 +85,7 @@ pub const Node = struct {
     pub const Def = struct {
         ix: DefIx,
         pos: filex.Pos,
+        is_dependency: bool = false, // We cannot store this data in amp.Def since that is shared between different resolved amps
     };
     pub const Defs = std.ArrayList(Def);
 

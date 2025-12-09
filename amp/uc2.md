@@ -37,7 +37,7 @@ Support planning items on a timeline and finding the next item to work-on.
 	- [ ] Use _end of period_ iso begin (eg 2025q1 should be 20250331 iso 20250101)
 - [ ] Add CLI option `-t` for text search into `n.content`
 - [x] Add CLI option `-d` for details to display amp metadata as well
-- [*] Push local amps to def when this is a dependency to support scheduling defs from the agenda
+- [x] Push local amps to def when this is a dependency to support scheduling defs from the agenda
 - [ ] Merge search and plan
 	- Search uses fuzzy matching, plan uses prio and hard filter...
 		- Maybe use some common layer but keep the different verbs

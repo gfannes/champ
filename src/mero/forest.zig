@@ -222,7 +222,7 @@ pub const Forest = struct {
             const My = @This();
 
             env: Env,
-            tree: *const Tree,
+            tree: *Tree,
             defmgr: *const amp.DefMgr,
 
             update_count: u64 = 0,
@@ -240,8 +240,13 @@ pub const Forest = struct {
                 for (n.org_amps.items) |org| {
                     const def = org.ix.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
-                        const def_node = my.tree.cget(location.node_id) catch continue;
-                        try my.inject_metadata(def_node, n);
+                        if (org.is_dependency) {
+                            const def_node = my.tree.get(location.node_id) catch continue;
+                            try my.inject_metadata(n, def_node);
+                        } else {
+                            const def_node = my.tree.cget(location.node_id) catch continue;
+                            try my.inject_metadata(def_node, n);
+                        }
                     }
                 }
 
@@ -418,7 +423,7 @@ pub const Forest = struct {
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                     if (try my.defmgr.resolve(&path, grove_id)) |defix| {
-                                        const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols } };
+                                        const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
                                         try n.org_amps.append(my.env.a, def);
 
                                         if (my.is_new_file and n.type == .Paragraph) {
