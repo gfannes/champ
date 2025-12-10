@@ -50,6 +50,7 @@ pub const App = struct {
 
     config_loader: ?cfg.file.Loader = null,
     config: cfg.file.Config = .{},
+    fui: cfg.file.Fui = .{},
 
     maybe_forest: ?mero.Forest = null,
 
@@ -106,7 +107,7 @@ pub const App = struct {
         // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
         const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
-        const ret = try cfg_loader.loadFromFile(config_fp);
+        const ret = try cfg_loader.loadFromFile(config_fp, .Config);
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
 
@@ -127,6 +128,7 @@ pub const App = struct {
                     var obj = Lsp{
                         .env = self.env,
                         .config = &self.config,
+                        .fui = &self.fui,
                         .cli_args = &self.cli_args,
                     };
                     try obj.init();

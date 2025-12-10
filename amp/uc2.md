@@ -2,7 +2,7 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
-- [*] Create FUI to configure `plan` in LSP
+- [/] Create FUI to configure `plan` in LSP
 	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org
 
 - [ ] Support wikilinks

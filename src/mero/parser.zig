@@ -788,7 +788,7 @@ test "Parser.parse()" {
         n.content = try aa.dupe(u8, scn.content);
         n.language = scn.language;
 
-        var parser = try Parser.init(f.id, &tree, ut.allocator);
+        var parser = try Parser.init(ut.allocator, f.id, &tree);
 
         try parser.parse();
     }

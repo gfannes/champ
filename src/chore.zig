@@ -240,13 +240,13 @@ test "chore" {
     defer tree.deinit();
 
     const ch0 = try tree.addChild(null);
-    ch0.data.* = mero.Node.init(env.a);
+    ch0.data.* = mero.Node{ .a = env.a };
 
     const ch1 = try tree.addChild(null);
-    ch1.data.* = mero.Node.init(env.a);
+    ch1.data.* = mero.Node{ .a = env.a };
 
     const ch2 = try tree.addChild(null);
-    ch2.data.* = mero.Node.init(env.a);
+    ch2.data.* = mero.Node{ .a = env.a };
 
     _ = try cl.add(0, &tree);
     _ = try cl.add(1, &tree);

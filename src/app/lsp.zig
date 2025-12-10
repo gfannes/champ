@@ -30,6 +30,7 @@ pub const Lsp = struct {
 
     env: Env,
     config: *const cfg.file.Config,
+    fui: *const cfg.file.Fui,
     cli_args: *const cfg.cli.Args,
 
     forest_pp: ForestPP = undefined,
@@ -503,8 +504,14 @@ pub const ForestPP = struct {
             // &todo: Replace hardcoded HOME folder
             // &:zig:build:info Couple filename with build.zig.zon#name
             const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
-            if (try self.config_loader.loadFromFile(config_fp)) {
+            if (try self.config_loader.loadFromFile(config_fp, .Config)) {
                 std.debug.print("Found new config\n", .{});
+                reload = true;
+            }
+
+            const fui_config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/fui.zon" else "/home/geertf/.config/champ/fui.zon";
+            if (try self.config_loader.loadFromFile(fui_config_fp, .Fui)) {
+                std.debug.print("Found new fui\n", .{});
                 reload = true;
             }
 
