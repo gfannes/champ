@@ -177,7 +177,18 @@ pub const Lsp = struct {
                     defer plan.deinit();
                     const prio = Prio.max(.Week);
                     _ = prio;
-                    try plan.call(null, &.{}, false);
+
+                    var loader = try cfg.file.Loader.init(self.env);
+                    defer loader.deinit();
+                    const fui_config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/fui.zon" else "/home/geertf/.config/champ/fui.zon";
+                    if (loader.loadFromFile(fui_config_fp, .Fui)) |_| {
+                        std.debug.print("Found new fui\n", .{});
+                    } else |err| {
+                        std.debug.print("Failed to load fui: {}", .{err});
+                    }
+                    const query_input = if (loader.fui != null and loader.fui.?.extra != null) loader.fui.?.extra.? else &.{};
+
+                    try plan.call(null, query_input, false);
 
                     var locations = std.ArrayList(dto.Location){};
                     for (plan.segments.items) |segment| {
@@ -506,12 +517,6 @@ pub const ForestPP = struct {
             const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
             if (try self.config_loader.loadFromFile(config_fp, .Config)) {
                 std.debug.print("Found new config\n", .{});
-                reload = true;
-            }
-
-            const fui_config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/fui.zon" else "/home/geertf/.config/champ/fui.zon";
-            if (try self.config_loader.loadFromFile(fui_config_fp, .Fui)) {
-                std.debug.print("Found new fui\n", .{});
                 reload = true;
             }
 

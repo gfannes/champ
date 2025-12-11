@@ -38,7 +38,7 @@ pub const Plan = struct {
         self.all_entries.deinit(self.env.a);
     }
 
-    pub fn call(self: *Self, prio_threshold: ?Prio, query_input: [][]const u8, reverse: bool) !void {
+    pub fn call(self: *Self, prio_threshold: ?Prio, query_input: []const []const u8, reverse: bool) !void {
         const today = try rubr.datex.Date.today();
 
         var query = qry.Query{ .a = self.env.a };
