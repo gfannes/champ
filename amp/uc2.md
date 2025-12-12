@@ -5,6 +5,10 @@ Support planning items on a timeline and finding the next item to work-on.
 - [/] Create FUI to configure `plan` in LSP
 	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org
 
+- [ ] Do not show File nodes in LSP references
+- [ ] Supports completion for full amp.Paths, not only Parts
+	- Maybe sort by date, if any
+
 - [ ] Support wikilinks
 - [x] Print plan in color depending on prio
 - [x] Use `s` to break prio ties
