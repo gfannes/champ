@@ -534,8 +534,10 @@ pub const Forest = struct {
                         var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
                         defer def_ap.deinit();
                         if (def_ap.is_definition) {
-                            if (n.def != null)
+                            if (n.def != null) {
+                                try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, def_ap });
                                 return error.OnlyOneDefAllowed;
+                            }
                             // Make the def amp absolute, if necessary
                             if (!def_ap.is_absolute) {
                                 var child_id = entry.id;

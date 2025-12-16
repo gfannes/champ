@@ -153,3 +153,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
         e.write(&n);
     }
 }
+
+pub fn get(self: Self, ix: Def.Ix) ?*const Def {
+    return ix.cget(self.defs.items);
+}
