@@ -83,6 +83,8 @@ pub const Lsp = struct {
                             .implementationProvider = true,
                             .typeDefinitionProvider = true,
                             .referencesProvider = true,
+                            .codeActionProvider = true,
+                            .executeCommandProvider = .{ .commands = &.{"extract"} },
                             .workspace = dto.ServerCapabilities.Workspace{
                                 .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
                                     .supported = true,
@@ -370,6 +372,11 @@ pub const Lsp = struct {
                     const size = @min(workspace_symbols.items.len, self.config.lsp.max_array_size);
 
                     try server.send(workspace_symbols.items[0..size]);
+                } else if (request.is("textDocument/codeAction")) {
+                    const commands = [_]rubr.lsp.dto.Command{ .{ .title = "abc", .command = "abc", .arguments = &.{ "a", "b", "c" } }, .{ .title = "def", .command = "def", .arguments = &.{ "d", "e", "f" } } };
+                    try server.send(&commands);
+                } else if (request.is("workspace/executeCommand")) {
+                    try server.send(null);
                 } else {
                     try self.env.log.warning("Unhandled request '{s}'\n", .{request.method});
                 }
