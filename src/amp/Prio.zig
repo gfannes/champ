@@ -88,7 +88,7 @@ test "amp.Prio" {
 
     for (scns) |scn| {
         std.debug.print("[Scn](str:{s})\n", .{scn.str});
-        if (parse(scn.str)) |act| {
+        if (parse(scn.str, .{})) |act| {
             try ut.expect(scn.exp != null);
             const exp = scn.exp.?;
             try ut.expect(act.endof == exp.endof);

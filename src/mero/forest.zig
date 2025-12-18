@@ -9,7 +9,6 @@ const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const chore = @import("../chore.zig");
 const filex = @import("../filex.zig");
-const Chores = @import("../chore.zig").Chores;
 
 const rubr = @import("rubr");
 const Env = rubr.Env;
@@ -33,7 +32,7 @@ pub const Forest = struct {
     valid: bool = false,
     tree: Tree = undefined,
     defmgr: amp.DefMgr = undefined,
-    chores: Chores = undefined,
+    chores: chore.Chores = undefined,
 
     pub fn init(self: *Self) void {
         // &perf: Using a FBA works a bit faster.
@@ -47,10 +46,8 @@ pub const Forest = struct {
         // }
         self.aral = std.heap.ArenaAllocator.init(self.env.a);
         self.tree = Tree.init(self.env.a);
-        self.defmgr = .{ .env = self.env, .phony_prefix = "?" };
-        self.defmgr.init();
-        self.chores = .{ .env = self.env };
-        self.chores.init();
+        self.defmgr = amp.DefMgr.init(self.env, "?");
+        self.chores = chore.Chores.init(self.env);
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
@@ -349,7 +346,7 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
-            chores: *Chores,
+            chores: *chore.Chores,
             tree: *const Tree,
             defmgr: *const amp.DefMgr,
 
@@ -559,7 +556,7 @@ pub const Forest = struct {
                                     try def_ap.prepend(parent_def);
                                     def_ap.is_definition = true;
                                 } else {
-                                    try my.env.log.warning("Could not find parent def for non-absolute '{f}', making it absolute as it is\n", .{def_ap});
+                                    try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ def_ap, my.path });
                                     def_ap.is_absolute = true;
                                 }
                             }

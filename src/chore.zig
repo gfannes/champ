@@ -4,7 +4,6 @@ const amp = @import("amp.zig");
 
 const rubr = @import("rubr");
 const naft = rubr.naft;
-const Env = rubr.Env;
 
 const mero = @import("mero.zig");
 const filex = @import("filex.zig");
@@ -125,21 +124,25 @@ pub const Chores = struct {
     const List = std.ArrayList(Chore);
     const TmpConcat = std.ArrayList([]const u8);
 
-    env: Env,
+    env: rubr.Env,
+    aral: std.heap.ArenaAllocator,
 
-    aral: std.heap.ArenaAllocator = undefined,
     list: List = .{},
 
     tmp_concat: TmpConcat = .{},
 
-    pub fn init(self: *Self) void {
-        self.aral = std.heap.ArenaAllocator.init(self.env.a);
+    pub fn init(env: rubr.Env) Self {
+        return .{
+            .env = env,
+            .aral = std.heap.ArenaAllocator.init(env.a),
+        };
     }
     pub fn deinit(self: *Self) void {
         self.aral.deinit();
     }
 
     // Returns true if tree[node_id] is an actual Chore and was thus added
+    // defmgr is needed to lookup the amp.Path
     pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree, defmgr: amp.DefMgr) !bool {
         const node = tree.cptr(node_id);
 
@@ -226,18 +229,20 @@ pub const Chores = struct {
 };
 
 test "chore" {
-    var env_inst = Env.Instance{};
+    var env_inst = rubr.Env.Instance{};
     env_inst.init();
     defer env_inst.deinit();
 
     const env = env_inst.env();
 
-    var cl = Chores{ .env = env };
-    cl.init();
-    defer cl.deinit();
+    var chores = Chores.init(env);
+    defer chores.deinit();
 
     var tree = mero.Tree.init(env.a);
     defer tree.deinit();
+
+    var defmgr = amp.DefMgr.init(env, "?");
+    defer defmgr.deinit();
 
     const ch0 = try tree.addChild(null);
     ch0.data.* = mero.Node{ .a = env.a };
@@ -248,7 +253,7 @@ test "chore" {
     const ch2 = try tree.addChild(null);
     ch2.data.* = mero.Node{ .a = env.a };
 
-    _ = try cl.add(0, &tree);
-    _ = try cl.add(1, &tree);
-    _ = try cl.add(2, &tree);
+    _ = try chores.add(0, &tree, defmgr);
+    _ = try chores.add(1, &tree, defmgr);
+    _ = try chores.add(2, &tree, defmgr);
 }

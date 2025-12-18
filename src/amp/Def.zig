@@ -1,3 +1,4 @@
+const std = @import("std");
 const rubr = @import("rubr");
 const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
@@ -32,4 +33,9 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
         n.attr("cols.begin", loc.pos.cols.begin);
         n.attr("cols.end", loc.pos.cols.end);
     }
+}
+pub fn format(self: Self, w: *std.Io.Writer) !void {
+    var r = rubr.naft.Node.root(w);
+    defer r.deinit();
+    self.write(&r);
 }

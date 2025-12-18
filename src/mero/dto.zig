@@ -4,7 +4,7 @@ const tkn = @import("../tkn.zig");
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
-const Parser = @import("parser.zig").Parser;
+const Parser = @import("Parser.zig");
 const chore = @import("../chore.zig");
 const filex = @import("../filex.zig");
 
@@ -47,8 +47,13 @@ pub const Term = struct {
         var n = parent.node("Term");
         defer n.deinit();
         n.attr("kind", self.kind);
-        if (self.kind != Kind.Newline)
+        if (self.kind != .Newline)
             n.attr("word", self.word);
+    }
+    pub fn format(self: Self, w: *std.Io.Writer) !void {
+        var n = naft.Node.root(w);
+        defer n.deinit();
+        self.write(&n);
     }
 };
 
@@ -124,6 +129,19 @@ pub const Node = struct {
         for (self.terms.items) |*item|
             item.deinit();
         self.terms.deinit(self.a);
+    }
+
+    pub fn write(self: Self, parent: *naft.Node) void {
+        var n = parent.node("dto.Node");
+        defer n.deinit();
+        n.attr("type", self.type);
+        n.attr("content", self.content);
+        self.content_rows.write(&n, "rows");
+        self.content_cols.write(&n, "cols");
+        self.line.terms_ixr.write(&n, "line");
+        for (self.terms.items) |term| {
+            term.write(&n);
+        }
     }
 };
 

@@ -4,7 +4,6 @@ pub const Term = dto.Term;
 pub const Node = dto.Node;
 pub const Tree = dto.Tree;
 
-const parser = @import("mero/parser.zig");
-pub const Parser = parser.Parser;
+pub const Parser = @import("mero/Parser.zig");
 
 pub const Forest = @import("mero/forest.zig").Forest;

@@ -10,15 +10,19 @@ const Defs = std.ArrayList(Def);
 const TmpConcat = std.ArrayList([]const u8);
 
 env: rubr.Env,
+aral: std.heap.ArenaAllocator,
 phony_prefix: []const u8,
 
-aral: std.heap.ArenaAllocator = undefined,
 defs: Defs = .{},
 
 tmp_concat: TmpConcat = .{},
 
-pub fn init(self: *Self) void {
-    self.aral = std.heap.ArenaAllocator.init(self.env.a);
+pub fn init(env: rubr.Env, phony_prefix: []const u8) Self {
+    return .{
+        .env = env,
+        .aral = std.heap.ArenaAllocator.init(env.a),
+        .phony_prefix = phony_prefix,
+    };
 }
 pub fn deinit(self: *Self) void {
     self.aral.deinit();
@@ -38,8 +42,8 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
             return other.ap.isFit(my.needle.*) and my.grove_id == other_grove_id;
         }
     }{ .needle = &def_ap, .grove_id = grove_id };
-    if (rubr.algo.anyOf(Def, self.defs.items, check_fit)) {
-        try self.env.log.warning("Definition '{f}' is already present in Grove {}.\n", .{ def_ap, grove_id });
+    if (rubr.algo.indexOfFirst(Def, self.defs.items, check_fit)) |ix| {
+        try self.env.log.warning("Definition '{f}' from '{s}' is already present in Grove {}: {f}.\n", .{ def_ap, path, grove_id, self.defs.items[ix] });
         return null;
     }
 
@@ -88,7 +92,7 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
                     if (!is_ambiguous) {
                         // This is the first ambiguous match we find: report the initial match as well
                         const d = match.ix.ptr(self.defs.items);
-                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ ap, def.ap, d.ap });
+                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ ap, def, d });
                     }
                     is_ambiguous = true;
                 }

@@ -36,7 +36,22 @@ pub fn lower(self: Self) []const u8 {
     return lowers[@intFromEnum(self.kind)];
 }
 
-test "amp.Status" {
+test "amp.Status.fromLower" {
     const ut = std.testing;
-    try ut.expect(false);
+    try ut.expectEqual(Self{ .kind = .Todo }, fromLower("todo"));
+    try ut.expectEqual(Self{ .kind = .Canceled }, fromLower("canceled"));
+    try ut.expectEqual(null, fromLower("TODO"));
+    try ut.expectEqual(null, fromLower("CANCELED"));
+}
+test "amp.Status.fromCapital" {
+    const ut = std.testing;
+    try ut.expectEqual(Self{ .kind = .Todo }, fromCapital("TODO"));
+    try ut.expectEqual(Self{ .kind = .Canceled }, fromCapital("CANCELED"));
+    try ut.expectEqual(null, fromCapital("todo"));
+    try ut.expectEqual(null, fromCapital("canceled"));
+}
+test "amp.Status.lower" {
+    const ut = std.testing;
+    try ut.expectEqualStrings("todo", lower(.{ .kind = .Todo }));
+    try ut.expectEqualStrings("canceled", lower(.{ .kind = .Canceled }));
 }

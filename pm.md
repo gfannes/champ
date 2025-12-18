@@ -12,13 +12,13 @@ Can be directly executed
 Non-exclusive
 
 
-## Prio &&:prio:~priority 
+## Prio &&:p:~prio
+
+
+## Start time &&:s:~date
 
 
 ## Effort &&:effort:~duration
-
-
-## Deadline &&:deadline:~date
 
 
 ## Type &&:type
