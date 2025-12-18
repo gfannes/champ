@@ -548,10 +548,8 @@ fn pop_md_code_term(self: *Self) ?Term {
 
         var code = Term{ .word = first_token.word, .kind = .Code };
         self.tokenizer.commit_peek();
-        std.debug.print("Started backtick {}\n", .{first_token.word.len});
 
         while (self.tokenizer.next()) |token| {
-            std.debug.print("  adding '{s}'\n", .{token.word});
             code.word.len += token.word.len;
 
             if (token.symbol == first_token.symbol and token.word.len == first_token.word.len)
@@ -775,36 +773,36 @@ test "mero.Parser.parse()" {
 
     const Scn = struct { content: []const u8, language: Language };
     for (&[_]Scn{
-        // .{
-        //     .content =
-        //     \\# Title1
-        //     \\
-        //     \\## Section
-        //     \\
-        //     \\Line
-        //     \\- Bullet
-        //     \\# Title2
-        //     \\Line
-        //     \\# Title3
-        //     \\ - Bullet
-        //     \\Line
-        //     \\# Title 4
-        //     \\- b
-        //     \\ - bb
-        //     \\- c
-        //     ,
-        //     .language = .Markdown,
-        // },
-        // .{
-        //     .content =
-        //     \\#include <iostream>
-        //     \\int main(){
-        //     \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
-        //     \\return 0;
-        //     \\}
-        //     ,
-        //     .language = .Cish,
-        // },
+        .{
+            .content =
+            \\# Title1
+            \\
+            \\## Section
+            \\
+            \\Line
+            \\- Bullet
+            \\# Title2
+            \\Line
+            \\# Title3
+            \\ - Bullet
+            \\Line
+            \\# Title 4
+            \\- b
+            \\ - bb
+            \\- c
+            ,
+            .language = .Markdown,
+        },
+        .{
+            .content =
+            \\#include <iostream>
+            \\int main(){
+            \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
+            \\return 0;
+            \\}
+            ,
+            .language = .Cish,
+        },
         .{
             .content =
             \\- [ ] &t1
