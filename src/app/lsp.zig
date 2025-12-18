@@ -19,6 +19,7 @@ pub const Error = error{
     ExpectedQuery,
     ExpectedTextDocument,
     ExpectedContext,
+    ExpectedCommand,
     UnexpectedFilenameFormat,
     ExpectedPosition,
     CouldNotLoadConfig,
@@ -84,7 +85,7 @@ pub const Lsp = struct {
                             .typeDefinitionProvider = true,
                             .referencesProvider = true,
                             .codeActionProvider = true,
-                            .executeCommandProvider = .{ .commands = &.{"extract"} },
+                            .executeCommandProvider = .{ .commands = &.{ "reload", "extract" } },
                             .workspace = dto.ServerCapabilities.Workspace{
                                 .workspaceFolders = dto.ServerCapabilities.Workspace.WorkspaceFolders{
                                     .supported = true,
@@ -373,9 +374,15 @@ pub const Lsp = struct {
 
                     try server.send(workspace_symbols.items[0..size]);
                 } else if (request.is("textDocument/codeAction")) {
-                    const commands = [_]rubr.lsp.dto.Command{ .{ .title = "abc", .command = "abc", .arguments = &.{ "a", "b", "c" } }, .{ .title = "def", .command = "def", .arguments = &.{ "d", "e", "f" } } };
+                    const commands = [_]rubr.lsp.dto.Command{.{ .title = "reload", .command = "reload" }};
                     try server.send(&commands);
                 } else if (request.is("workspace/executeCommand")) {
+                    const params = request.params orelse return error.ExpectedParams;
+                    const command = params.command orelse return error.ExpectedCommand;
+                    if (std.mem.eql(u8, command, "reload")) {
+                        // Force a reload, but do not wait for it
+                        self.forest_pp.reload_counter = 0;
+                    }
                     try server.send(null);
                 } else {
                     try self.env.log.warning("Unhandled request '{s}'\n", .{request.method});
