@@ -106,7 +106,11 @@ pub const App = struct {
 
         // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
-        const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
+        const config_fp = switch (builtin.os.tag) {
+            .macos => "/Users/geertf/.config/champ/config.zon",
+            .windows => "C:/Users/geertf/.config/champ/config.zon",
+            else => "/home/geertf/.config/champ/config.zon",
+        };
         const ret = try cfg_loader.loadFromFile(config_fp, .Config);
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;

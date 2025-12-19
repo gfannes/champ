@@ -528,7 +528,11 @@ pub const ForestPP = struct {
 
             // &todo: Replace hardcoded HOME folder
             // &:zig:build:info Couple filename with build.zig.zon#name
-            const config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/config.zon" else "/home/geertf/.config/champ/config.zon";
+            const config_fp = switch (builtin.os.tag) {
+                .macos => "/Users/geertf/.config/champ/config.zon",
+                .windows => "C:/Users/geertf/.config/champ/config.zon",
+                else => "/home/geertf/.config/champ/config.zon",
+            };
             if (try self.config_loader.loadFromFile(config_fp, .Config)) {
                 std.debug.print("Found new config\n", .{});
                 reload = true;
