@@ -149,6 +149,9 @@ pub const Chores = struct {
         if (rubr.slc.is_empty(node.org_amps.items))
             // This is not a Chore
             return false;
+        if (node.type == .File)
+            // Skip Files
+            return false;
 
         const aa = self.aral.allocator();
 

@@ -1,8 +1,10 @@
 # Ampersand Metadata Protocol (AMP) &&:amp
 
-## Interpret AMP on first Node as AMP for Tree &todo &a0
+## DONE Interpret AMP on first Node as AMP for Tree
+- All metadata placed on the first line of a file (a markdown paragraph) applies to the complete file
+- All metadata placed in `_amp.md` applies to the folder, recursively
 
-## Set ~date from filename &todo &b3
+## DONE Set ~date from filename
 - For `daily/YYYY-MM-DD.md` format
 
 ## Specification &&spec
@@ -29,9 +31,6 @@
 	- `&todo` matches with both `&todo` and `&todo:status`
 	- How can we represent an absolute path? #todo/status/!
 	- Less intuitive
-- [ ] Test use of `#` iso `&`
-	- Has some support in Obsidian, but this means we can only use `/` or `-` as Path separator
-	- Better to develop a custom Obsidion plugin?
 
 ## Support pesistent project enumeration
 - Config file
@@ -72,17 +71,16 @@
 - A Tree that is used by another Node
 	- How to express this Node? Or only allow Tree -> Tree dependencies in this case?
 
-## Support nested projects &a0
-- Support proj statement that does not append to the curret proj path, but resolves into an existing one
-- `&:abs` and `&rel`
-- Prune context from items with a direct match in org, on a match with org.parent() &todo
+## DONE Support nested projects
+- Support proj statement that does not append to the current proj path, but resolves into an existing one
+	- Use of absolute and relative definitions
+	- `&:abs` and `&rel`
 
-## Support colored output &a1
+## DONE Support colored output
 - Depending on prio
 
-## &tbd Discriminate between AMP data and commented-out code
-- Only allow AMP at the start of a comment for SourceCode?
-- Check for parenthesis nesting? => cannot handle commented-out variable definitions
+## Discriminate between AMP data and commented-out code
+- Only allow AMP at the start of a comment for SourceCode
 
 ## Support AMP links
 - `&[[title]]`

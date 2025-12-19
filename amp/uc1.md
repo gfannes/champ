@@ -1,4 +1,4 @@
-&&uc1 &s:202509
+&&uc1 &202509 &c1
 
 Support collecting, finding and walking information.
 

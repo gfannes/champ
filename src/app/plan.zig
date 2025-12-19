@@ -17,7 +17,7 @@ pub const Plan = struct {
         path: []const u8,
         content: []const u8,
         amps: []const u8,
-        date: Date,
+        date: ?Date,
         prio: ?Prio,
         rows: rubr.idx.Range,
         cols: rubr.idx.Range,
@@ -57,40 +57,46 @@ pub const Plan = struct {
                 else => continue,
             }
 
-            // Check that its start date is before today
-            const start_value = chore.value("s", .Any) orelse continue;
-            const start_date = start_value.date orelse continue;
-            if (start_date.date.epoch_day.day > today.epoch_day.day)
-                continue;
-
+            // Check prio
             const myprio: ?Prio = if (chore.value("p", .Any)) |value|
                 value.prio
             else
                 null;
-
             if (Prio.order(prio_threshold, myprio) == .lt)
                 continue;
 
+            // Check correspondance with provided query
             const distance = query.distance(chore) orelse continue;
             if (distance > 1.0)
                 continue;
 
-            // Skip files
-            const n = try self.forest.tree.cget(chore.node_id);
-            if (n.type == .File)
-                continue;
+            // Check that its start date is before today, if any
+            const date = if (chore.value("s", .Any)) |start_value| ret: {
+                if (start_value.date) |start_date| {
+                    if (start_date.date.epoch_day.day > today.epoch_day.day)
+                        continue;
+                    break :ret start_date;
+                } else {
+                    try self.env.log.warning("Expected a valid date\n", .{});
+                    continue;
+                }
+            } else null;
+
+            const n = self.forest.tree.cptr(chore.node_id);
+
+            const entry = Entry{
+                .path = n.path,
+                .content = n.content,
+                .amps = chore.str,
+                .date = date,
+                .prio = myprio,
+                .rows = n.content_rows,
+                .cols = n.content_cols,
+            };
 
             try self.all_entries.append(
                 self.env.a,
-                Entry{
-                    .path = n.path,
-                    .content = n.content,
-                    .amps = chore.str,
-                    .date = start_date,
-                    .prio = myprio,
-                    .rows = n.content_rows,
-                    .cols = n.content_cols,
-                },
+                entry,
             );
         }
 
@@ -133,12 +139,12 @@ pub const Plan = struct {
                 var entry_style = rubr.ansi.Style{ .fg = .{ .color = .White } };
                 if (entry.prio) |prio| {
                     switch (prio.endof) {
-                        .Hour => entry_style.fg.?.color = .Green,
-                        .Day => entry_style.fg.?.color = .Magenta,
-                        .Week => entry_style.fg.?.color = .Yellow,
-                        .Month => entry_style.fg.?.color = .Cyan,
+                        .Hour => entry_style.fg.?.color = .Red,
+                        .Day => entry_style.fg.?.color = .Yellow,
+                        .Week => entry_style.fg.?.color = .Green,
+                        .Month => entry_style.fg.?.color = .Magenta,
                         .Quarter => entry_style.fg.?.color = .Blue,
-                        else => {},
+                        .Year => entry_style.fg.?.color = .Cyan,
                     }
                     if (prio.index == 0) {
                         entry_style.fg.?.intense = true;
