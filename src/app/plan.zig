@@ -53,7 +53,7 @@ pub const Plan = struct {
             const status_value = chore.value("status", .Org) orelse continue;
             const status = status_value.status orelse continue;
             switch (status.kind) {
-                .Todo, .Wip, .Next => {},
+                .Todo, .Wip, .Next, .Blocked, .Question => {},
                 else => continue,
             }
 

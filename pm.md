@@ -8,9 +8,6 @@ Most agile projects should use only 3 statuses: `todo`, `wip` and `done`. All ot
 ### Next
 Can be directly executed
 
-### Blocked &&blocked
-Non-exclusive
-
 
 ## Prio &&:p:~prio
 

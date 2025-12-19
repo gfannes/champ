@@ -15,7 +15,8 @@ pub const Query = struct {
         wip: bool = false,
         canceled: bool = false,
         question: bool = false,
-        callout: bool = false,
+        info: bool = false,
+        blocked: bool = false,
         forward: bool = false,
 
         pub fn set(my: *My, val: bool) void {
@@ -66,8 +67,11 @@ pub const Query = struct {
                 } else if (strange.popChar('-')) {
                     self.include.canceled = true;
                     self.only_status = true;
+                } else if (strange.popChar('i')) {
+                    self.include.info = true;
+                    self.only_status = true;
                 } else if (strange.popChar('!')) {
-                    self.include.callout = true;
+                    self.include.blocked = true;
                     self.only_status = true;
                 } else if (strange.popChar('?')) {
                     self.include.question = true;
@@ -101,8 +105,10 @@ pub const Query = struct {
                     break :block self.include.wip;
                 if (std.mem.eql(u8, last, "next"))
                     break :block self.include.next;
-                if (std.mem.eql(u8, last, "callout"))
-                    break :block self.include.callout;
+                if (std.mem.eql(u8, last, "info"))
+                    break :block self.include.info;
+                if (std.mem.eql(u8, last, "blocked"))
+                    break :block self.include.blocked;
                 if (std.mem.eql(u8, last, "question"))
                     break :block self.include.question;
                 if (std.mem.eql(u8, last, "forward"))
