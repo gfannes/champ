@@ -7,6 +7,10 @@ Support planning items on a timeline and finding the next item to work-on.
 
 - [ ] Support def of full amp path `&&v2:espcap` and `&&v3:espcap`
 
+- [ ] Support specifying an offset on a date or shifting existing dates &a
+	- Date in filename is difficult to change, we need support to start this chore a bit more early
+	- Support shifting all dates via CLI
+
 - [ ] Do not show File nodes in LSP references
 - [ ] Supports completion for full amp.Paths, not only Parts
 	- Maybe sort by date, if any
