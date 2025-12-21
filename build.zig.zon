@@ -1,4 +1,4 @@
-// &&:zig:build:info &someday Expose this info once zig supports it
+// &&:zig:build:md &someday Expose this metadata once zig supports it
 .{
     // This is the default name used by packages depending on this one. For
     // example, when a user runs `zig fetch --save <url>`, this field is used
