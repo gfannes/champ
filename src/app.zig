@@ -56,6 +56,7 @@ pub const App = struct {
 
     // Instance should not be moved after init()
     pub fn init(self: *Self, os_init: std.process.Init) !void {
+        self.env_inst.environ = os_init.minimal.environ;
         self.env_inst.init();
         self.env = self.env_inst.env();
 
