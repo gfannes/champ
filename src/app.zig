@@ -39,7 +39,7 @@ pub const App = struct {
     env: Env = undefined,
 
     buffer: [1024]u8 = undefined,
-    stdoutw: std.fs.File.Writer = undefined,
+    stdoutw: std.Io.File.Writer = undefined,
     witf: *std.Io.Writer = undefined,
 
     // gpa: 1075ms
@@ -55,15 +55,15 @@ pub const App = struct {
     maybe_forest: ?mero.Forest = null,
 
     // Instance should not be moved after init()
-    pub fn init(self: *Self) !void {
+    pub fn init(self: *Self, os_init: std.process.Init) !void {
         self.env_inst.init();
         self.env = self.env_inst.env();
 
-        self.stdoutw = std.fs.File.stdout().writer(&self.buffer);
+        self.stdoutw = std.Io.File.stdout().writer(self.env.io, &self.buffer);
         self.witf = &self.stdoutw.interface;
 
         self.cli_args = .{ .env = self.env };
-        try self.cli_args.init();
+        try self.cli_args.init(os_init.minimal.args);
     }
     pub fn deinit(self: *Self) void {
         if (self.maybe_forest) |*forest|

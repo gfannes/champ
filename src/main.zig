@@ -1,9 +1,9 @@
 const std = @import("std");
 const app = @import("app.zig");
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var my_app = app.App{};
-    try my_app.init();
+    try my_app.init(init);
     defer my_app.deinit();
 
     try my_app.parseOptions();

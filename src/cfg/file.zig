@@ -58,8 +58,8 @@ pub const Loader = struct {
     }
 
     pub fn loadFromFile(self: *Self, filename: []const u8, what: What) !bool {
-        var file = try std.fs.openFileAbsolute(filename, .{});
-        defer file.close();
+        var file = try std.Io.Dir.openFileAbsolute(self.env.io, filename, .{});
+        defer file.close(self.env.io);
 
         // For some reason, std.zon.parse.fromSliceAlloc() expects a sentinel string
         var readbuf: [1024]u8 = undefined;

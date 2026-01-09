@@ -45,7 +45,7 @@ pub const Perf = struct {
                 byte_count: usize = 0,
                 token_count: usize = 0,
 
-                pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+                pub fn call(my: *Cb, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
                     if (kind != walker.Kind.File)
                         return;
 
@@ -59,10 +59,10 @@ pub const Perf = struct {
                             return;
                     }
 
-                    const file = try dir.openFile(name, .{});
-                    defer file.close();
+                    const file = try dir.openFile(my.env.io, name, .{});
+                    defer file.close(my.env.io);
 
-                    const stat = try file.stat();
+                    const stat = try file.stat(my.env.io);
 
                     const size_is_ok = if (my.grove.max_size) |max_size| stat.size < max_size else true;
                     if (!size_is_ok)
@@ -122,8 +122,8 @@ pub const Perf = struct {
                 }
             }{ .env = self.env, .outer = &self, .grove = &grove, .content = &content };
 
-            var dir = try std.fs.openDirAbsolute(grove.path, .{});
-            defer dir.close();
+            var dir = try std.Io.Dir.openDirAbsolute(self.env.io, grove.path, .{});
+            defer dir.close(self.env.io);
             std.debug.print("folder: {s} {}\n", .{ grove.path, dir });
 
             try w.walk(dir, &cb);

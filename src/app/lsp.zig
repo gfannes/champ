@@ -48,10 +48,10 @@ pub const Lsp = struct {
         try self.env.log.info("Lsp server started {}\n", .{(try std.time.Instant.now()).timestamp});
 
         var readbuf: [1024]u8 = undefined;
-        var cin = std.fs.File.stdin().reader(self.env.io, &readbuf);
+        var cin = std.Io.File.stdin().reader(self.env.io, &readbuf);
 
         var writebuf: [1024]u8 = undefined;
-        var cout = std.fs.File.stdout().writer(&writebuf);
+        var cout = std.Io.File.stdout().writer(self.env.io, &writebuf);
 
         var server = lsp.Server.init(&cin.interface, &cout.interface, self.env.log.writer(), self.env.a);
         defer server.deinit();
@@ -114,7 +114,7 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
 
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
-                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
                     // Find Amp corresponding to this src_filename and position
                     var maybe_ap: ?amp.Path = null;
@@ -171,7 +171,7 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
 
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
-                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
                     var plan = Plan{
                         .env = self.env,
@@ -223,7 +223,7 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
 
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
-                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa);
+                    const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
                     // Find Amp
                     var maybe_ap: ?amp.Path = null;
@@ -272,7 +272,7 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
 
                     var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
-                    const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa);
+                    const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa, self.env.io);
 
                     var document_symbols = std.ArrayList(dto.DocumentSymbol){};
 
@@ -405,7 +405,7 @@ pub const Lsp = struct {
     }
 
     // Converts a URI with format 'file:///home/geertf/a%20b.md' into '/home/geert/a b.md'
-    fn uriToPath_(uri: []const u8, buf: *[std.fs.max_path_bytes]u8, a: std.mem.Allocator) ![]const u8 {
+    fn uriToPath_(uri: []const u8, buf: *[std.fs.max_path_bytes]u8, a: std.mem.Allocator, io: std.Io) ![]const u8 {
         const prefix = "file://";
 
         if (!std.mem.startsWith(u8, uri, prefix))
@@ -418,7 +418,8 @@ pub const Lsp = struct {
 
         _ = std.mem.replace(u8, uri[prefix.len..], "%20", " ", b);
 
-        return try std.fs.realpath(b, buf);
+        const len = try std.Io.Dir.realPathFileAbsolute(io, b, buf);
+        return buf[0..len];
     }
     fn pathToUri_(path: []const u8, a: std.mem.Allocator) ![]const u8 {
         const prefix = "file://";

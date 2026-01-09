@@ -2,8 +2,15 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+- [ ] Interpret a lowercase sentence as a todo
+	- Start after leesteken or newline
+	- Contains a capitalized word (not loud or camelcase)
+	- One or more words (verb) with lowercase?
+		- 'check how to Run a command' or 'howto Run a command'
 - [/] Create FUI to configure `plan` in LSP
 	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org
+
+- [ ] Chores with org prio without status nor subchores with status should become a todo
 
 - [ ] Support def of full amp path `&&v2:espcap` and `&&v3:espcap`
 

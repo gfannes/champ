@@ -109,8 +109,8 @@ pub const Forest = struct {
         var cb = Cb.init(self.env, self.aral.allocator(), cfg_grove, &self.tree);
         defer cb.deinit();
 
-        var dir = try std.fs.openDirAbsolute(cfg_grove.path, .{});
-        defer dir.close();
+        var dir = try std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.path, .{});
+        defer dir.close(self.env.io);
 
         var w = walker.Walker{ .env = self.env };
         defer w.deinit();
@@ -140,7 +140,7 @@ pub const Forest = struct {
             my.node_stack.deinit(my.env.a);
         }
 
-        pub fn call(my: *Cb, dir: std.fs.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+        pub fn call(my: *Cb, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
             switch (kind) {
                 walker.Kind.Enter => {
                     var name: []const u8 = undefined;
@@ -182,10 +182,10 @@ pub const Forest = struct {
                                 return;
                         my.file_count += 1;
 
-                        const file = try dir.openFile(name, .{});
-                        defer file.close();
+                        const file = try dir.openFile(my.env.io, name, .{});
+                        defer file.close(my.env.io);
 
-                        const stat = try file.stat();
+                        const stat = try file.stat(my.env.io);
                         const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
                         if (!size_is_ok)
                             return;

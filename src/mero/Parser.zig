@@ -745,7 +745,7 @@ fn is_amp_start(maybe_past: ?tkn.Token, t: tkn.Token) bool {
     return t.symbol == .Ampersand;
 }
 fn is_amp_body(t: tkn.Token) bool {
-    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde;
+    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde or t.symbol == .Minus;
 }
 fn is_whitespace(t: tkn.Token) bool {
     return t.symbol == .Space;
@@ -773,39 +773,39 @@ test "mero.Parser.parse()" {
 
     const Scn = struct { content: []const u8, language: Language };
     for (&[_]Scn{
+        // .{
+        //     .content =
+        //     \\# Title1
+        //     \\
+        //     \\## Section
+        //     \\
+        //     \\Line
+        //     \\- Bullet
+        //     \\# Title2
+        //     \\Line
+        //     \\# Title3
+        //     \\ - Bullet
+        //     \\Line
+        //     \\# Title 4
+        //     \\- b
+        //     \\ - bb
+        //     \\- c
+        //     ,
+        //     .language = .Markdown,
+        // },
+        // .{
+        //     .content =
+        //     \\#include <iostream>
+        //     \\int main(){
+        //     \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
+        //     \\return 0;
+        //     \\}
+        //     ,
+        //     .language = .Cish,
+        // },
         .{
             .content =
-            \\# Title1
-            \\
-            \\## Section
-            \\
-            \\Line
-            \\- Bullet
-            \\# Title2
-            \\Line
-            \\# Title3
-            \\ - Bullet
-            \\Line
-            \\# Title 4
-            \\- b
-            \\ - bb
-            \\- c
-            ,
-            .language = .Markdown,
-        },
-        .{
-            .content =
-            \\#include <iostream>
-            \\int main(){
-            \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
-            \\return 0;
-            \\}
-            ,
-            .language = .Cish,
-        },
-        .{
-            .content =
-            \\- [ ] &t1
+            \\- [ ] &t1 &2026-01-01
             \\```
             \\aoeuaoue
             \\```
@@ -844,4 +844,6 @@ test "mero.Parser.parse()" {
 
         try tree.dfsAll(true, &cb);
     }
+
+    try ut.expect(false);
 }

@@ -42,9 +42,9 @@ pub const Args = struct {
 
     args: rubr.cli.Args = undefined,
 
-    pub fn init(self: *Self) !void {
+    pub fn init(self: *Self, os_args: std.process.Args) !void {
         self.args = rubr.cli.Args{ .env = self.env };
-        try self.args.setupFromOS();
+        try self.args.setupFromOS(os_args);
 
         self.groves = Strings{};
         self.extra = Strings{};
