@@ -2,17 +2,24 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+<<<<<<< Updated upstream
 - [ ] Interpret a lowercase sentence as a todo
 	- Start after leesteken or newline
 	- Contains a capitalized word (not loud or camelcase)
 	- One or more words (verb) with lowercase?
 		- 'check how to Run a command' or 'howto Run a command'
+=======
+- [ ] When resolving an amp.Path, take the current definition path into account.
+- [ ] Support completion of full amp.Path: complete on `&xtensa:l`
+
+>>>>>>> Stashed changes
 - [/] Create FUI to configure `plan` in LSP
 	- [ ] Support for opening `$HOME/.config/champ/fui.zon` from &org
 
 - [ ] Chores with org prio without status nor subchores with status should become a todo
 
 - [ ] Support def of full amp path `&&v2:espcap` and `&&v3:espcap`
+	- [ ] Support refering to `&v2` iso using `&v2:espcap`
 
 - [ ] Support specifying an offset on a date or shifting existing dates &a
 	- Date in filename is difficult to change, we need support to start this chore a bit more early
