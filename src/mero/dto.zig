@@ -36,6 +36,7 @@ pub const Term = struct {
         Newline,
         Amp,
         Whitespace,
+        Wikilink,
     };
 
     word: []const u8,

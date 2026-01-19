@@ -221,6 +221,11 @@ fn pop_md_text(self: *Self, n: *Node) !void {
             try self.appendToLine(n, formula);
             continue;
         }
+        if (self.pop_md_wikilink_term()) |wikilink| {
+            try text.commit();
+            try self.appendToLine(n, wikilink);
+            continue;
+        }
         if (self.pop_md_comment_start()) |comment_start| {
             std.debug.assert(self.language == Language.Markdown);
 
@@ -386,6 +391,26 @@ fn pop_amp_term(self: *Self) ?Term {
 
             return amp;
         }
+    }
+    return null;
+}
+
+fn pop_md_wikilink_term(self: *Self) ?Term {
+    if (self.tokenizer.peek()) |first_token| {
+        if (first_token.symbol != .OpenSquare or first_token.word.len != 2)
+            return null;
+
+        var wikilink = Term{ .word = first_token.word, .kind = .Wikilink };
+        self.tokenizer.commit_peek();
+
+        while (self.tokenizer.next()) |token| {
+            wikilink.word.len += token.word.len;
+
+            if (token.symbol == .CloseSquare and token.word.len == first_token.word.len)
+                break;
+        }
+
+        return wikilink;
     }
     return null;
 }
@@ -773,36 +798,36 @@ test "mero.Parser.parse()" {
 
     const Scn = struct { content: []const u8, language: Language };
     for (&[_]Scn{
-        // .{
-        //     .content =
-        //     \\# Title1
-        //     \\
-        //     \\## Section
-        //     \\
-        //     \\Line
-        //     \\- Bullet
-        //     \\# Title2
-        //     \\Line
-        //     \\# Title3
-        //     \\ - Bullet
-        //     \\Line
-        //     \\# Title 4
-        //     \\- b
-        //     \\ - bb
-        //     \\- c
-        //     ,
-        //     .language = .Markdown,
-        // },
-        // .{
-        //     .content =
-        //     \\#include <iostream>
-        //     \\int main(){
-        //     \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
-        //     \\return 0;
-        //     \\}
-        //     ,
-        //     .language = .Cish,
-        // },
+        .{
+            .content =
+            \\# Title1
+            \\
+            \\## Section
+            \\
+            \\Line
+            \\- Bullet
+            \\# Title2
+            \\Line
+            \\# Title3
+            \\ - Bullet
+            \\Line
+            \\# Title 4
+            \\- b
+            \\ - bb
+            \\- c
+            ,
+            .language = .Markdown,
+        },
+        .{
+            .content =
+            \\#include <iostream>
+            \\int main(){
+            \\  std::cout << "Hello world." << std::endl; // &todo: place real program here
+            \\return 0;
+            \\}
+            ,
+            .language = .Cish,
+        },
         .{
             .content =
             \\- [ ] &t1 &2026-01-01
@@ -810,6 +835,15 @@ test "mero.Parser.parse()" {
             \\aoeuaoue
             \\```
             \\- [ ] &t2
+            ,
+            .language = .Markdown,
+        },
+        .{
+            .content =
+            \\- [ ] `code` [[Wikilink]]
+            \\```
+            \\aoeuaoue
+            \\```
             ,
             .language = .Markdown,
         },
@@ -844,6 +878,4 @@ test "mero.Parser.parse()" {
 
         try tree.dfsAll(true, &cb);
     }
-
-    try ut.expect(false);
 }
