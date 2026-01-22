@@ -78,7 +78,9 @@ pub fn parse(self: *Self) !void {
         row: usize = 0,
         col: usize = 0,
 
-        pub fn call(my: *My, entry: Tree.Entry) !void {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+            if (!before)
+                return;
             const n = entry.data;
             n.content_rows.begin = my.row;
             n.content_cols.begin = my.col;
@@ -110,7 +112,7 @@ pub fn parse(self: *Self) !void {
             }
         }
     }{ .terms = self.root().terms.items };
-    try self.tree.dfs(self.root_id, true, &cb);
+    try self.tree.dfs(self.root_id, &cb);
 }
 
 fn pop_line(self: *Self) !?Node {
@@ -870,12 +872,14 @@ test "mero.Parser.parse()" {
             fn deinit(my: *@This()) void {
                 my.naft_root.deinit();
             }
-            pub fn call(my: *@This(), entry: dto.Tree.Entry) !void {
+            pub fn call(my: *@This(), entry: dto.Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
                 entry.data.write(&my.naft_root);
             }
         }{ .naft_root = rubr.naft.Node.root(null) };
         defer cb.deinit();
 
-        try tree.dfsAll(true, &cb);
+        try tree.dfsAll(&cb);
     }
 }

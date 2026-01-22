@@ -25,7 +25,9 @@ pub const Export = struct {
 
         const Cb = struct {
             haystack: [][]const u8,
-            pub fn call(my: @This(), entry: mero.Tree.Entry) !void {
+            pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
                 const n: *const mero.Node = entry.data;
                 if (n.type == .File) {
                     var do_include: bool = false;
@@ -39,6 +41,6 @@ pub const Export = struct {
             }
         };
         const cb = Cb{ .haystack = query_input };
-        try self.forest.tree.dfsAll(true, &cb);
+        try self.forest.tree.dfsAll(&cb);
     }
 };

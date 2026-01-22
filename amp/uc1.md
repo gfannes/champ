@@ -106,6 +106,7 @@ Support collecting, finding and walking information.
 		- [*] Maybe 'readme.md' is better than '_amp.md'
 		- Extension should be a known extension to leverage existing bindings
 		- Start with an '_' to avoid collisions. Starting with a '.' is to impractical.
+		- Start with an '&' to ensure lexicographical sorting places the before other filenames
 		- '_amp': communicates this is metadata for AMP
 		- '_tree': communicates this is metadata for the (sub)tree
 		- '_metadata.md'

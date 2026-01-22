@@ -2,7 +2,7 @@
 
 ## DONE Interpret AMP on first Node as AMP for Tree
 - All metadata placed on the first line of a file (a markdown paragraph) applies to the complete file
-- All metadata placed in `_amp.md` applies to the folder, recursively
+- All metadata placed in `&.md` applies to the folder, recursively
 
 ## DONE Set ~date from filename
 - For `daily/YYYY-MM-DD.md` format

@@ -100,6 +100,7 @@ pub const Grove = struct {
     include: ?[][]const u8 = null,
     max_size: ?usize = null,
     max_count: ?usize = null,
+    autodef: bool = false,
 };
 
 pub const Lsp = struct {

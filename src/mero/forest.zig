@@ -241,7 +241,10 @@ pub const Forest = struct {
 
             update_count: u64 = 0,
 
-            pub fn call(my: *My, entry: Tree.Entry) !void {
+            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
+
                 const n = entry.data;
 
                 if (rubr.slc.is_empty(n.org_amps.items))
@@ -349,7 +352,7 @@ pub const Forest = struct {
         const n = 10;
         for (0..n) |ix| {
             cb.update_count = 0;
-            try self.tree.dfsAll(true, &cb);
+            try self.tree.dfsAll(&cb);
             if (cb.update_count == 0)
                 break;
             if (ix + 1 == n) {
@@ -367,11 +370,13 @@ pub const Forest = struct {
             tree: *const Tree,
             defmgr: *const amp.DefMgr,
 
-            pub fn call(my: *My, entry: Tree.Entry) !void {
+            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
                 _ = try my.chores.add(entry.id, my.tree, my.defmgr.*);
             }
         }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
-        try self.tree.dfsAll(true, &cb);
+        try self.tree.dfsAll(&cb);
     }
 
     // Setup Node.org_amps and amp.DefMgr for data found in Node.line.terms
@@ -389,7 +394,10 @@ pub const Forest = struct {
             grove_id: ?usize = null,
             is_new_file: bool = false,
 
-            pub fn call(my: *My, entry: Tree.Entry) !void {
+            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
+
                 const n = entry.data;
                 switch (n.type) {
                     Node.Type.Grove => {},
@@ -441,7 +449,7 @@ pub const Forest = struct {
                                         try n.org_amps.append(my.env.a, def);
 
                                         if (my.is_new_file and n.type == .Paragraph) {
-                                            // Push org amps on the first (non-title) line to the file level. For _amp.md, also to the folder level.
+                                            // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
                                             if (try my.tree.parent(entry.id)) |file| {
                                                 try file.data.org_amps.append(my.env.a, def);
 
@@ -470,7 +478,7 @@ pub const Forest = struct {
             .tree = &self.tree,
             .defmgr = &self.defmgr,
         };
-        try self.tree.dfsAll(true, &cb);
+        try self.tree.dfsAll(&cb);
     }
 
     fn collectDefs(self: *Self) !void {
@@ -489,22 +497,25 @@ pub const Forest = struct {
             do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
-            pub fn call(my: *My, entry: Tree.Entry) !void {
+            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
+
                 const n = entry.data;
 
                 switch (n.type) {
                     // Node.Type.Grove => {},
                     Node.Type.Grove, Node.Type.Folder => {
                         my.path = n.path;
-                        // Process '_amp.md' before other Files and Folders.
+                        // Process '&.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
                         for (my.tree.childIds(entry.id)) |child_id| {
                             const child = my.tree.ptr(child_id);
                             if (is_amp_md(child.path)) {
-                                // Allow processing '_amp.md'
+                                // Allow processing '&.md'
                                 my.do_process_amp_md = true;
-                                try my.tree.dfs(child_id, true, my);
+                                try my.tree.dfs(child_id, my);
                                 my.do_process_amp_md = false;
                             }
                         }
@@ -598,7 +609,7 @@ pub const Forest = struct {
                     switch (n.type) {
                         Node.Type.Paragraph => {
                             // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
-                            // If the file is '_amp.md', it is copied to the Folder as well
+                            // If the file is '&.md', it is copied to the Folder as well
                             if (try my.tree.parent(entry.id)) |file| {
                                 file.data.def = n.def;
                                 try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
@@ -616,7 +627,7 @@ pub const Forest = struct {
                 }
             }
         }{ .env = self.env, .tree = &self.tree, .defmgr = &self.defmgr };
-        try self.tree.dfsAll(true, &cb);
+        try self.tree.dfsAll(&cb);
     }
 
     fn findFile_(self: *Self, name: []const u8, id: Tree.Id) ?Tree.Entry {
@@ -639,5 +650,5 @@ pub const Forest = struct {
 };
 
 fn is_amp_md(path: []const u8) bool {
-    return std.mem.endsWith(u8, path, "_amp.md");
+    return std.mem.endsWith(u8, path, "&.md");
 }
