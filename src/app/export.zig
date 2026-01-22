@@ -24,23 +24,28 @@ pub const Export = struct {
             std.debug.print("Writing output to '{s}'.\n", .{output});
 
         const Cb = struct {
-            haystack: [][]const u8,
-            pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
-                if (!before)
-                    return;
+            needle: []const u8,
+            first: bool = false,
+            pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
                 const n: *const mero.Node = entry.data;
-                if (n.type == .File) {
-                    var do_include: bool = false;
-                    for (my.haystack) |needle| {
-                        if (std.mem.find(u8, n.path, needle)) |_|
-                            do_include = true;
-                    }
-                    if (do_include)
-                        std.debug.print("{s}\n", .{n.path});
+                switch (n.type) {
+                    .Folder => {
+                        my.first = before;
+                    },
+                    .File => {
+                        if (before) {
+                            if (std.mem.find(u8, n.path, my.needle)) |_|
+                                std.debug.print("{s}{s}\n", .{if (my.first) "*" else "", n.path});
+                            my.first = false;
+                        }
+                    },
+                    else => {},
                 }
             }
         };
-        const cb = Cb{ .haystack = query_input };
-        try self.forest.tree.dfsAll(&cb);
+        for (query_input) |needle| {
+            var cb = Cb{ .needle = needle };
+            try self.forest.tree.dfsAll(&cb);
+        }
     }
 };
