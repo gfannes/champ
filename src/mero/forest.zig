@@ -162,7 +162,24 @@ pub const Forest = struct {
                     try my.node_stack.append(my.env.a, entry.id);
                 },
                 walker.Kind.Leave => {
-                    _ = my.node_stack.pop();
+                    if (my.node_stack.pop()) |folder_id| {
+                        const sort_files = true;
+                        if (sort_files) {
+                            const file_ids = my.tree.childIdsMut(folder_id);
+                            const Ftor = struct {
+                                pub fn lt(m: *const My, a: Tree.Id, b: Tree.Id) bool {
+                                    // &perf: this uses the full path while we know that only the filename itself differs
+                                    return std.mem.lessThan(u8, m.tree.cptr(a).path, m.tree.cptr(b).path);
+                                }
+                            };
+                            std.sort.block(
+                                Tree.Id,
+                                file_ids,
+                                my,
+                                Ftor.lt,
+                            );
+                        }
+                    }
                 },
                 walker.Kind.File => {
                     const offsets = maybe_offsets orelse return error.ExpectedOffsets;

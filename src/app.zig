@@ -16,6 +16,7 @@ const cfg = @import("cfg.zig");
 
 const Lsp = @import("app/lsp.zig").Lsp;
 const Search = @import("app/search.zig").Search;
+const Export = @import("app/export.zig").Export;
 const Plan = @import("app/plan.zig").Plan;
 const Check = @import("app/check.zig").Check;
 const Perf = @import("app/perf.zig").Perf;
@@ -153,6 +154,19 @@ pub const App = struct {
                     try obj.call(self.cli_args.extra.items, !self.cli_args.reverse);
                     try obj.show(self.cli_args.details);
                 },
+                cfg.cli.Mode.Export => {
+                    const forest = try self.loadForest();
+
+                    var obj = Export{
+                        .env = self.env,
+                        .config = &self.config,
+                        .cli_args = &self.cli_args,
+                        .forest = forest,
+                    };
+                    defer obj.deinit();
+
+                    try obj.call(self.cli_args.extra.items);
+                },
                 cfg.cli.Mode.Plan => {
                     const forest = try self.loadForest();
 
@@ -204,7 +218,7 @@ pub const App = struct {
         } else return Error.ModeNotSet;
     }
 
-    fn loadForest(self: *Self) !*const mero.Forest {
+    fn loadForest(self: *Self) !*mero.Forest {
         if (self.maybe_forest) |*forest|
             return forest;
 

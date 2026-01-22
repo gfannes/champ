@@ -99,7 +99,7 @@ pub const Node = struct {
 
     a: std.mem.Allocator,
 
-    type: Type = Type.Unknown,
+    type: Type = .Unknown,
     language: ?Language = null,
 
     // Ref to a definition that is directly present in this Node

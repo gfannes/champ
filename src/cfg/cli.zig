@@ -18,6 +18,7 @@ pub const Mode = enum {
     Plan,
     Check,
     Perf,
+    Export,
     Test,
 };
 
@@ -38,6 +39,7 @@ pub const Args = struct {
     prio: ?[]const u8 = null,
     reverse: bool = false,
     details: bool = false,
+    output: ?[]const u8 = null,
     extra: Strings = undefined,
 
     args: rubr.cli.Args = undefined,
@@ -67,6 +69,9 @@ pub const Args = struct {
             } else if (arg.is("-g", "--grove")) {
                 if (self.args.pop()) |x|
                     try self.groves.append(self.env.aa, x.arg);
+            } else if (arg.is("-o", "--output")) {
+                if (self.args.pop()) |x|
+                    self.output = x.arg;
             } else if (arg.is("-l", "--log")) {
                 if (self.args.pop()) |x|
                     self.logfile = x.arg;
@@ -84,7 +89,7 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        .Search, .Plan, .Test => try self.extra.append(self.env.aa, arg.arg),
+                        .Search, .Export, .Plan, .Test => try self.extra.append(self.env.aa, arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;
@@ -94,6 +99,8 @@ pub const Args = struct {
                     self.mode = .Lsp;
                 } else if (arg.is("se", "search")) {
                     self.mode = .Search;
+                } else if (arg.is("ex", "export")) {
+                    self.mode = .Export;
                 } else if (arg.is("pl", "plan")) {
                     self.mode = .Plan;
                 } else if (arg.is("ch", "check")) {
@@ -127,6 +134,7 @@ pub const Args = struct {
             "  Commands:\n" ++
             "    lsp                  Lsp server\n" ++
             "    se/search            Search\n" ++
+            "    ex/export            Export\n" ++
             "    pl/plan              Plan\n" ++
             "    ch/check             Check\n" ++
             "    perf                 Performance tests\n" ++
