@@ -453,7 +453,7 @@ pub const Forest = struct {
                                             if (try my.tree.parent(entry.id)) |file| {
                                                 try file.data.org_amps.append(my.env.a, def);
 
-                                                if (is_amp_md(file.data.path)) {
+                                                if (amp.is_folder_metadata_fp(file.data.path)) {
                                                     if (try my.tree.parent(file.id)) |folder| {
                                                         try folder.data.org_amps.append(my.env.a, def);
                                                     }
@@ -512,7 +512,7 @@ pub const Forest = struct {
                         // Both making defs absolute or aggregation of AMPs require this.
                         for (my.tree.childIds(entry.id)) |child_id| {
                             const child = my.tree.ptr(child_id);
-                            if (is_amp_md(child.path)) {
+                            if (amp.is_folder_metadata_fp(child.path)) {
                                 // Allow processing '&.md'
                                 my.do_process_amp_md = true;
                                 try my.tree.dfs(child_id, my);
@@ -526,7 +526,7 @@ pub const Forest = struct {
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
-                        my.do_process_other = if (is_amp_md(n.path)) my.do_process_amp_md else true;
+                        my.do_process_other = if (amp.is_folder_metadata_fp(n.path)) my.do_process_amp_md else true;
                     },
                     else => {
                         if (my.do_process_other)
@@ -614,7 +614,7 @@ pub const Forest = struct {
                                 file.data.def = n.def;
                                 try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
-                                if (is_amp_md(file.data.path)) {
+                                if (amp.is_folder_metadata_fp(file.data.path)) {
                                     if (try my.tree.parent(file.id)) |folder| {
                                         folder.data.def = n.def;
                                         try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
@@ -648,7 +648,3 @@ pub const Forest = struct {
         return null;
     }
 };
-
-fn is_amp_md(path: []const u8) bool {
-    return std.mem.endsWith(u8, path, "&.md");
-}
