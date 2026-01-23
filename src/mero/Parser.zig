@@ -185,7 +185,7 @@ fn pop_md_text(self: *Self, n: *Node) !void {
         }
     }{ .outer = self, .n = n };
 
-    var check_for_bullet: bool = true;
+    var check_for_bullet_or_section: bool = true;
 
     while (self.tokenizer.peek()) |token| {
         if (is_newline(token)) {
@@ -201,8 +201,13 @@ fn pop_md_text(self: *Self, n: *Node) !void {
                 continue;
             }
         }
-        if (check_for_bullet) {
-            check_for_bullet = false;
+        if (check_for_bullet_or_section) {
+            check_for_bullet_or_section = false;
+            if (self.pop_md_section_term()) |section| {
+                try text.commit();
+                try self.appendToLine(n, section);
+                continue;
+            }
             if (self.pop_md_bullet_term()) |bullet| {
                 try text.commit();
                 try self.appendToLine(n, bullet);
@@ -221,6 +226,11 @@ fn pop_md_text(self: *Self, n: *Node) !void {
         if (self.pop_md_formula_term()) |formula| {
             try text.commit();
             try self.appendToLine(n, formula);
+            continue;
+        }
+        if (self.pop_md_link_term()) |wikilink| {
+            try text.commit();
+            try self.appendToLine(n, wikilink);
             continue;
         }
         if (self.pop_md_wikilink_term()) |wikilink| {
@@ -397,6 +407,82 @@ fn pop_amp_term(self: *Self) ?Term {
     return null;
 }
 
+fn pop_md_link_term(self: *Self) ?Term {
+    const sp = self.tokenizer;
+
+    if (self.tokenizer.peek()) |first_token| {
+        if ((first_token.symbol != .Exclamation and first_token.symbol != .OpenSquare) or first_token.word.len != 1)
+            return null;
+
+        var link = Term{ .word = first_token.word, .kind = .Link };
+        self.tokenizer.commit_peek();
+
+        const State = enum { Exclamation, Caption, Link, Meta };
+        var state: State = if (first_token.symbol == .Exclamation) .Exclamation else .Caption;
+        var open: bool = true;
+
+        while (self.tokenizer.next()) |token| {
+            link.word.len += token.word.len;
+
+            switch (state) {
+                .Exclamation => {
+                    if (token.symbol == .OpenSquare and token.word.len == 1) {
+                        state = .Caption;
+                        open = true;
+                    } else {
+                        self.tokenizer = sp;
+                        return null;
+                    }
+                },
+                .Caption => {
+                    if (open) {
+                        if (token.symbol == .CloseSquare and token.word.len == 1)
+                            open = false;
+                    } else {
+                        if (token.symbol == .OpenParens and token.word.len == 1) {
+                            state = .Link;
+                            open = true;
+                        } else {
+                            self.tokenizer = sp;
+                            return null;
+                        }
+                    }
+                },
+                .Link => {
+                    if (open) {
+                        if (token.symbol == .CloseParens and token.word.len == 1) {
+                            open = false;
+                            if (self.tokenizer.peek()) |next_token| {
+                                if (next_token.symbol == .OpenCurly)
+                                    // There is metadata as well: continue
+                                    continue;
+                            }
+                            // No metadata: we are done
+                            break;
+                        }
+                    } else {
+                        if (token.symbol == .OpenCurly and token.word.len == 1) {
+                            state = .Meta;
+                            open = true;
+                        }
+                    }
+                },
+                .Meta => {
+                    if (open) {
+                        if (token.symbol == .CloseCurly and token.word.len == 1) {
+                            open = false;
+                            break;
+                        }
+                    }
+                },
+            }
+        }
+
+        return link;
+    }
+    return null;
+}
+
 fn pop_md_wikilink_term(self: *Self) ?Term {
     if (self.tokenizer.peek()) |first_token| {
         if (first_token.symbol != .OpenSquare or first_token.word.len != 2)
@@ -519,6 +605,29 @@ fn pop_nonmd_code_term(self: *Self) ?Term {
     return null;
 }
 
+fn pop_md_section_term(self: *Self) ?Term {
+    if (self.tokenizer.peek()) |first_token| {
+        if (is_section(first_token) == null)
+            return null;
+
+        var section = Term{ .word = first_token.word, .kind = .Section };
+        self.tokenizer.commit_peek();
+
+        while (self.tokenizer.peek()) |token| {
+            switch (token.symbol) {
+                .Space, .Tab, .Hashtag => {
+                    section.word.len += token.word.len;
+                    self.tokenizer.commit_peek();
+                },
+                else => break,
+            }
+        }
+
+        return section;
+    }
+    return null;
+}
+
 fn pop_md_bullet_term(self: *Self) ?Term {
     if (self.tokenizer.peek()) |first_token| {
         if (is_bullet(first_token) == null)
@@ -541,6 +650,7 @@ fn pop_md_bullet_term(self: *Self) ?Term {
     }
     return null;
 }
+
 fn pop_md_checkbox_term(self: *Self) ?Term {
     if (self.tokenizer.peek()) |first_token| {
         if (first_token.symbol != .OpenSquare or first_token.word.len != 1)
@@ -685,14 +795,14 @@ fn pop_md_comment_start(self: *Self) ?Term {
 
 fn pop_section_node(self: *Self, parent_id: Tree.Id) !bool {
     if (self.tokenizer.peek()) |first_token| {
-        if (is_title(first_token)) |my_depth| {
+        if (is_section(first_token)) |my_depth| {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
             n.type = Node.Type.Section;
 
             while (self.tokenizer.peek()) |token| {
-                if (is_title(token)) |depth| {
+                if (is_section(token)) |depth| {
                     if (depth <= my_depth)
                         // This is the start of a section with a depth too low: we cannot nest
                         break;
@@ -743,7 +853,7 @@ fn pop_bullets_node(self: *Self, parent_id: Tree.Id) !bool {
     return false;
 }
 
-fn is_title(t: tkn.Token) ?usize {
+fn is_section(t: tkn.Token) ?usize {
     return if (t.symbol == .Hashtag) t.word.len else null;
 }
 fn is_line(t: tkn.Token) bool {

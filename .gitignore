@@ -5,6 +5,7 @@ zig-out/
 .zig-cache/
 build/
 .xmake/
+tmp/
 
 # Added by cargo
 target/

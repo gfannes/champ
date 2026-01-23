@@ -280,7 +280,7 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.slc.is_empty(chore.parts.items[0..chore.org_count])) {
+                        if (rubr.slc.isEmpty(chore.parts.items[0..chore.org_count])) {
                             try self.env.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
@@ -338,7 +338,7 @@ pub const Lsp = struct {
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (rubr.slc.is_empty(chore.parts.items[0..chore.org_count])) {
+                        if (rubr.slc.isEmpty(chore.parts.items[0..chore.org_count])) {
                             try self.env.log.warning("Expected to find at least one AMP per Chore\n", .{});
                             continue;
                         }

@@ -2,6 +2,9 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+# Export
+- [ ] Create todos.md as well with links to the sections where there are still things todo
+
 <<<<<<< Updated upstream
 - [ ] Interpret a lowercase sentence as a todo
 	- Start after leesteken or newline

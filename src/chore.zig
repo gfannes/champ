@@ -143,15 +143,15 @@ pub const Chores = struct {
 
     // Returns true if tree[node_id] is an actual Chore and was thus added
     // defmgr is needed to lookup the amp.Path
-    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree, defmgr: amp.DefMgr) !bool {
+    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree, defmgr: amp.DefMgr) !?usize {
         const node = tree.cptr(node_id);
 
-        if (rubr.slc.is_empty(node.org_amps.items))
+        if (rubr.slc.isEmpty(node.org_amps.items))
             // This is not a Chore
-            return false;
+            return null;
         if (node.type == .File)
             // Skip Files
-            return false;
+            return null;
 
         const aa = self.aral.allocator();
 
@@ -217,9 +217,10 @@ pub const Chores = struct {
                 maybe_id = null;
         }
 
+        const chore_ix = self.list.items.len;
         try self.list.append(aa, chore);
 
-        return true;
+        return chore_ix;
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {

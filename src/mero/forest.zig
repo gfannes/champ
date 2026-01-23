@@ -72,11 +72,11 @@ pub const Forest = struct {
 
     pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
         var wanted_groves: [][]const u8 = cli_args.groves.items;
-        if (rubr.slc.is_empty(wanted_groves)) {
+        if (rubr.slc.isEmpty(wanted_groves)) {
             if (config.default) |default|
                 wanted_groves = default;
         }
-        if (rubr.slc.is_empty(wanted_groves))
+        if (rubr.slc.isEmpty(wanted_groves))
             return error.ExpectedAtLeastOneGrove;
 
         for (config.groves) |cfg_grove| {
@@ -247,7 +247,7 @@ pub const Forest = struct {
 
                 const n = entry.data;
 
-                if (rubr.slc.is_empty(n.org_amps.items))
+                if (rubr.slc.isEmpty(n.org_amps.items))
                     return;
 
                 if (my.parent(entry.id)) |parent_node| {
@@ -340,7 +340,7 @@ pub const Forest = struct {
             fn parent(my: My, child_id: usize) ?*const Node {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
-                    if (!rubr.slc.is_empty(pentry.data.org_amps.items)) {
+                    if (!rubr.slc.isEmpty(pentry.data.org_amps.items)) {
                         return pentry.data;
                     }
                     id = pentry.id;

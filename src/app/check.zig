@@ -24,7 +24,7 @@ pub const Check = struct {
 
     env: Env,
     cli_args: *const cfg.cli.Args,
-    forest: *const mero.Forest,
+    forest: *mero.Forest,
 
     segments: std.ArrayList(Segment) = .{},
     all_entries: std.ArrayList(Entry) = .{},
@@ -39,16 +39,38 @@ pub const Check = struct {
     }
 
     pub fn show(self: Self, details: bool) !void {
-        _ = details;
+        var root = rubr.naft.Node.root(self.env.stdout);
+        defer root.deinit();
 
-        try self.env.stdout.print("[DefMgr]\n", .{});
-        for (self.forest.defmgr.defs.items, 0..) |def, ix| {
-            try self.env.stdout.print("  {} {f}\n", .{ ix, def.ap });
+        if (details) {
+            var n = root.node("Tree");
+            defer n.deinit();
+
+            const Cb = struct {
+                env: rubr.Env,
+                n: *rubr.naft.Node,
+
+                pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
+                    if (!before)
+                        return;
+                    entry.data.write(my.n, entry.id);
+                }
+            };
+            const cb = Cb{ .env = self.env, .n = &n };
+            try self.forest.tree.dfsAll(&cb);
         }
 
         {
-            var root = rubr.naft.Node{ .w = self.env.stdout };
-            self.forest.chores.write(&root);
+            var n = root.node("DefMgr");
+            defer n.deinit();
+            for (self.forest.defmgr.defs.items, 0..) |def, ix| {
+                var nn = n.node("Def");
+                defer nn.deinit();
+                nn.attr("ix", ix);
+                nn.attr("ap", def.ap);
+            }
         }
+
+        self.forest.chores.write(&root);
     }
 };

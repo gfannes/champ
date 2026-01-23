@@ -24,20 +24,33 @@ pub const Tokenizer = struct {
 
     // 460ms
     pub fn scan(self: *Self, a: std.mem.Allocator, tokens: *Tokens) !void {
-        try tokens.resize(a, 0);
+        const Cb = struct {
+            a: std.mem.Allocator,
+            tokens: *Tokens,
+            pub fn call(my: *@This(), token: Token) !void {
+                try my.tokens.append(my.a, token);
+            }
+        };
 
+        try tokens.resize(a, 0);
+        const cb = Cb{ .a = a, .tokens = tokens };
+        try self.each(cb);
+    }
+
+    // 'cb' receives all tokens
+    pub fn each(self: *Self, cb: anytype) !void {
         if (self.content.len == 0)
             // Nothing to do
             return;
 
-        // Setup current_token to ensure it matches with the first characeter in below's loop
+        // Setup current_token to ensure it matches with the first character in below's loop
         var current_token = Token{ .word = self.content[0..0], .symbol = Symbol.from(self.content[0]) };
 
         for (self.content, 0..) |ch, ix| {
             const symbol = Symbol.from(ch);
 
             if (current_token.symbol != symbol) {
-                try tokens.append(a, current_token);
+                try cb.call(current_token);
                 current_token = Token{ .word = self.content[ix..ix], .symbol = symbol };
             }
 
@@ -45,7 +58,7 @@ pub const Tokenizer = struct {
         }
 
         // Push last 'current_token'
-        try tokens.append(a, current_token);
+        try cb.call(current_token);
 
         // Consume all content
         self.content.ptr += self.content.len;
@@ -156,44 +169,44 @@ pub const Symbol = enum(u8) {
 };
 
 const ch__symbol: [256]Symbol = blk: {
-    var t = [_]Symbol{Symbol.Word} ** 256;
+    var t = [_]Symbol{.Word} ** 256;
 
-    t[' '] = Symbol.Space;
-    t['\t'] = Symbol.Tab;
-    t['!'] = Symbol.Exclamation;
-    t['?'] = Symbol.Questionmark;
-    t['|'] = Symbol.Pipe;
-    t['@'] = Symbol.At;
-    t['#'] = Symbol.Hashtag;
-    t['$'] = Symbol.Dollar;
-    t['%'] = Symbol.Percent;
-    t['^'] = Symbol.Hat;
-    t['&'] = Symbol.Ampersand;
-    t['*'] = Symbol.Star;
-    t['('] = Symbol.OpenParens;
-    t[')'] = Symbol.CloseParens;
-    t['['] = Symbol.OpenSquare;
-    t[']'] = Symbol.CloseSquare;
-    t['{'] = Symbol.OpenCurly;
-    t['}'] = Symbol.CloseCurly;
-    t['<'] = Symbol.OpenAngle;
-    t['>'] = Symbol.CloseAngle;
-    t['~'] = Symbol.Tilde;
-    t['+'] = Symbol.Plus;
-    t['-'] = Symbol.Minus;
-    t['='] = Symbol.Equal;
-    t[':'] = Symbol.Colon;
-    t['_'] = Symbol.Underscore;
-    t['.'] = Symbol.Dot;
-    t[','] = Symbol.Comma;
-    t[';'] = Symbol.Semicolon;
-    t['\''] = Symbol.SingleQuote;
-    t['"'] = Symbol.DoubleQuote;
-    t['`'] = Symbol.Backtick;
-    t['/'] = Symbol.Slash;
-    t['\\'] = Symbol.BackSlash;
-    t['\n'] = Symbol.Newline;
-    t['\r'] = Symbol.Newline;
+    t[' '] = .Space;
+    t['\t'] = .Tab;
+    t['!'] = .Exclamation;
+    t['?'] = .Questionmark;
+    t['|'] = .Pipe;
+    t['@'] = .At;
+    t['#'] = .Hashtag;
+    t['$'] = .Dollar;
+    t['%'] = .Percent;
+    t['^'] = .Hat;
+    t['&'] = .Ampersand;
+    t['*'] = .Star;
+    t['('] = .OpenParens;
+    t[')'] = .CloseParens;
+    t['['] = .OpenSquare;
+    t[']'] = .CloseSquare;
+    t['{'] = .OpenCurly;
+    t['}'] = .CloseCurly;
+    t['<'] = .OpenAngle;
+    t['>'] = .CloseAngle;
+    t['~'] = .Tilde;
+    t['+'] = .Plus;
+    t['-'] = .Minus;
+    t['='] = .Equal;
+    t[':'] = .Colon;
+    t['_'] = .Underscore;
+    t['.'] = .Dot;
+    t[','] = .Comma;
+    t[';'] = .Semicolon;
+    t['\''] = .SingleQuote;
+    t['"'] = .DoubleQuote;
+    t['`'] = .Backtick;
+    t['/'] = .Slash;
+    t['\\'] = .BackSlash;
+    t['\n'] = .Newline;
+    t['\r'] = .Newline;
 
     break :blk t;
 };

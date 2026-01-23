@@ -27,6 +27,7 @@ pub const Term = struct {
     pub const Kind = enum {
         Text,
         Link,
+        Section,
         Bullet,
         Checkbox,
         Capital,
@@ -132,9 +133,11 @@ pub const Node = struct {
         self.terms.deinit(self.a);
     }
 
-    pub fn write(self: Self, parent: *naft.Node) void {
+    pub fn write(self: Self, parent: *naft.Node, maybe_id: ?Tree.Id) void {
         var n = parent.node("dto.Node");
         defer n.deinit();
+        if (maybe_id) |id|
+            n.attr("id", id);
         n.attr("type", self.type);
         n.attr("content", self.content);
         self.content_rows.write(&n, "rows");
