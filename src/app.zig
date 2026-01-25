@@ -152,7 +152,7 @@ pub const App = struct {
                     defer obj.deinit();
 
                     try obj.call(self.cli_args.extra.items, !self.cli_args.reverse);
-                    try obj.show(self.cli_args.details);
+                    try obj.show(self.cli_args.details > 0);
                 },
                 cfg.cli.Mode.Export => {
                     const forest = try self.loadForest();
@@ -181,7 +181,7 @@ pub const App = struct {
                     else
                         null;
                     try obj.call(prio_threshold, self.cli_args.extra.items, !self.cli_args.reverse);
-                    try obj.show(self.cli_args.details);
+                    try obj.show(self.cli_args.details > 0);
                 },
                 cfg.cli.Mode.Check => {
                     const forest = try self.loadForest();

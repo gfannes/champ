@@ -124,6 +124,7 @@ pub const Node = struct {
     content_cols: idx.Range = .{},
 
     grove_id: ?usize = null,
+    chore_id: ?usize = null,
 
     pub fn deinit(self: *Self) void {
         self.org_amps.deinit(self.a);
@@ -140,6 +141,8 @@ pub const Node = struct {
             n.attr("id", id);
         n.attr("type", self.type);
         n.attr("content", self.content);
+        if (self.chore_id) |id|
+            n.attr("chore_id", id);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
         self.line.terms_ixr.write(&n, "line");

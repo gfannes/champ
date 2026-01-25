@@ -373,7 +373,7 @@ pub const Forest = struct {
             pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
-                _ = try my.chores.add(entry.id, my.tree, my.defmgr.*);
+                entry.data.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
             }
         }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(&cb);

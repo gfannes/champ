@@ -21,28 +21,18 @@ pub const Export = struct {
     const Self = @This();
     const BoolStack = std.ArrayList(bool);
     const NodeIds = std.ArrayList(usize);
-
-    const SectionTasks = struct {
-        const TaskNids = std.ArrayList(usize);
-        section_id: i64,
-        section_nid: usize,
-        task_nids: NodeIds = .{},
-        terms: []const mero.Term = &.{},
-    };
-    const SectionTasksList = std.ArrayList(SectionTasks);
+    const ChoreIds = std.ArrayList(usize);
 
     env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
     forest: *mero.Forest,
     stack: BoolStack = .{},
-    sectiontasks_list: SectionTasksList = .{},
+    chore_ids: ChoreIds = .{},
 
     pub fn deinit(self: *Self) void {
         self.stack.deinit(self.env.a);
-        for (self.sectiontasks_list.items) |*sectiontasks|
-            sectiontasks.task_nids.deinit(self.env.a);
-        self.sectiontasks_list.deinit(self.env.a);
+        self.chore_ids.deinit(self.env.a);
     }
 
     pub fn call(self: *Self, query_input: [][]const u8) !void {
@@ -61,7 +51,7 @@ pub const Export = struct {
             env: rubr.Env,
             tree: *mero.Tree,
             stack: *BoolStack,
-            sectiontasks_list: *SectionTasksList,
+            chore_ids: *ChoreIds,
             needle: []const u8,
             output_dir: *std.Io.Dir,
             output: *std.Io.Writer,
@@ -132,6 +122,9 @@ pub const Export = struct {
                         if (!before)
                             return;
 
+                        if (n.chore_id) |chore_id|
+                            try my.chore_ids.append(my.env.a, chore_id);
+
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
                             const term = my.terms[ix];
                             if (false)
@@ -172,24 +165,8 @@ pub const Export = struct {
                                         }
                                     },
                                     .Newline => {
-                                        if (n.type == .Section) {
-                                            my.section_id += 1;
-                                            try my.output.print(" {{#section:{}}}", .{my.section_id});
-                                        }
-                                    },
-                                    .Checkbox => {
-                                        const section_nid = my.section_nid_stack.getLastOrNull() orelse {
-                                            try my.env.log.err("Found a checkbok in '{s}' outside a section\n", .{n.path});
-                                            return error.CouldNotFindSection;
-                                        };
-                                        if (rubr.slc.lastPtr(my.sectiontasks_list.items)) |sectiontasks| {
-                                            if (sectiontasks.section_nid != section_nid)
-                                                try my.sectiontasks_list.append(my.env.a, SectionTasks{ .section_id = my.section_id, .section_nid = section_nid, .terms = my.terms });
-                                        } else {
-                                            try my.sectiontasks_list.append(my.env.a, SectionTasks{ .section_id = my.section_id, .section_nid = section_nid, .terms = my.terms });
-                                        }
-                                        const sectiontasks = rubr.slc.lastPtrUnsafe(my.sectiontasks_list.items);
-                                        try sectiontasks.task_nids.append(my.env.a, entry.id);
+                                        if (n.type == .Section)
+                                            try my.output.print(" {{#section:{}}}", .{entry.id});
                                     },
                                     else => {},
                                 }
@@ -212,7 +189,7 @@ pub const Export = struct {
                 .env = self.env,
                 .tree = &self.forest.tree,
                 .stack = &self.stack,
-                .sectiontasks_list = &self.sectiontasks_list,
+                .chore_ids = &self.chore_ids,
                 .needle = needle,
                 .output_dir = &output_dir,
                 .output = &output_w.interface,
@@ -221,33 +198,79 @@ pub const Export = struct {
             try self.forest.tree.dfsAll(&cb);
         }
 
-        if (!rubr.slc.isEmpty(self.sectiontasks_list.items)) {
+        if (!rubr.slc.isEmpty(self.chore_ids.items)) {
             const w = &output_w.interface;
-            try w.print("\n# Open tasks\n\n", .{});
-            try w.print("This section provides on overview of the open tasks per section in above document.\n\n", .{});
-            for (self.sectiontasks_list.items) |sectiontasks| {
-                {
-                    try w.print("## [", .{});
-                    const n: *const mero.Node = try self.forest.tree.cget(sectiontasks.section_nid);
-                    for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
-                        const term = sectiontasks.terms[ix];
-                        switch (term.kind) {
-                            .Section, .Newline => {},
-                            else => try w.print("{s}", .{term.word}),
+            try w.print("\n# Tasks\n\n", .{});
+            try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});
+            for (&[_]bool{ false, true }) |is_done| {
+                try w.print("\n## {s} tasks\n\n", .{if (is_done) "Closed" else "Open"});
+
+                var prev_section: ?*const mero.Node = null;
+                for (self.chore_ids.items) |chore_id| {
+                    const chore = &self.forest.chores.list.items[chore_id];
+                    if (chore.isDone() != is_done)
+                        continue;
+
+                    const Ancestors = struct {
+                        section: ?*const mero.Node = null,
+                        section_id: ?usize = null,
+                        file: ?*const mero.Node = null,
+                        pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
+                            switch (entry.data.type) {
+                                .Section => if (an.section == null) {
+                                    an.section = entry.data;
+                                    an.section_id = entry.id;
+                                },
+                                .File => if (an.file == null) {
+                                    an.file = entry.data;
+                                },
+                                else => {},
+                            }
+                        }
+                    };
+                    var ancestors = Ancestors{};
+                    self.forest.tree.toRoot(chore.node_id, &ancestors);
+
+                    if (ancestors.section != prev_section)
+                        prev_section = null;
+
+                    if (prev_section == null) {
+                        if (ancestors.section) |section| {
+                            try w.print("\n### [", .{});
+                            if (ancestors.file) |file| {
+                                for (section.line.terms_ixr.begin..section.line.terms_ixr.end) |ix| {
+                                    const term = file.terms.items[ix];
+                                    switch (term.kind) {
+                                        .Section, .Amp, .Checkbox, .Capital, .Newline => {},
+                                        else => try w.print("{s}", .{term.word}),
+                                    }
+                                }
+                            }
+                            try w.print("](#section:{})\n\n", .{ancestors.section_id.?});
+                            prev_section = section;
                         }
                     }
-                    try w.print("](#section:{})\n\n", .{sectiontasks.section_id});
-                }
 
-                for (sectiontasks.task_nids.items) |task_nid| {
-                    try w.print("- ", .{});
-                    const n: *const mero.Node = try self.forest.tree.cget(task_nid);
-                    for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
-                        const term = sectiontasks.terms[ix];
-                        switch (term.kind) {
-                            .Section, .Bullet, .Checkbox => {},
-                            else => try w.print("{s}", .{term.word}),
+                    {
+                        var first: bool = true;
+                        const n = self.forest.tree.cptr(chore.node_id);
+                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
+                            if (ancestors.file) |file| {
+                                const term = file.terms.items[ix];
+                                switch (term.kind) {
+                                    .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
+                                    else => {
+                                        if (first) {
+                                            first = false;
+                                            try w.print("- ", .{});
+                                        }
+                                        try w.print("{s}", .{term.word});
+                                    },
+                                }
+                            }
                         }
+                        if (!first)
+                            try w.print("\n", .{});
                     }
                 }
             }

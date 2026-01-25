@@ -103,7 +103,7 @@ pub const Chore = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chore");
         defer n.deinit();
-        n.attr("id", self.node_id);
+        n.attr("node_id", self.node_id);
         if (self.path.len > 0)
             n.attr("path", self.path);
         n.attr("str", self.str);

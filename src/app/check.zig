@@ -38,39 +38,68 @@ pub const Check = struct {
         _ = self;
     }
 
-    pub fn show(self: Self, details: bool) !void {
+    pub fn show(self: *Self, details: u8) !void {
         var root = rubr.naft.Node.root(self.env.stdout);
         defer root.deinit();
 
-        if (details) {
+        {
             var n = root.node("Tree");
             defer n.deinit();
 
-            const Cb = struct {
-                env: rubr.Env,
-                n: *rubr.naft.Node,
+            if (details == 0) {
+                const Cb = struct {
+                    env: rubr.Env,
+                    node_count: u64 = 0,
+                    term_count: u64 = 0,
 
-                pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
-                    if (!before)
-                        return;
-                    entry.data.write(my.n, entry.id);
-                }
-            };
-            const cb = Cb{ .env = self.env, .n = &n };
-            try self.forest.tree.dfsAll(&cb);
+                    pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
+                        if (!before)
+                            return;
+                        my.node_count += 1;
+                        my.term_count += entry.data.terms.items.len;
+                    }
+                };
+                var cb = Cb{ .env = self.env };
+                try self.forest.tree.dfsAll(&cb);
+                n.attr("node_count", cb.node_count);
+                n.attr("term_count", cb.term_count);
+            } else {
+                const Cb = struct {
+                    env: rubr.Env,
+                    n: *rubr.naft.Node,
+
+                    pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
+                        if (!before)
+                            return;
+                        entry.data.write(my.n, entry.id);
+                    }
+                };
+                const cb = Cb{ .env = self.env, .n = &n };
+                try self.forest.tree.dfsAll(&cb);
+            }
         }
 
         {
             var n = root.node("DefMgr");
             defer n.deinit();
-            for (self.forest.defmgr.defs.items, 0..) |def, ix| {
-                var nn = n.node("Def");
-                defer nn.deinit();
-                nn.attr("ix", ix);
-                nn.attr("ap", def.ap);
+            if (details == 0) {
+                n.attr("count", self.forest.defmgr.defs.items.len);
+            } else {
+                for (self.forest.defmgr.defs.items, 0..) |def, ix| {
+                    var nn = n.node("Def");
+                    defer nn.deinit();
+                    nn.attr("ix", ix);
+                    nn.attr("ap", def.ap);
+                }
             }
         }
 
-        self.forest.chores.write(&root);
+        if (details == 0) {
+            var n = root.node("Chores");
+            defer n.deinit();
+            n.attr("count", self.forest.chores.list.items.len);
+        } else {
+            self.forest.chores.write(&root);
+        }
     }
 };

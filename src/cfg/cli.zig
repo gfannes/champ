@@ -38,7 +38,7 @@ pub const Args = struct {
     mode: ?Mode = null,
     prio: ?[]const u8 = null,
     reverse: bool = false,
-    details: bool = false,
+    details: u8 = 0,
     output: ?[]const u8 = null,
     extra: Strings = undefined,
 
@@ -85,7 +85,7 @@ pub const Args = struct {
             } else if (arg.is("-r", "--reverse")) {
                 self.reverse = true;
             } else if (arg.is("-d", "--details")) {
-                self.details = true;
+                self.details += 1;
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
@@ -130,7 +130,7 @@ pub const Args = struct {
             "    -P  --parse          Parse\n" ++
             "    -p  --prio           Prio (top: a0)\n" ++
             "    -r  --reverse        Reverse\n" ++
-            "    -d  --details        Details\n" ++
+            "    -d  --details        Details, more than one can be specified\n" ++
             "  Commands:\n" ++
             "    lsp                  Lsp server\n" ++
             "    se/search            Search\n" ++
