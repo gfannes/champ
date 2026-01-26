@@ -210,9 +210,8 @@ pub const Forest = struct {
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
                         n.* = Node{ .a = my.env.a };
-                        n.type = .file;
+                        n.type.file = Node.File{ .language = language };
                         n.path = try my.aa.dupe(u8, path);
-                        n.language = language;
                         {
                             var readbuf: [1024]u8 = undefined;
                             var reader = file.reader(my.env.io, &readbuf);
@@ -389,7 +388,7 @@ pub const Forest = struct {
             tree: *const Tree,
             defmgr: *amp.DefMgr,
 
-            terms: *const Terms = undefined,
+            terms: []const Term = &.{},
             path: []const u8 = &.{},
             grove_id: ?usize = null,
             is_new_file: bool = false,
@@ -404,9 +403,9 @@ pub const Forest = struct {
                     .folder => {
                         my.path = n.path;
                     },
-                    .file => {
+                    .file => |file| {
                         my.path = n.path;
-                        my.terms = &n.terms;
+                        my.terms = file.terms.items;
                         if (n.grove_id == null)
                             return error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
@@ -434,7 +433,7 @@ pub const Forest = struct {
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
-                            const term = &my.terms.items[term_ix];
+                            const term = &my.terms[term_ix];
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 
@@ -490,7 +489,7 @@ pub const Forest = struct {
             tree: *Tree,
             defmgr: *amp.DefMgr,
 
-            terms: ?*const Terms = null,
+            terms: ?[]const Term = null,
             path: []const u8 = &.{},
             is_new_file: bool = false,
             grove_id: ?usize = null,
@@ -519,9 +518,9 @@ pub const Forest = struct {
                             }
                         }
                     },
-                    .file => {
+                    .file => |file| {
                         defer my.path = n.path;
-                        my.terms = &n.terms;
+                        my.terms = file.terms.items;
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
@@ -547,7 +546,7 @@ pub const Forest = struct {
 
                 for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
                     const terms = my.terms orelse unreachable;
-                    const term = &terms.items[term_ix];
+                    const term = &terms[term_ix];
 
                     cols.begin = cols.end;
                     cols.end += term.word.len;

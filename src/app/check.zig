@@ -56,7 +56,10 @@ pub const Check = struct {
                         if (!before)
                             return;
                         my.node_count += 1;
-                        my.term_count += entry.data.terms.items.len;
+                        switch (entry.data.type) {
+                            .file => |file| my.term_count += file.terms.items.len,
+                            else => {},
+                        }
                     }
                 };
                 var cb = Cb{ .env = self.env };

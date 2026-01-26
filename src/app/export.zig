@@ -83,13 +83,13 @@ pub const Export = struct {
                                     }
                                 }
                             },
-                            .file => {
+                            .file => |file| {
                                 if (before) {
                                     if (std.mem.find(u8, n.path, my.needle)) |_| {
-                                        std.debug.print("{}: {s} {}\n", .{ my.section_level, n.path, n.terms.items.len });
+                                        std.debug.print("{}: {s} {}\n", .{ my.section_level, n.path, file.terms.items.len });
 
                                         my.mode = .Write;
-                                        my.terms = n.terms.items;
+                                        my.terms = file.terms.items;
                                         for (my.tree.childIds(entry.id)) |child_id| {
                                             try my.tree.dfs(child_id, my);
                                         }
@@ -239,7 +239,7 @@ pub const Export = struct {
                             try w.print("\n### [", .{});
                             if (ancestors.file) |file| {
                                 for (section.line.terms_ixr.begin..section.line.terms_ixr.end) |ix| {
-                                    const term = file.terms.items[ix];
+                                    const term = file.type.file.terms.items[ix];
                                     switch (term.kind) {
                                         .Section, .Amp, .Checkbox, .Capital, .Newline => {},
                                         else => try w.print("{s}", .{term.word}),
@@ -256,7 +256,7 @@ pub const Export = struct {
                         const n = self.forest.tree.cptr(chore.node_id);
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
                             if (ancestors.file) |file| {
-                                const term = file.terms.items[ix];
+                                const term = file.type.file.terms.items[ix];
                                 switch (term.kind) {
                                     .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
                                     else => {

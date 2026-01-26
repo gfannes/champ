@@ -107,8 +107,7 @@ pub const Perf = struct {
                             const f = try tree.addChild(null);
                             const n = f.data;
                             n.* = mero.Node{ .a = my.env.a };
-                            n.type = .file;
-                            n.language = language;
+                            n.type.file = mero.Node.File{ .language = language };
                             n.content = try n.a.dupe(u8, my.content.items);
 
                             var parser = try mero.Parser.init(my.env.a, f.id, &tree);

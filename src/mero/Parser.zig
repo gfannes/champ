@@ -36,7 +36,10 @@ tokenizer: tkn.Tokenizer,
 
 pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
     const r = tree.ptr(root_id);
-    const language = r.language orelse return Error.ExpectedLanguage;
+    const language = switch (r.type) {
+        .file => |file| file.language,
+        else => return error.ExpectedLanguage,
+    };
     return Self{
         .a = a,
         .root_id = root_id,
@@ -50,7 +53,7 @@ pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
 
 pub fn parse(self: *Self) !void {
     switch (self.language) {
-        Language.Markdown => while (true) {
+        .Markdown => while (true) {
             if (try self.pop_section_node(self.root_id))
                 continue;
             if (try self.pop_paragraph_node(self.root_id))
@@ -111,7 +114,7 @@ pub fn parse(self: *Self) !void {
                     my.row += 1;
             }
         }
-    }{ .terms = self.root().terms.items };
+    }{ .terms = self.terms().items };
     try self.tree.dfs(self.root_id, &cb);
 }
 
@@ -124,9 +127,9 @@ fn pop_line(self: *Self) !?Node {
     n.type = .line;
 
     switch (self.language) {
-        Language.Markdown => try self.pop_md_text(&n),
-        Language.Text => try self.pop_txt_text(&n),
-        Language.Cish, Language.Ruby, Language.Python, Language.Lua => try self.pop_nonmd_code_comment_text(&n),
+        .Markdown => try self.pop_md_text(&n),
+        .Text => try self.pop_txt_text(&n),
+        .Cish, .Ruby, .Python, .Lua => try self.pop_nonmd_code_comment_text(&n),
     }
 
     if (self.tokenizer.peek()) |last_token| {
@@ -160,7 +163,7 @@ fn pop_line(self: *Self) !?Node {
 }
 
 fn appendToLine(self: *Self, n: *Node, term: Term) !void {
-    try n.line.append(term, &self.root().terms, self.a);
+    try n.line.append(term, self.terms(), self.a);
 }
 
 fn pop_md_text(self: *Self, n: *Node) !void {
@@ -239,7 +242,7 @@ fn pop_md_text(self: *Self, n: *Node) !void {
             continue;
         }
         if (self.pop_md_comment_start()) |comment_start| {
-            std.debug.assert(self.language == Language.Markdown);
+            std.debug.assert(self.language == .Markdown);
 
             var comment = comment_start;
 
@@ -742,7 +745,7 @@ fn pop_capital_term(self: *Self) ?Term {
 }
 
 fn pop_md_comment_start(self: *Self) ?Term {
-    std.debug.assert(self.language == Language.Markdown);
+    std.debug.assert(self.language == .Markdown);
 
     // We look for '<!--'
 
@@ -869,9 +872,9 @@ fn is_bullet(t: tkn.Token) ?usize {
 }
 fn is_comment(t: tkn.Token, language: Language) bool {
     return switch (language) {
-        Language.Cish => t.symbol == .Slash and t.word.len >= 2,
-        Language.Ruby, Language.Python => t.symbol == .Hashtag,
-        Language.Lua => t.symbol == .Minus and t.word.len >= 2,
+        .Cish => t.symbol == .Slash and t.word.len >= 2,
+        .Ruby, .Python => t.symbol == .Hashtag,
+        .Lua => t.symbol == .Minus and t.word.len >= 2,
         else => false,
     };
 }
@@ -897,8 +900,8 @@ fn is_exclamation(t: tkn.Token) bool {
     return t.symbol == .Exclamation;
 }
 
-fn root(self: *Self) *Node {
-    return self.tree.ptr(self.root_id);
+fn terms(self: *Self) *dto.Terms {
+    return &self.tree.ptr(self.root_id).type.file.terms;
 }
 
 test "mero.Parser.parse()" {

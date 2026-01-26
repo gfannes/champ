@@ -96,12 +96,24 @@ pub const Node = struct {
     };
     pub const Defs = std.ArrayList(Def);
 
-    pub const Type = enum { grove, folder, file, section, paragraph, bullet, line };
+    pub const File = struct {
+        language: Language,
+        terms: Terms = .{},
+    };
+
+    pub const Type = union(enum) {
+        grove: void,
+        folder: void,
+        file: File,
+        section: void,
+        paragraph: void,
+        bullet: void,
+        line: void,
+    };
 
     a: std.mem.Allocator,
 
     type: Type = undefined,
-    language: ?Language = null,
 
     // Ref to a definition that is directly present in this Node
     // Is also added to org_amps
@@ -118,7 +130,6 @@ pub const Node = struct {
     line: Line = .{},
     path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
     content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: subslices are present many times
-    terms: Terms = .{},
 
     content_rows: idx.Range = .{},
     content_cols: idx.Range = .{},
@@ -129,9 +140,15 @@ pub const Node = struct {
     pub fn deinit(self: *Self) void {
         self.org_amps.deinit(self.a);
         self.agg_amps.deinit(self.a);
-        for (self.terms.items) |*item|
-            item.deinit();
-        self.terms.deinit(self.a);
+        switch (self.type) {
+            .file => |*file| {
+                for (file.terms.items) |*item|
+                    item.deinit();
+                file.terms.deinit(self.a);
+            },
+
+            else => {},
+        }
     }
 
     pub fn write(self: Self, parent: *naft.Node, maybe_id: ?Tree.Id) void {
@@ -146,8 +163,12 @@ pub const Node = struct {
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
         self.line.terms_ixr.write(&n, "line");
-        for (self.terms.items) |term| {
-            term.write(&n);
+        switch (self.type) {
+            .file => |file| {
+                for (file.terms.items) |term|
+                    term.write(&n);
+            },
+            else => {},
         }
     }
 };
