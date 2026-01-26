@@ -10,36 +10,39 @@ const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
 const amp = @import("../amp.zig");
 const markdown = @import("../markdown.zig");
+const chore = @import("../chore.zig");
 
 pub const Error = error{
     UnexpectedEmptyStack,
     ExpectedAbsolutePath,
     CouldNotFindSection,
     ExpectedSection,
+    ExpectedWbs,
 };
 
 pub const Export = struct {
     const Self = @This();
     const BoolStack = std.ArrayList(bool);
-    const NodeIds = std.ArrayList(usize);
+    const Section = struct {
+        id: usize,
+        wbs: ?amp.Wbs.Kind = null,
+    };
+    const SectionStack = std.ArrayList(Section);
     const SectionChores = std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize));
     const Chore = struct {
         id: usize,
         section: usize,
     };
-    const Chores = std.ArrayList(Chore);
 
     env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
     forest: *mero.Forest,
     stack: BoolStack = .{},
-    chores: Chores = .{},
     section_chores: SectionChores = .{},
 
     pub fn deinit(self: *Self) void {
         self.stack.deinit(self.env.a);
-        self.chores.deinit(self.env.a);
         {
             var it = self.section_chores.iterator();
             while (it.next()) |e|
@@ -64,21 +67,21 @@ pub const Export = struct {
             env: rubr.Env,
             tree: *mero.Tree,
             stack: *BoolStack,
-            chores: *Chores,
+            chores: *const chore.Chores,
             section_chores: *SectionChores,
             needle: []const u8,
             output_dir: *std.Io.Dir,
             output: *std.Io.Writer,
             terms: []const mero.Term = &.{},
             section_level: usize = 0,
-            section_nid_stack: NodeIds = .{},
+            section_stack: SectionStack = .{},
             add_newline_before_bullet: bool = false,
             write_section_id_on_newline: bool = false,
             mode: Mode = .Search,
-            first_section_id: ?usize = null,
+            first_section: ?Section = null,
 
             fn deinit(my: *@This()) void {
-                my.section_nid_stack.deinit(my.env.a);
+                my.section_stack.deinit(my.env.a);
             }
 
             pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
@@ -94,7 +97,7 @@ pub const Export = struct {
                                     if (my.stack.pop()) |has_section| {
                                         if (has_section) {
                                             my.section_level -= 1;
-                                            _ = my.section_nid_stack.pop();
+                                            _ = my.section_stack.pop();
                                         }
                                     }
                                 }
@@ -106,7 +109,7 @@ pub const Export = struct {
 
                                         my.mode = .Write;
                                         my.terms = file.terms.items;
-                                        my.first_section_id = null;
+                                        my.first_section = null;
                                         for (my.tree.childIds(entry.id)) |child_id| {
                                             try my.tree.dfs(child_id, my);
                                         }
@@ -115,12 +118,12 @@ pub const Export = struct {
                                         my.mode = .Search;
 
                                         if (amp.is_folder_metadata_fp(n.path)) {
-                                            if (my.first_section_id) |id| {
-                                                std.debug.print("Found section in md folder: {}\n", .{id});
+                                            if (my.first_section) |section| {
+                                                std.debug.print("Found section in md folder: {}\n", .{section.id});
                                                 const has_section = rubr.slc.lastPtr(my.stack.items) orelse return error.UnexpectedEmptyStack;
                                                 has_section.* = true;
                                                 my.section_level += 1;
-                                                try my.section_nid_stack.append(my.env.a, id);
+                                                try my.section_stack.append(my.env.a, section);
                                             }
                                         }
                                     }
@@ -131,17 +134,29 @@ pub const Export = struct {
                     },
                     .Write => {
                         // We record the section_id _before_ we add any potential id: a section itself is attributed to its parent
-                        const maybe_section_id = rubr.slc.last(my.section_nid_stack.items);
+                        const maybe_section: ?Section = rubr.slc.last(my.section_stack.items);
 
                         if (n.type == .section) {
                             if (before) {
                                 my.section_level += 1;
-                                try my.section_nid_stack.append(my.env.a, entry.id);
-                                if (my.first_section_id == null)
-                                    my.first_section_id = entry.id;
+                                var section = Section{ .id = entry.id };
+                                if (n.chore_id) |chore_id| {
+                                    if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
+                                        const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
+                                        section.wbs = wbs.kind;
+                                    }
+                                }
+                                if (maybe_section) |s| {
+                                    if (s.wbs == .Epic)
+                                        // We do not go deeper than an epic
+                                        section = s;
+                                }
+                                try my.section_stack.append(my.env.a, section);
+                                if (my.first_section == null)
+                                    my.first_section = section;
                             } else {
                                 my.section_level -= 1;
-                                _ = my.section_nid_stack.pop();
+                                _ = my.section_stack.pop();
                             }
                         }
 
@@ -149,12 +164,11 @@ pub const Export = struct {
                             return;
 
                         if (n.chore_id) |chore_id| {
-                            const section_id = maybe_section_id orelse {
+                            const section = maybe_section orelse {
                                 try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
                                 return error.ExpectedSection;
                             };
-                            try my.chores.append(my.env.a, Chore{ .id = chore_id, .section = section_id });
-                            const res = try my.section_chores.getOrPut(my.env.a, section_id);
+                            const res = try my.section_chores.getOrPut(my.env.a, section.id);
                             if (!res.found_existing)
                                 res.value_ptr.* = .{};
                             try res.value_ptr.append(my.env.a, chore_id);
@@ -224,7 +238,7 @@ pub const Export = struct {
                 .env = self.env,
                 .tree = &self.forest.tree,
                 .stack = &self.stack,
-                .chores = &self.chores,
+                .chores = &self.forest.chores,
                 .section_chores = &self.section_chores,
                 .needle = needle,
                 .output_dir = &output_dir,
@@ -234,7 +248,7 @@ pub const Export = struct {
             try self.forest.tree.dfsAll(&cb);
         }
 
-        if (!rubr.slc.isEmpty(self.chores.items)) {
+        {
             const w = &output_w.interface;
             try w.print("\n# Tasks\n\n", .{});
             try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});

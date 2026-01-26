@@ -4,7 +4,7 @@ const rubr = @import("rubr");
 const Status = @import("Status.zig");
 const Prio = @import("Prio.zig");
 const Date = @import("Date.zig");
-const Level = @import("Level.zig");
+const Wbs = @import("Wbs.zig");
 
 pub const Error = error{
     CannotExtendAbsolutePath,
@@ -13,7 +13,7 @@ pub const Error = error{
     ExpectedStatus,
     ExpectedDate,
     ExpectedPrio,
-    ExpectedLevel,
+    ExpectedWbs,
     UnsupportedTemplate,
 };
 
@@ -25,7 +25,7 @@ pub const Part = struct {
     status: ?Status = null,
     date: ?Date = null,
     prio: ?Prio = null,
-    level: ?Level = null,
+    wbs: ?Wbs = null,
     is_exclusive: bool = false,
     is_template: bool = false,
 
@@ -80,8 +80,8 @@ pub fn isFit(self: Self, rhs: Self) bool {
             } else if (std.mem.eql(u8, self_part.content, "prio")) {
                 if (Prio.parse(rhs_part.content, .{}) == null)
                     return false;
-            } else if (std.mem.eql(u8, self_part.content, "level")) {
-                if (Level.parse(rhs_part.content, .{}) == null)
+            } else if (std.mem.eql(u8, self_part.content, "wbs")) {
+                if (Wbs.parse(rhs_part.content, .{}) == null)
                     return false;
             } else {
                 // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
@@ -124,8 +124,8 @@ pub fn evaluate(self: Self, ap: *Self) !void {
             dst.date = Date.parse(dst.content, .{}) orelse return Error.ExpectedDate;
         } else if (std.mem.eql(u8, src.content, "prio")) {
             dst.prio = Prio.parse(dst.content, .{}) orelse return Error.ExpectedPrio;
-        } else if (std.mem.eql(u8, src.content, "level")) {
-            dst.level = Level.parse(dst.content, .{}) orelse return Error.ExpectedLevel;
+        } else if (std.mem.eql(u8, src.content, "wbs")) {
+            dst.wbs = Wbs.parse(dst.content, .{}) orelse return Error.ExpectedWbs;
         } else {
             std.debug.print("Unsupported template '{s}'\n", .{src.content});
             return Error.UnsupportedTemplate;

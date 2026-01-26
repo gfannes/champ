@@ -18,7 +18,7 @@ Can be directly executed
 ## Effort &&:effort:~duration
 
 
-## Level &&:level:~level
+## Wbs &&:wbs:~wbs
 
 
 ## Type &&:type
