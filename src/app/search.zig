@@ -56,7 +56,7 @@ pub const Search = struct {
         for (self.forest.chores.list.items) |chore| {
             if (query.distance(chore)) |distance| {
                 const n = try self.forest.tree.cget(chore.node_id);
-                if (n.type == .File)
+                if (n.type == .file)
                     continue;
                 try self.all_entries.append(
                     self.env.a,

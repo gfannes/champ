@@ -96,11 +96,11 @@ pub const Node = struct {
     };
     pub const Defs = std.ArrayList(Def);
 
-    pub const Type = enum { Grove, Folder, File, Root, Section, Paragraph, Bullet, Code, Line, Unknown };
+    pub const Type = enum { grove, folder, file, section, paragraph, bullet, line };
 
     a: std.mem.Allocator,
 
-    type: Type = .Unknown,
+    type: Type = undefined,
     language: ?Language = null,
 
     // Ref to a definition that is directly present in this Node

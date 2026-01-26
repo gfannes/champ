@@ -121,7 +121,7 @@ fn pop_line(self: *Self) !?Node {
 
     var n = Node{ .a = self.a };
     errdefer n.deinit();
-    n.type = .Line;
+    n.type = .line;
 
     switch (self.language) {
         Language.Markdown => try self.pop_md_text(&n),
@@ -799,7 +799,7 @@ fn pop_section_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = Node.Type.Section;
+            n.type = .section;
 
             while (self.tokenizer.peek()) |token| {
                 if (is_section(token)) |depth| {
@@ -822,7 +822,7 @@ fn pop_paragraph_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = Node.Type.Paragraph;
+            n.type = .paragraph;
 
             while (try self.pop_bullets_node(entry.id)) {}
             return true;
@@ -837,7 +837,7 @@ fn pop_bullets_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = Node.Type.Bullet;
+            n.type = .bullet;
 
             while (self.tokenizer.peek()) |token| {
                 if (is_bullet(token)) |depth| {

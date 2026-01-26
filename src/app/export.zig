@@ -73,7 +73,7 @@ pub const Export = struct {
                 switch (my.mode) {
                     .Search => {
                         switch (n.type) {
-                            .Folder => {
+                            .folder => {
                                 if (before) {
                                     try my.stack.append(my.env.a, false);
                                 } else {
@@ -83,7 +83,7 @@ pub const Export = struct {
                                     }
                                 }
                             },
-                            .File => {
+                            .file => {
                                 if (before) {
                                     if (std.mem.find(u8, n.path, my.needle)) |_| {
                                         std.debug.print("{}: {s} {}\n", .{ my.section_level, n.path, n.terms.items.len });
@@ -109,7 +109,7 @@ pub const Export = struct {
                         }
                     },
                     .Write => {
-                        if (n.type == .Section) {
+                        if (n.type == .section) {
                             if (before) {
                                 my.section_level += 1;
                                 try my.section_nid_stack.append(my.env.a, entry.id);
@@ -165,7 +165,7 @@ pub const Export = struct {
                                         }
                                     },
                                     .Newline => {
-                                        if (n.type == .Section)
+                                        if (n.type == .section)
                                             try my.output.print(" {{#section:{}}}", .{entry.id});
                                     },
                                     else => {},
@@ -175,7 +175,7 @@ pub const Export = struct {
                             }
                         }
 
-                        my.add_newline_before_bullet = n.type == .Paragraph;
+                        my.add_newline_before_bullet = n.type == .paragraph;
                     },
                 }
             }
@@ -217,11 +217,11 @@ pub const Export = struct {
                         file: ?*const mero.Node = null,
                         pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
                             switch (entry.data.type) {
-                                .Section => if (an.section == null) {
+                                .section => if (an.section == null) {
                                     an.section = entry.data;
                                     an.section_id = entry.id;
                                 },
-                                .File => if (an.file == null) {
+                                .file => if (an.file == null) {
                                     an.file = entry.data;
                                 },
                                 else => {},

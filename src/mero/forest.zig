@@ -142,15 +142,15 @@ pub const Forest = struct {
 
         pub fn call(my: *Cb, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
             switch (kind) {
-                walker.Kind.Enter => {
+                .Enter => {
                     var name: []const u8 = undefined;
                     var node_type: Node.Type = undefined;
                     if (maybe_offsets) |offsets| {
                         name = path[offsets.name..];
-                        node_type = Node.Type.Folder;
+                        node_type = .folder;
                     } else {
                         name = "<ROOT>";
-                        node_type = Node.Type.Grove;
+                        node_type = .grove;
                     }
 
                     const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
@@ -161,7 +161,7 @@ pub const Forest = struct {
 
                     try my.node_stack.append(my.env.a, entry.id);
                 },
-                walker.Kind.Leave => {
+                .Leave => {
                     if (my.node_stack.pop()) |folder_id| {
                         const sort_files = true;
                         if (sort_files) {
@@ -181,7 +181,7 @@ pub const Forest = struct {
                         }
                     }
                 },
-                walker.Kind.File => {
+                .File => {
                     const offsets = maybe_offsets orelse return error.ExpectedOffsets;
                     const name = path[offsets.name..];
 
@@ -210,7 +210,7 @@ pub const Forest = struct {
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
                         n.* = Node{ .a = my.env.a };
-                        n.type = Node.Type.File;
+                        n.type = .file;
                         n.path = try my.aa.dupe(u8, path);
                         n.language = language;
                         {
@@ -400,11 +400,11 @@ pub const Forest = struct {
 
                 const n = entry.data;
                 switch (n.type) {
-                    Node.Type.Grove => {},
-                    Node.Type.Folder => {
+                    .grove => {},
+                    .folder => {
                         my.path = n.path;
                     },
-                    Node.Type.File => {
+                    .file => {
                         my.path = n.path;
                         my.terms = &n.terms;
                         if (n.grove_id == null)
@@ -448,7 +448,7 @@ pub const Forest = struct {
                                         const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
                                         try n.org_amps.append(my.env.a, def);
 
-                                        if (my.is_new_file and n.type == .Paragraph) {
+                                        if (my.is_new_file and n.type == .paragraph) {
                                             // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
                                             if (try my.tree.parent(entry.id)) |file| {
                                                 try file.data.org_amps.append(my.env.a, def);
@@ -504,8 +504,7 @@ pub const Forest = struct {
                 const n = entry.data;
 
                 switch (n.type) {
-                    // Node.Type.Grove => {},
-                    Node.Type.Grove, Node.Type.Folder => {
+                    .grove, .folder => {
                         my.path = n.path;
                         // Process '&.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
@@ -520,7 +519,7 @@ pub const Forest = struct {
                             }
                         }
                     },
-                    Node.Type.File => {
+                    .file => {
                         defer my.path = n.path;
                         my.terms = &n.terms;
                         my.is_new_file = true;
@@ -538,7 +537,7 @@ pub const Forest = struct {
             fn processOther(my: *My, entry: Tree.Entry) !void {
                 const n = entry.data;
                 std.debug.assert(n.org_amps.items.len == 0);
-                std.debug.assert(n.type != Node.Type.Grove and n.type != Node.Type.Folder and n.type != Node.Type.File);
+                std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
 
                 defer my.is_new_file = false;
 
@@ -607,7 +606,7 @@ pub const Forest = struct {
 
                 if (my.is_new_file) {
                     switch (n.type) {
-                        Node.Type.Paragraph => {
+                        .paragraph => {
                             // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
                             // If the file is '&.md', it is copied to the Folder as well
                             if (try my.tree.parent(entry.id)) |file| {
@@ -633,11 +632,11 @@ pub const Forest = struct {
     fn findFile_(self: *Self, name: []const u8, id: Tree.Id) ?Tree.Entry {
         const n = self.tree.ptr(id);
         switch (n.type) {
-            mero.Node.Type.File => {
+            .file => {
                 if (std.mem.endsWith(u8, n.path, name))
                     return Tree.Entry{ .id = id, .data = n };
             },
-            mero.Node.Type.Folder, mero.Node.Type.Grove => {
+            .folder, .frove => {
                 for (self.tree.childIds(id)) |child_id| {
                     if (self.findFile_(name, child_id)) |file|
                         return file;

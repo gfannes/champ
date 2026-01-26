@@ -149,7 +149,7 @@ pub const Chores = struct {
         if (rubr.slc.isEmpty(node.org_amps.items))
             // This is not a Chore
             return null;
-        if (node.type == .File)
+        if (node.type == .file)
             // Skip Files
             return null;
 
@@ -208,7 +208,7 @@ pub const Chores = struct {
         while (maybe_id) |id| {
             const n = tree.cptr(id);
             switch (n.type) {
-                mero.Node.Type.Grove, mero.Node.Type.Folder, mero.Node.Type.File => chore.path = n.path,
+                .grove, .folder, .file => chore.path = n.path,
                 else => {},
             }
             maybe_id = if (try tree.parent(id)) |p| p.id else null;
