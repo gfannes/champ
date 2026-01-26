@@ -210,7 +210,7 @@ pub const Forest = struct {
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
                         n.* = Node{ .a = my.env.a };
-                        n.type.file = Node.File{ .language = language };
+                        n.type = Node.Type{ .file = .{ .language = language } };
                         n.path = try my.aa.dupe(u8, path);
                         {
                             var readbuf: [1024]u8 = undefined;

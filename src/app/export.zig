@@ -15,24 +15,37 @@ pub const Error = error{
     UnexpectedEmptyStack,
     ExpectedAbsolutePath,
     CouldNotFindSection,
+    ExpectedSection,
 };
 
 pub const Export = struct {
     const Self = @This();
     const BoolStack = std.ArrayList(bool);
     const NodeIds = std.ArrayList(usize);
-    const ChoreIds = std.ArrayList(usize);
+    const SectionChores = std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize));
+    const Chore = struct {
+        id: usize,
+        section: usize,
+    };
+    const Chores = std.ArrayList(Chore);
 
     env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
     forest: *mero.Forest,
     stack: BoolStack = .{},
-    chore_ids: ChoreIds = .{},
+    chores: Chores = .{},
+    section_chores: SectionChores = .{},
 
     pub fn deinit(self: *Self) void {
         self.stack.deinit(self.env.a);
-        self.chore_ids.deinit(self.env.a);
+        self.chores.deinit(self.env.a);
+        {
+            var it = self.section_chores.iterator();
+            while (it.next()) |e|
+                e.value_ptr.deinit(self.env.a);
+            self.section_chores.deinit(self.env.a);
+        }
     }
 
     pub fn call(self: *Self, query_input: [][]const u8) !void {
@@ -51,17 +64,18 @@ pub const Export = struct {
             env: rubr.Env,
             tree: *mero.Tree,
             stack: *BoolStack,
-            chore_ids: *ChoreIds,
+            chores: *Chores,
+            section_chores: *SectionChores,
             needle: []const u8,
             output_dir: *std.Io.Dir,
             output: *std.Io.Writer,
             terms: []const mero.Term = &.{},
             section_level: usize = 0,
             section_nid_stack: NodeIds = .{},
-            section_id: i64 = -1,
             add_newline_before_bullet: bool = false,
             write_section_id_on_newline: bool = false,
             mode: Mode = .Search,
+            first_section_id: ?usize = null,
 
             fn deinit(my: *@This()) void {
                 my.section_nid_stack.deinit(my.env.a);
@@ -77,9 +91,11 @@ pub const Export = struct {
                                 if (before) {
                                     try my.stack.append(my.env.a, false);
                                 } else {
-                                    if (my.stack.pop()) |saw_folder_metadata| {
-                                        if (saw_folder_metadata)
+                                    if (my.stack.pop()) |has_section| {
+                                        if (has_section) {
                                             my.section_level -= 1;
+                                            _ = my.section_nid_stack.pop();
+                                        }
                                     }
                                 }
                             },
@@ -90,6 +106,7 @@ pub const Export = struct {
 
                                         my.mode = .Write;
                                         my.terms = file.terms.items;
+                                        my.first_section_id = null;
                                         for (my.tree.childIds(entry.id)) |child_id| {
                                             try my.tree.dfs(child_id, my);
                                         }
@@ -98,9 +115,13 @@ pub const Export = struct {
                                         my.mode = .Search;
 
                                         if (amp.is_folder_metadata_fp(n.path)) {
-                                            const saw_folder_metadata = rubr.slc.lastPtr(my.stack.items) orelse return error.UnexpectedEmptyStack;
-                                            saw_folder_metadata.* = true;
-                                            my.section_level += 1;
+                                            if (my.first_section_id) |id| {
+                                                std.debug.print("Found section in md folder: {}\n", .{id});
+                                                const has_section = rubr.slc.lastPtr(my.stack.items) orelse return error.UnexpectedEmptyStack;
+                                                has_section.* = true;
+                                                my.section_level += 1;
+                                                try my.section_nid_stack.append(my.env.a, id);
+                                            }
                                         }
                                     }
                                 }
@@ -109,10 +130,15 @@ pub const Export = struct {
                         }
                     },
                     .Write => {
+                        // We record the section_id _before_ we add any potential id: a section itself is attributed to its parent
+                        const maybe_section_id = rubr.slc.last(my.section_nid_stack.items);
+
                         if (n.type == .section) {
                             if (before) {
                                 my.section_level += 1;
                                 try my.section_nid_stack.append(my.env.a, entry.id);
+                                if (my.first_section_id == null)
+                                    my.first_section_id = entry.id;
                             } else {
                                 my.section_level -= 1;
                                 _ = my.section_nid_stack.pop();
@@ -122,8 +148,17 @@ pub const Export = struct {
                         if (!before)
                             return;
 
-                        if (n.chore_id) |chore_id|
-                            try my.chore_ids.append(my.env.a, chore_id);
+                        if (n.chore_id) |chore_id| {
+                            const section_id = maybe_section_id orelse {
+                                try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
+                                return error.ExpectedSection;
+                            };
+                            try my.chores.append(my.env.a, Chore{ .id = chore_id, .section = section_id });
+                            const res = try my.section_chores.getOrPut(my.env.a, section_id);
+                            if (!res.found_existing)
+                                res.value_ptr.* = .{};
+                            try res.value_ptr.append(my.env.a, chore_id);
+                        }
 
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
                             const term = my.terms[ix];
@@ -189,7 +224,8 @@ pub const Export = struct {
                 .env = self.env,
                 .tree = &self.forest.tree,
                 .stack = &self.stack,
-                .chore_ids = &self.chore_ids,
+                .chores = &self.chores,
+                .section_chores = &self.section_chores,
                 .needle = needle,
                 .output_dir = &output_dir,
                 .output = &output_w.interface,
@@ -198,29 +234,23 @@ pub const Export = struct {
             try self.forest.tree.dfsAll(&cb);
         }
 
-        if (!rubr.slc.isEmpty(self.chore_ids.items)) {
+        if (!rubr.slc.isEmpty(self.chores.items)) {
             const w = &output_w.interface;
             try w.print("\n# Tasks\n\n", .{});
             try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});
-            for (&[_]bool{ false, true }) |is_done| {
-                try w.print("\n## {s} tasks\n\n", .{if (is_done) "Closed" else "Open"});
 
-                var prev_section: ?*const mero.Node = null;
-                for (self.chore_ids.items) |chore_id| {
-                    const chore = &self.forest.chores.list.items[chore_id];
-                    if (chore.isDone() != is_done)
-                        continue;
+            var act_section_id: ?usize = null;
+
+            var it = self.section_chores.iterator();
+            while (it.next()) |e| {
+                const section_id = e.key_ptr.*;
+                for (e.value_ptr.items) |chore_id| {
+                    const ch = &self.forest.chores.list.items[chore_id];
 
                     const Ancestors = struct {
-                        section: ?*const mero.Node = null,
-                        section_id: ?usize = null,
                         file: ?*const mero.Node = null,
                         pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
                             switch (entry.data.type) {
-                                .section => if (an.section == null) {
-                                    an.section = entry.data;
-                                    an.section_id = entry.id;
-                                },
                                 .file => if (an.file == null) {
                                     an.file = entry.data;
                                 },
@@ -228,32 +258,44 @@ pub const Export = struct {
                             }
                         }
                     };
-                    var ancestors = Ancestors{};
-                    self.forest.tree.toRoot(chore.node_id, &ancestors);
 
-                    if (ancestors.section != prev_section)
-                        prev_section = null;
+                    if (act_section_id != section_id)
+                        act_section_id = null;
 
-                    if (prev_section == null) {
-                        if (ancestors.section) |section| {
-                            try w.print("\n### [", .{});
-                            if (ancestors.file) |file| {
-                                for (section.line.terms_ixr.begin..section.line.terms_ixr.end) |ix| {
-                                    const term = file.type.file.terms.items[ix];
-                                    switch (term.kind) {
-                                        .Section, .Amp, .Checkbox, .Capital, .Newline => {},
-                                        else => try w.print("{s}", .{term.word}),
-                                    }
+                    if (act_section_id == null) {
+                        act_section_id = section_id;
+                        const section = try self.forest.tree.cget(section_id);
+
+                        try w.print("\n### [", .{});
+                        var ancestors = Ancestors{};
+                        self.forest.tree.toRoot(section_id, &ancestors);
+                        if (ancestors.file) |file| {
+                            var trim: []const u8 = " ";
+                            var maybe_word: ?[]const u8 = null;
+                            for (section.line.terms_ixr.begin..section.line.terms_ixr.end) |ix| {
+                                const term = file.type.file.terms.items[ix];
+                                switch (term.kind) {
+                                    .Section, .Amp, .Checkbox, .Capital, .Newline => {},
+                                    else => {
+                                        if (maybe_word) |word| {
+                                            try w.print("{s}", .{std.mem.trimStart(u8, word, trim)});
+                                            trim = "";
+                                        }
+                                        maybe_word = term.word;
+                                    },
                                 }
                             }
-                            try w.print("](#section:{})\n\n", .{ancestors.section_id.?});
-                            prev_section = section;
+                            if (maybe_word) |word|
+                                try w.print("{s}", .{std.mem.trimEnd(u8, std.mem.trimStart(u8, word, trim), " ")});
                         }
+                        try w.print("](#section:{})\n\n", .{section_id});
                     }
 
                     {
                         var first: bool = true;
-                        const n = self.forest.tree.cptr(chore.node_id);
+                        const n = self.forest.tree.cptr(ch.node_id);
+                        var ancestors = Ancestors{};
+                        self.forest.tree.toRoot(ch.node_id, &ancestors);
                         for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
                             if (ancestors.file) |file| {
                                 const term = file.type.file.terms.items[ix];

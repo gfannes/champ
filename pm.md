@@ -18,6 +18,9 @@ Can be directly executed
 ## Effort &&:effort:~duration
 
 
+## Level &&:level:~level
+
+
 ## Type &&:type
 
 ### Documentation &&doc
