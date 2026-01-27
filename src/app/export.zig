@@ -14,43 +14,23 @@ const chore = @import("../chore.zig");
 
 pub const Error = error{
     UnexpectedEmptyStack,
-    ExpectedAbsolutePath,
+    UnexpectedStatus,
     CouldNotFindSection,
+    ExpectedAbsolutePath,
     ExpectedSection,
     ExpectedWbs,
-    UnexpectedStatus,
+    ExpectedNeedle,
 };
 
 pub const Export = struct {
     const Self = @This();
-    const BoolStack = std.ArrayList(bool);
-    const Section = struct {
-        id: usize,
-        wbs: ?amp.Wbs.Kind = null,
-    };
-    const SectionStack = std.ArrayList(Section);
-    const SectionChores = std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize));
-    const Chore = struct {
-        id: usize,
-        section: usize,
-    };
 
     env: Env,
     config: *const cfg.file.Config,
     cli_args: *const cfg.cli.Args,
     forest: *mero.Forest,
-    stack: BoolStack = .{},
-    section_chores: SectionChores = .{},
 
-    pub fn deinit(self: *Self) void {
-        self.stack.deinit(self.env.a);
-        {
-            var it = self.section_chores.iterator();
-            while (it.next()) |e|
-                e.value_ptr.deinit(self.env.a);
-            self.section_chores.deinit(self.env.a);
-        }
-    }
+    pub fn deinit(_: *Self) void {}
 
     pub fn call(self: *Self, query_input: [][]const u8) !void {
         var output_dir = try std.Io.Dir.cwd().createDirPathOpen(self.env.io, self.cli_args.output orelse ".", .{});
@@ -64,15 +44,26 @@ pub const Export = struct {
 
         const Cb = struct {
             const Mode = enum { Search, Write };
+            const BoolStack = std.ArrayList(bool);
+            const Section = struct {
+                id: usize,
+                wbs: ?amp.Wbs.Kind = null,
+            };
+            const SectionStack = std.ArrayList(Section);
+            const SectionChoreIds = std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize));
 
             env: rubr.Env,
             tree: *mero.Tree,
-            stack: *BoolStack,
             chores: *const chore.Chores,
-            section_chores: *SectionChores,
-            needle: []const u8,
             output_dir: *std.Io.Dir,
             output: *std.Io.Writer,
+
+            needle: ?[]const u8 = null,
+
+            // Indicates if a folder has a metadata file '&.md' with a section in it. If so, this will be used to nest the sections from other files.
+            has_section_stack: BoolStack = .{},
+
+            section_chores: SectionChoreIds = .{},
             terms: []const mero.Term = &.{},
             section_level: usize = 0,
             section_stack: SectionStack = .{},
@@ -82,10 +73,19 @@ pub const Export = struct {
             first_section: ?Section = null,
 
             fn deinit(my: *@This()) void {
+                my.has_section_stack.deinit(my.env.a);
                 my.section_stack.deinit(my.env.a);
+                {
+                    var it = my.section_chores.iterator();
+                    while (it.next()) |e|
+                        e.value_ptr.deinit(my.env.a);
+                    my.section_chores.deinit(my.env.a);
+                }
             }
 
             pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
+                const needle = my.needle orelse return error.ExpectedNeedle;
+
                 const n: *const mero.Node = entry.data;
 
                 switch (my.mode) {
@@ -93,9 +93,9 @@ pub const Export = struct {
                         switch (n.type) {
                             .folder => {
                                 if (before) {
-                                    try my.stack.append(my.env.a, false);
+                                    try my.has_section_stack.append(my.env.a, false);
                                 } else {
-                                    if (my.stack.pop()) |has_section| {
+                                    if (my.has_section_stack.pop()) |has_section| {
                                         if (has_section) {
                                             my.section_level -= 1;
                                             _ = my.section_stack.pop();
@@ -105,7 +105,7 @@ pub const Export = struct {
                             },
                             .file => |file| {
                                 if (before) {
-                                    if (std.mem.find(u8, n.path, my.needle)) |_| {
+                                    if (std.mem.find(u8, n.path, needle)) |_| {
                                         std.debug.print("{}: {s} {}\n", .{ my.section_level, n.path, file.terms.items.len });
 
                                         my.mode = .Write;
@@ -121,7 +121,7 @@ pub const Export = struct {
                                         if (amp.is_folder_metadata_fp(n.path)) {
                                             if (my.first_section) |section| {
                                                 std.debug.print("Found section in md folder: {}\n", .{section.id});
-                                                const has_section = rubr.slc.lastPtr(my.stack.items) orelse return error.UnexpectedEmptyStack;
+                                                const has_section = rubr.slc.lastPtr(my.has_section_stack.items) orelse return error.UnexpectedEmptyStack;
                                                 has_section.* = true;
                                                 my.section_level += 1;
                                                 try my.section_stack.append(my.env.a, section);
@@ -234,18 +234,17 @@ pub const Export = struct {
         const default_query_input: [1][]const u8 = .{""};
         const needles = if (rubr.slc.isEmpty(query_input)) &default_query_input else query_input;
 
+        var cb = Cb{
+            .env = self.env,
+            .tree = &self.forest.tree,
+            .chores = &self.forest.chores,
+            .output_dir = &output_dir,
+            .output = &output_w.interface,
+        };
+        defer cb.deinit();
+
         for (needles) |needle| {
-            var cb = Cb{
-                .env = self.env,
-                .tree = &self.forest.tree,
-                .stack = &self.stack,
-                .chores = &self.forest.chores,
-                .section_chores = &self.section_chores,
-                .needle = needle,
-                .output_dir = &output_dir,
-                .output = &output_w.interface,
-            };
-            defer cb.deinit();
+            cb.needle = needle;
             try self.forest.tree.dfsAll(&cb);
         }
 
@@ -266,7 +265,7 @@ pub const Export = struct {
             try w.print("\n# Tasks\n\n", .{});
             try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});
 
-            var it = self.section_chores.iterator();
+            var it = cb.section_chores.iterator();
             while (it.next()) |e| {
                 const section_id = e.key_ptr.*;
 

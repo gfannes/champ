@@ -13,8 +13,8 @@ task :install, :variant do |_task, args|
     variant = args[:variant]&.to_sym || :zig
 
     # mode = :safe
-    mode = :fast
-    # mode = :debug
+    # mode = :fast
+    mode = :debug
 
     case variant
     when :zig
