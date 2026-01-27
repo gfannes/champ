@@ -175,7 +175,7 @@ pub const Export = struct {
                             try res.value_ptr.append(my.env.a, chore_id);
                         }
 
-                        for (n.type.text.line.terms_ixr.begin..n.type.text.line.terms_ixr.end) |ix| {
+                        for (n.type.text.terms_ixr.begin..n.type.text.terms_ixr.end) |ix| {
                             const term = my.terms[ix];
                             if (false)
                                 try my.output.print("[{any}]({s})", .{ term.kind, term.word })
@@ -309,7 +309,7 @@ pub const Export = struct {
                         if (ancestors.file) |file| {
                             var trim: []const u8 = " ";
                             var maybe_word: ?[]const u8 = null;
-                            for (section.type.text.line.terms_ixr.begin..section.type.text.line.terms_ixr.end) |ix| {
+                            for (section.type.text.terms_ixr.begin..section.type.text.terms_ixr.end) |ix| {
                                 const term = file.type.file.terms.items[ix];
                                 switch (term.kind) {
                                     .Section, .Amp, .Checkbox, .Capital, .Newline => {},
@@ -350,7 +350,7 @@ pub const Export = struct {
                                 const n = self.forest.tree.cptr(ch.node_id);
                                 var ancestors = Ancestors{};
                                 self.forest.tree.toRoot(ch.node_id, &ancestors);
-                                for (n.type.text.line.terms_ixr.begin..n.type.text.line.terms_ixr.end) |ix| {
+                                for (n.type.text.terms_ixr.begin..n.type.text.terms_ixr.end) |ix| {
                                     if (ancestors.file) |file| {
                                         const term = file.type.file.terms.items[ix];
                                         switch (term.kind) {

@@ -1,9 +1,11 @@
 const std = @import("std");
 
-const Term = @import("dto.zig").Term;
-const Terms = @import("dto.zig").Terms;
-const Tree = @import("dto.zig").Tree;
-const Node = @import("dto.zig").Node;
+const dto = @import("dto.zig");
+const Term = dto.Term;
+const Terms = dto.Terms;
+const Tree = dto.Tree;
+const Node = dto.Node;
+const Text = dto.Text;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
@@ -432,7 +434,7 @@ pub const Forest = struct {
 
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
-                        for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
+                        for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
                             const term = &my.terms[term_ix];
                             cols.begin = cols.end;
                             cols.end += term.word.len;
@@ -533,7 +535,7 @@ pub const Forest = struct {
                 }
             }
 
-            fn processText(my: *My, entry: Tree.Entry, text: Node.Text) !void {
+            fn processText(my: *My, entry: Tree.Entry, text: Text) !void {
                 const n = entry.data;
                 std.debug.assert(n.org_amps.items.len == 0);
                 std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
@@ -544,7 +546,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
-                for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
+                for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
                     const terms = my.terms orelse unreachable;
                     const term = &terms[term_ix];
 

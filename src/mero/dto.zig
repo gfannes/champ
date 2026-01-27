@@ -59,9 +59,16 @@ pub const Term = struct {
     }
 };
 
-pub const Line = struct {
+pub const Text = struct {
     const Self = @This();
+    pub const Kind = enum { Section, Paragraph, Bullet, Line };
+    kind: Kind,
 
+    // During parsing, `ixr` is used to avoid dangling pointers.
+    // terms: union {
+    //     ixr: idx.Range,
+    //     slice: []const Term,
+    // },
     terms_ixr: idx.Range = .{},
 
     pub fn append(self: *Self, term: Term, terms: *Terms, a: std.mem.Allocator) !void {
@@ -74,7 +81,7 @@ pub const Line = struct {
     }
 
     pub fn write(self: Self, terms: []const Term, parent: *naft.Node) void {
-        var n = parent.node("Line");
+        var n = parent.node("Text");
         defer n.deinit();
         for (self.terms_ixr.begin..self.terms_ixr.end) |ix| {
             // n.attr1(term.word);
@@ -99,12 +106,6 @@ pub const Node = struct {
     pub const File = struct {
         language: Language,
         terms: Terms = .{},
-    };
-
-    pub const Text = struct {
-        pub const Kind = enum { Section, Paragraph, Bullet, Line };
-        kind: Kind,
-        line: Line = .{},
     };
 
     pub const Type = union(enum) {
@@ -177,7 +178,7 @@ pub const Node = struct {
                     term.write(&n);
             },
             .text => |text| {
-                text.line.terms_ixr.write(&n, "line");
+                text.terms_ixr.write(&n, "line");
             },
             else => {},
         }

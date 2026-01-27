@@ -11,7 +11,6 @@ const Language = dto.Language;
 const Node = dto.Node;
 const Tree = dto.Tree;
 const Term = dto.Term;
-const Line = dto.Line;
 const Terms = dto.Terms;
 
 pub const Error = error{
@@ -90,7 +89,7 @@ pub fn parse(self: *Self) !void {
             n.content_cols.begin = my.col;
             switch (n.type) {
                 .text => |text| {
-                    for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
+                    for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
                         const term = &my.terms[term_ix];
                         switch (term.kind) {
                             .Newline => {
@@ -110,7 +109,7 @@ pub fn parse(self: *Self) !void {
                         }
                     }
                 },
-                else => return error.ExpectedTextNode,
+                else => {},
             }
         }
 
@@ -168,9 +167,9 @@ fn pop_line(self: *Self) !?Node {
     return n;
 }
 
-fn appendToLine(self: *Self, n: *Node, term: Term) !void {
+fn appendToText(self: *Self, n: *Node, term: Term) !void {
     switch (n.type) {
-        .text => |*text| try text.line.append(term, self.terms(), self.a),
+        .text => |*text| try text.append(term, self.terms(), self.a),
         else => return error.ExpectedTextNode,
     }
 }
@@ -185,7 +184,7 @@ fn pop_md_text(self: *Self, n: *Node) !void {
 
         fn commit(my: *My) !void {
             if (my.maybe_text) |text| {
-                try my.outer.appendToLine(my.n, text);
+                try my.outer.appendToText(my.n, text);
                 my.maybe_text = null;
             }
         }
@@ -202,14 +201,14 @@ fn pop_md_text(self: *Self, n: *Node) !void {
     while (self.tokenizer.peek()) |token| {
         if (is_newline(token)) {
             try text.commit();
-            try self.appendToLine(n, self.pop_newline_term() orelse unreachable);
+            try self.appendToText(n, self.pop_newline_term() orelse unreachable);
             return;
         }
 
         if (is_amp_start(self.tokenizer.current(), token)) {
             if (self.pop_amp_term()) |amp| {
                 try text.commit();
-                try self.appendToLine(n, amp);
+                try self.appendToText(n, amp);
                 continue;
             }
         }
@@ -217,37 +216,37 @@ fn pop_md_text(self: *Self, n: *Node) !void {
             check_for_bullet_or_section = false;
             if (self.pop_md_section_term()) |section| {
                 try text.commit();
-                try self.appendToLine(n, section);
+                try self.appendToText(n, section);
                 continue;
             }
             if (self.pop_md_bullet_term()) |bullet| {
                 try text.commit();
-                try self.appendToLine(n, bullet);
+                try self.appendToText(n, bullet);
                 if (self.pop_md_checkbox_term()) |checkbox| {
                     try text.commit();
-                    try self.appendToLine(n, checkbox);
+                    try self.appendToText(n, checkbox);
                 }
                 continue;
             }
         }
         if (self.pop_md_code_term()) |code| {
             try text.commit();
-            try self.appendToLine(n, code);
+            try self.appendToText(n, code);
             continue;
         }
         if (self.pop_md_formula_term()) |formula| {
             try text.commit();
-            try self.appendToLine(n, formula);
+            try self.appendToText(n, formula);
             continue;
         }
         if (self.pop_md_link_term()) |wikilink| {
             try text.commit();
-            try self.appendToLine(n, wikilink);
+            try self.appendToText(n, wikilink);
             continue;
         }
         if (self.pop_md_wikilink_term()) |wikilink| {
             try text.commit();
-            try self.appendToLine(n, wikilink);
+            try self.appendToText(n, wikilink);
             continue;
         }
         if (self.pop_md_comment_start()) |comment_start| {
@@ -266,12 +265,12 @@ fn pop_md_text(self: *Self, n: *Node) !void {
             }
 
             try text.commit();
-            try self.appendToLine(n, comment);
+            try self.appendToText(n, comment);
             continue;
         }
         if (self.pop_capital_term()) |capital| {
             try text.commit();
-            try self.appendToLine(n, capital);
+            try self.appendToText(n, capital);
             continue;
         }
 
@@ -286,25 +285,25 @@ fn pop_txt_text(self: *Self, n: *Node) !void {
     while (self.tokenizer.peek()) |token| {
         if (is_amp_start(self.tokenizer.current(), token)) {
             if (self.pop_amp_term()) |amp| {
-                try self.appendToLine(n, amp);
+                try self.appendToText(n, amp);
                 continue;
             }
         }
 
         if (self.pop_capital_term()) |capital| {
-            try self.appendToLine(n, capital);
+            try self.appendToText(n, capital);
             continue;
         }
 
         // If token is '&' but above could not pop a real Amp, make sure we will pop a Text
         const accept_inital_amp = true;
         if (self.pop_txt_text_term(accept_inital_amp)) |text| {
-            try self.appendToLine(n, text);
+            try self.appendToText(n, text);
             continue;
         }
 
         if (self.pop_newline_term()) |newline| {
-            try self.appendToLine(n, newline);
+            try self.appendToText(n, newline);
             break;
         }
 
@@ -319,32 +318,32 @@ fn pop_nonmd_code_comment_text(self: *Self, n: *Node) !void {
     while (true) {
         if (!found_comment) {
             if (self.pop_nonmd_comment_term()) |comment| {
-                try self.appendToLine(n, comment);
+                try self.appendToText(n, comment);
                 found_comment = true;
 
                 while (self.pop_amp_term()) |amp| {
-                    try self.appendToLine(n, amp);
+                    try self.appendToText(n, amp);
 
                     if (self.pop_nonmd_whitespace_term()) |whitespace|
-                        try self.appendToLine(n, whitespace);
+                        try self.appendToText(n, whitespace);
                 }
 
                 continue;
             }
             if (self.pop_nonmd_code_term()) |code| {
-                try self.appendToLine(n, code);
+                try self.appendToText(n, code);
                 continue;
             }
         } else if (self.pop_capital_term()) |capital| {
-            try self.appendToLine(n, capital);
+            try self.appendToText(n, capital);
             continue;
         } else if (self.pop_nonmd_text_term()) |text| {
-            try self.appendToLine(n, text);
+            try self.appendToText(n, text);
             continue;
         }
 
         if (self.pop_newline_term()) |newline| {
-            try self.appendToLine(n, newline);
+            try self.appendToText(n, newline);
             break;
         }
 
@@ -811,7 +810,7 @@ fn pop_section_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .{ .text = .{ .kind = .Section } };
+            n.type.text.kind = .Section;
 
             while (self.tokenizer.peek()) |token| {
                 if (is_section(token)) |depth| {
@@ -834,7 +833,7 @@ fn pop_paragraph_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .{ .text = .{ .kind = .Paragraph } };
+            n.type.text.kind = .Paragraph;
 
             while (try self.pop_bullets_node(entry.id)) {}
             return true;
@@ -849,7 +848,7 @@ fn pop_bullets_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .{ .text = .{ .kind = .Bullet } };
+            n.type.text.kind = .Bullet;
 
             while (self.tokenizer.peek()) |token| {
                 if (is_bullet(token)) |depth| {
