@@ -108,7 +108,134 @@ pub const Forest = struct {
     }
 
     fn loadGrove(self: *Self, cfg_grove: *const cfg.file.Grove) !void {
-        var cb = Cb.init(self.env, self.aral.allocator(), cfg_grove, &self.tree);
+        var cb = struct {
+            const My = @This();
+            const Stack = std.ArrayList(usize);
+
+            env: Env,
+            aa: std.mem.Allocator,
+            cfg_grove: *const cfg.file.Grove,
+            tree: *Tree,
+
+            node_stack: Stack = .{},
+            file_count: usize = 0,
+
+            pub fn deinit(my: *My) void {
+                my.node_stack.deinit(my.env.a);
+            }
+
+            pub fn call(my: *My, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+                switch (kind) {
+                    .Enter => {
+                        var name: []const u8 = undefined;
+                        var node_type: Node.Type = undefined;
+                        if (maybe_offsets) |offsets| {
+                            name = path[offsets.name..];
+                            node_type = .folder;
+                        } else {
+                            name = "<ROOT>";
+                            node_type = .grove;
+                        }
+
+                        const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
+                        const n = entry.data;
+                        n.* = Node{ .a = my.env.a };
+                        n.type = node_type;
+                        n.path = try my.aa.dupe(u8, path);
+
+                        try my.node_stack.append(my.env.a, entry.id);
+                    },
+                    .Leave => {
+                        if (my.node_stack.pop()) |folder_id| {
+                            const sort_files = true;
+                            if (sort_files) {
+                                const file_ids = my.tree.childIdsMut(folder_id);
+                                const Ftor = struct {
+                                    pub fn lt(m: *const My, a: Tree.Id, b: Tree.Id) bool {
+                                        // &perf: this uses the full path while we know that only the filename itself differs
+                                        return std.mem.lessThan(u8, m.tree.cptr(a).path, m.tree.cptr(b).path);
+                                    }
+                                };
+                                std.sort.block(
+                                    Tree.Id,
+                                    file_ids,
+                                    my,
+                                    Ftor.lt,
+                                );
+                            }
+                        }
+                    },
+                    .File => {
+                        const offsets = maybe_offsets orelse return error.ExpectedOffsets;
+                        const name = path[offsets.name..];
+
+                        if (my.cfg_grove.include) |include| {
+                            const ext = std.fs.path.extension(name);
+                            if (!strings.contains(u8, include, ext))
+                                // Skip this extension
+                                return;
+                        }
+
+                        const my_ext = std.fs.path.extension(name);
+                        if (mero.Language.from_extension(my_ext)) |language| {
+                            if (my.cfg_grove.max_count) |max_count|
+                                if (my.file_count >= max_count)
+                                    return;
+                            my.file_count += 1;
+
+                            const file = try dir.openFile(my.env.io, name, .{});
+                            defer file.close(my.env.io);
+
+                            const stat = try file.stat(my.env.io);
+                            const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
+                            if (!size_is_ok)
+                                return;
+
+                            var file_nid: usize = undefined;
+                            {
+                                const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
+                                file_nid = entry.id;
+                                const n = entry.data;
+                                n.* = Node{
+                                    .a = my.env.a,
+                                    .type = .{ .file = .{ .language = language } },
+                                    .path = try my.aa.dupe(u8, path),
+                                    .grove_id = my.cfg_grove.id,
+                                };
+                                {
+                                    var readbuf: [1024]u8 = undefined;
+                                    var reader = file.reader(my.env.io, &readbuf);
+                                    n.content = try reader.interface.readAlloc(my.aa, stat.size);
+                                }
+                            }
+
+                            var parser = try mero.Parser.init(my.env.a, file_nid, my.tree);
+                            try parser.parse();
+
+                            // Switch from Text.ixr to Text.terms
+                            const cb2 = struct {
+                                terms: []const Term,
+                                pub fn call(my2: @This(), e: Tree.Entry, before: bool) !void {
+                                    if (!before)
+                                        return;
+                                    var n2 = e.data;
+                                    switch (n2.type) {
+                                        .text => |*text| {
+                                            const ixr = text.terms.ixr;
+                                            text.terms = .{ .slice = my2.terms[ixr.begin..ixr.end] };
+                                        },
+                                        else => {},
+                                    }
+                                }
+                            }{ .terms = my.tree.cptr(file_nid).type.file.terms.items };
+                            try my.tree.dfs(file_nid, &cb2);
+                        } else {
+                            try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+                        }
+                    },
+                }
+            }
+        }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.tree };
         defer cb.deinit();
 
         var dir = try std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.path, .{});
@@ -118,118 +245,6 @@ pub const Forest = struct {
         defer w.deinit();
         try w.walk(dir, &cb);
     }
-
-    const Cb = struct {
-        const My = @This();
-        const Stack = std.ArrayList(usize);
-
-        env: Env,
-        aa: std.mem.Allocator,
-        cfg_grove: *const cfg.file.Grove,
-        tree: *Tree,
-        node_stack: Stack = .{},
-        file_count: usize = 0,
-
-        pub fn init(env: Env, aa: std.mem.Allocator, cfg_grove: *const cfg.file.Grove, tree: *Tree) Cb {
-            return Cb{
-                .env = env,
-                .aa = aa,
-                .cfg_grove = cfg_grove,
-                .tree = tree,
-            };
-        }
-        pub fn deinit(my: *My) void {
-            my.node_stack.deinit(my.env.a);
-        }
-
-        pub fn call(my: *Cb, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
-            switch (kind) {
-                .Enter => {
-                    var name: []const u8 = undefined;
-                    var node_type: Node.Type = undefined;
-                    if (maybe_offsets) |offsets| {
-                        name = path[offsets.name..];
-                        node_type = .folder;
-                    } else {
-                        name = "<ROOT>";
-                        node_type = .grove;
-                    }
-
-                    const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
-                    const n = entry.data;
-                    n.* = Node{ .a = my.env.a };
-                    n.type = node_type;
-                    n.path = try my.aa.dupe(u8, path);
-
-                    try my.node_stack.append(my.env.a, entry.id);
-                },
-                .Leave => {
-                    if (my.node_stack.pop()) |folder_id| {
-                        const sort_files = true;
-                        if (sort_files) {
-                            const file_ids = my.tree.childIdsMut(folder_id);
-                            const Ftor = struct {
-                                pub fn lt(m: *const My, a: Tree.Id, b: Tree.Id) bool {
-                                    // &perf: this uses the full path while we know that only the filename itself differs
-                                    return std.mem.lessThan(u8, m.tree.cptr(a).path, m.tree.cptr(b).path);
-                                }
-                            };
-                            std.sort.block(
-                                Tree.Id,
-                                file_ids,
-                                my,
-                                Ftor.lt,
-                            );
-                        }
-                    }
-                },
-                .File => {
-                    const offsets = maybe_offsets orelse return error.ExpectedOffsets;
-                    const name = path[offsets.name..];
-
-                    if (my.cfg_grove.include) |include| {
-                        const ext = std.fs.path.extension(name);
-                        if (!strings.contains(u8, include, ext))
-                            // Skip this extension
-                            return;
-                    }
-
-                    const my_ext = std.fs.path.extension(name);
-                    if (mero.Language.from_extension(my_ext)) |language| {
-                        if (my.cfg_grove.max_count) |max_count|
-                            if (my.file_count >= max_count)
-                                return;
-                        my.file_count += 1;
-
-                        const file = try dir.openFile(my.env.io, name, .{});
-                        defer file.close(my.env.io);
-
-                        const stat = try file.stat(my.env.io);
-                        const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
-                        if (!size_is_ok)
-                            return;
-
-                        const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
-                        const n = entry.data;
-                        n.* = Node{ .a = my.env.a };
-                        n.type = Node.Type{ .file = .{ .language = language } };
-                        n.path = try my.aa.dupe(u8, path);
-                        {
-                            var readbuf: [1024]u8 = undefined;
-                            var reader = file.reader(my.env.io, &readbuf);
-                            n.content = try reader.interface.readAlloc(my.aa, stat.size);
-                        }
-                        n.grove_id = my.cfg_grove.id;
-
-                        var parser = try mero.Parser.init(my.env.a, entry.id, my.tree);
-                        try parser.parse();
-                    } else {
-                        try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
-                    }
-                },
-            }
-        }
-    };
 
     // Distribute parent org_amps and agg_amps from root to leaf into agg_amps
     fn aggregateAmps(self: *Self) !void {
@@ -390,7 +405,6 @@ pub const Forest = struct {
             tree: *const Tree,
             defmgr: *amp.DefMgr,
 
-            terms: []const Term = &.{},
             path: []const u8 = &.{},
             grove_id: ?usize = null,
             is_new_file: bool = false,
@@ -405,9 +419,8 @@ pub const Forest = struct {
                     .folder => {
                         my.path = n.path;
                     },
-                    .file => |file| {
+                    .file => {
                         my.path = n.path;
-                        my.terms = file.terms.items;
                         if (n.grove_id == null)
                             return error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
@@ -434,8 +447,7 @@ pub const Forest = struct {
 
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
-                        for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
-                            const term = &my.terms[term_ix];
+                        for (text.terms.slice) |term| {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 
@@ -491,7 +503,6 @@ pub const Forest = struct {
             tree: *Tree,
             defmgr: *amp.DefMgr,
 
-            terms: ?[]const Term = null,
             path: []const u8 = &.{},
             is_new_file: bool = false,
             grove_id: ?usize = null,
@@ -520,9 +531,8 @@ pub const Forest = struct {
                             }
                         }
                     },
-                    .file => |file| {
+                    .file => {
                         defer my.path = n.path;
-                        my.terms = file.terms.items;
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
@@ -546,10 +556,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
-                for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
-                    const terms = my.terms orelse unreachable;
-                    const term = &terms[term_ix];
-
+                for (text.terms.slice) |term| {
                     cols.begin = cols.end;
                     cols.end += term.word.len;
 

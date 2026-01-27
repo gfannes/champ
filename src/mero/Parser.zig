@@ -89,7 +89,7 @@ pub fn parse(self: *Self) !void {
             n.content_cols.begin = my.col;
             switch (n.type) {
                 .text => |text| {
-                    for (text.terms_ixr.begin..text.terms_ixr.end) |term_ix| {
+                    for (text.terms.ixr.begin..text.terms.ixr.end) |term_ix| {
                         const term = &my.terms[term_ix];
                         switch (term.kind) {
                             .Newline => {
@@ -127,9 +127,11 @@ fn pop_line(self: *Self) !?Node {
     const first_token = self.tokenizer.peek() orelse return null;
     var content = first_token.word;
 
-    var n = Node{ .a = self.a };
+    var n = Node{
+        .a = self.a,
+        .type = .{ .text = .{ .kind = .Line, .terms = .{ .ixr = .{} } } },
+    };
     errdefer n.deinit();
-    n.type = .{ .text = .{ .kind = .Line } };
 
     switch (self.language) {
         .Markdown => try self.pop_md_text(&n),
@@ -980,9 +982,11 @@ test "mero.Parser.parse()" {
 
         const f = try tree.addChild(null);
         const n = f.data;
-        n.* = Node{ .a = ut.allocator };
-        n.content = try aa.dupe(u8, scn.content);
-        n.language = scn.language;
+        n.* = Node{
+            .a = ut.allocator,
+            .type = .{ .file = .{ .language = scn.language } },
+            .content = try aa.dupe(u8, scn.content),
+        };
 
         var parser = try Self.init(ut.allocator, f.id, &tree);
 

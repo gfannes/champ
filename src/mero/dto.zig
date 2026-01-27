@@ -65,18 +65,17 @@ pub const Text = struct {
     kind: Kind,
 
     // During parsing, `ixr` is used to avoid dangling pointers.
-    // terms: union {
-    //     ixr: idx.Range,
-    //     slice: []const Term,
-    // },
-    terms_ixr: idx.Range = .{},
+    terms: union {
+        ixr: idx.Range,
+        slice: []const Term,
+    },
 
     pub fn append(self: *Self, term: Term, terms: *Terms, a: std.mem.Allocator) !void {
         if (term.word.len > 0) {
-            if (self.terms_ixr.empty())
-                self.terms_ixr = .{ .begin = terms.items.len, .end = terms.items.len };
+            if (self.terms.ixr.empty())
+                self.terms.ixr = .{ .begin = terms.items.len, .end = terms.items.len };
             try terms.append(a, term);
-            self.terms_ixr.end += 1;
+            self.terms.ixr.end += 1;
         }
     }
 
@@ -178,7 +177,9 @@ pub const Node = struct {
                     term.write(&n);
             },
             .text => |text| {
-                text.terms_ixr.write(&n, "line");
+                var nn = n.node("Text");
+                defer nn.deinit();
+                nn.attr("kind", text.kind);
             },
             else => {},
         }

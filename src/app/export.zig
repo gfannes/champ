@@ -64,7 +64,6 @@ pub const Export = struct {
             has_section_stack: BoolStack = .{},
 
             section_chores: SectionChoreIds = .{},
-            terms: []const mero.Term = &.{},
             section_level: usize = 0,
             section_stack: SectionStack = .{},
             add_newline_before_bullet: bool = false,
@@ -103,19 +102,17 @@ pub const Export = struct {
                                     }
                                 }
                             },
-                            .file => |file| {
+                            .file => {
                                 if (before) {
                                     if (std.mem.find(u8, n.path, needle)) |_| {
-                                        std.debug.print("{}: {s} {}\n", .{ my.section_level, n.path, file.terms.items.len });
+                                        std.debug.print("{}: {s}\n", .{ my.section_level, n.path });
 
                                         my.mode = .Write;
-                                        my.terms = file.terms.items;
                                         my.first_section = null;
                                         for (my.tree.childIds(entry.id)) |child_id| {
                                             try my.tree.dfs(child_id, my);
                                         }
                                         try my.output.print("\n", .{});
-                                        my.terms = &.{};
                                         my.mode = .Search;
 
                                         if (amp.is_folder_metadata_fp(n.path)) {
@@ -175,8 +172,7 @@ pub const Export = struct {
                             try res.value_ptr.append(my.env.a, chore_id);
                         }
 
-                        for (n.type.text.terms_ixr.begin..n.type.text.terms_ixr.end) |ix| {
-                            const term = my.terms[ix];
+                        for (n.type.text.terms.slice) |term| {
                             if (false)
                                 try my.output.print("[{any}]({s})", .{ term.kind, term.word })
                             else {
@@ -248,18 +244,6 @@ pub const Export = struct {
             try self.forest.tree.dfsAll(&cb);
         }
 
-        const Ancestors = struct {
-            file: ?*const mero.Node = null,
-            pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
-                switch (entry.data.type) {
-                    .file => if (an.file == null) {
-                        an.file = entry.data;
-                    },
-                    else => {},
-                }
-            }
-        };
-
         {
             const w = &output_w.interface;
             try w.print("\n# Tasks\n\n", .{});
@@ -304,27 +288,22 @@ pub const Export = struct {
                         const section = try self.forest.tree.cget(section_id);
 
                         try w.print("\n### ", .{});
-                        var ancestors = Ancestors{};
-                        self.forest.tree.toRoot(section_id, &ancestors);
-                        if (ancestors.file) |file| {
-                            var trim: []const u8 = " ";
-                            var maybe_word: ?[]const u8 = null;
-                            for (section.type.text.terms_ixr.begin..section.type.text.terms_ixr.end) |ix| {
-                                const term = file.type.file.terms.items[ix];
-                                switch (term.kind) {
-                                    .Section, .Amp, .Checkbox, .Capital, .Newline => {},
-                                    else => {
-                                        if (maybe_word) |word| {
-                                            try w.print("{s}", .{std.mem.trimStart(u8, word, trim)});
-                                            trim = "";
-                                        }
-                                        maybe_word = term.word;
-                                    },
-                                }
+                        var trim: []const u8 = " ";
+                        var maybe_word: ?[]const u8 = null;
+                        for (section.type.text.terms.slice) |term| {
+                            switch (term.kind) {
+                                .Section, .Amp, .Checkbox, .Capital, .Newline => {},
+                                else => {
+                                    if (maybe_word) |word| {
+                                        try w.print("{s}", .{std.mem.trimStart(u8, word, trim)});
+                                        trim = "";
+                                    }
+                                    maybe_word = term.word;
+                                },
                             }
-                            if (maybe_word) |word|
-                                try w.print("{s}", .{std.mem.trimEnd(u8, std.mem.trimStart(u8, word, trim), " ")});
                         }
+                        if (maybe_word) |word|
+                            try w.print("{s}", .{std.mem.trimEnd(u8, std.mem.trimStart(u8, word, trim), " ")});
                         try w.print("\n\nDetailed description can be found [here](#section:{}).\n\n", .{section_id});
                     }
 
@@ -348,21 +327,16 @@ pub const Export = struct {
                             {
                                 var first: bool = true;
                                 const n = self.forest.tree.cptr(ch.node_id);
-                                var ancestors = Ancestors{};
-                                self.forest.tree.toRoot(ch.node_id, &ancestors);
-                                for (n.type.text.terms_ixr.begin..n.type.text.terms_ixr.end) |ix| {
-                                    if (ancestors.file) |file| {
-                                        const term = file.type.file.terms.items[ix];
-                                        switch (term.kind) {
-                                            .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
-                                            else => {
-                                                if (first) {
-                                                    first = false;
-                                                    try w.print("- ", .{});
-                                                }
-                                                try w.print("{s}", .{term.word});
-                                            },
-                                        }
+                                for (n.type.text.terms.slice) |term| {
+                                    switch (term.kind) {
+                                        .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
+                                        else => {
+                                            if (first) {
+                                                first = false;
+                                                try w.print("- ", .{});
+                                            }
+                                            try w.print("{s}", .{term.word});
+                                        },
                                     }
                                 }
                                 if (!first)
