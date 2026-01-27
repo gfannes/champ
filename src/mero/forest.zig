@@ -427,12 +427,12 @@ pub const Forest = struct {
                             }
                         }
                     },
-                    else => {
+                    .text => |text| {
                         defer my.is_new_file = false;
 
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
-                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                        for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
                             const term = &my.terms[term_ix];
                             cols.begin = cols.end;
                             cols.end += term.word.len;
@@ -447,7 +447,7 @@ pub const Forest = struct {
                                         const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
                                         try n.org_amps.append(my.env.a, def);
 
-                                        if (my.is_new_file and n.type == .paragraph) {
+                                        if (my.is_new_file and n.type.isText(.Paragraph)) {
                                             // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
                                             if (try my.tree.parent(entry.id)) |file| {
                                                 try file.data.org_amps.append(my.env.a, def);
@@ -526,14 +526,14 @@ pub const Forest = struct {
 
                         my.do_process_other = if (amp.is_folder_metadata_fp(n.path)) my.do_process_amp_md else true;
                     },
-                    else => {
+                    .text => |text| {
                         if (my.do_process_other)
-                            try my.processOther(entry);
+                            try my.processText(entry, text);
                     },
                 }
             }
 
-            fn processOther(my: *My, entry: Tree.Entry) !void {
+            fn processText(my: *My, entry: Tree.Entry, text: Node.Text) !void {
                 const n = entry.data;
                 std.debug.assert(n.org_amps.items.len == 0);
                 std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
@@ -544,7 +544,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
-                for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
+                for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
                     const terms = my.terms orelse unreachable;
                     const term = &terms[term_ix];
 
@@ -603,24 +603,19 @@ pub const Forest = struct {
                     }
                 }
 
-                if (my.is_new_file) {
-                    switch (n.type) {
-                        .paragraph => {
-                            // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
-                            // If the file is '&.md', it is copied to the Folder as well
-                            if (try my.tree.parent(entry.id)) |file| {
-                                file.data.def = n.def;
-                                try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
+                if (my.is_new_file and n.type.isText(.Paragraph)) {
+                    // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
+                    // If the file is '&.md', it is copied to the Folder as well
+                    if (try my.tree.parent(entry.id)) |file| {
+                        file.data.def = n.def;
+                        try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
-                                if (amp.is_folder_metadata_fp(file.data.path)) {
-                                    if (try my.tree.parent(file.id)) |folder| {
-                                        folder.data.def = n.def;
-                                        try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
-                                    }
-                                }
+                        if (amp.is_folder_metadata_fp(file.data.path)) {
+                            if (try my.tree.parent(file.id)) |folder| {
+                                folder.data.def = n.def;
+                                try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
                             }
-                        },
-                        else => {},
+                        }
                     }
                 }
             }

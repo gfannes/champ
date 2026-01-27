@@ -18,6 +18,7 @@ pub const Error = error{
     UnexpectedState,
     CouldNotParse,
     ExpectedLanguage,
+    ExpectedTextNode,
 };
 
 // &rework: Split pop_txt_X(), pop_md_X() and pop_nonmd_X() into different structs and maybe files
@@ -87,24 +88,29 @@ pub fn parse(self: *Self) !void {
             const n = entry.data;
             n.content_rows.begin = my.row;
             n.content_cols.begin = my.col;
-            for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |term_ix| {
-                const term = &my.terms[term_ix];
-                switch (term.kind) {
-                    .Newline => {
-                        my.updateRow(term.word);
-                        my.col = 0;
-                    },
-                    else => {
-                        if ((term.kind == .Code or term.kind == .Formula) and term.word.len > 1)
-                            my.updateRow(term.word);
-                        my.col += term.word.len;
+            switch (n.type) {
+                .text => |text| {
+                    for (text.line.terms_ixr.begin..text.line.terms_ixr.end) |term_ix| {
+                        const term = &my.terms[term_ix];
+                        switch (term.kind) {
+                            .Newline => {
+                                my.updateRow(term.word);
+                                my.col = 0;
+                            },
+                            else => {
+                                if ((term.kind == .Code or term.kind == .Formula) and term.word.len > 1)
+                                    my.updateRow(term.word);
+                                my.col += term.word.len;
 
-                        // We update content_rows/content_cols here and not after this for loop
-                        // to not include the last Newline
-                        n.content_rows.end = my.row;
-                        n.content_cols.end = my.col;
-                    },
-                }
+                                // We update content_rows/content_cols here and not after this for loop
+                                // to not include the last Newline
+                                n.content_rows.end = my.row;
+                                n.content_cols.end = my.col;
+                            },
+                        }
+                    }
+                },
+                else => return error.ExpectedTextNode,
             }
         }
 
@@ -124,7 +130,7 @@ fn pop_line(self: *Self) !?Node {
 
     var n = Node{ .a = self.a };
     errdefer n.deinit();
-    n.type = .line;
+    n.type = .{ .text = .{ .kind = .Line } };
 
     switch (self.language) {
         .Markdown => try self.pop_md_text(&n),
@@ -163,7 +169,10 @@ fn pop_line(self: *Self) !?Node {
 }
 
 fn appendToLine(self: *Self, n: *Node, term: Term) !void {
-    try n.line.append(term, self.terms(), self.a);
+    switch (n.type) {
+        .text => |*text| try text.line.append(term, self.terms(), self.a),
+        else => return error.ExpectedTextNode,
+    }
 }
 
 fn pop_md_text(self: *Self, n: *Node) !void {
@@ -802,7 +811,7 @@ fn pop_section_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .section;
+            n.type = .{ .text = .{ .kind = .Section } };
 
             while (self.tokenizer.peek()) |token| {
                 if (is_section(token)) |depth| {
@@ -825,7 +834,7 @@ fn pop_paragraph_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .paragraph;
+            n.type = .{ .text = .{ .kind = .Paragraph } };
 
             while (try self.pop_bullets_node(entry.id)) {}
             return true;
@@ -840,7 +849,7 @@ fn pop_bullets_node(self: *Self, parent_id: Tree.Id) !bool {
             const entry = try self.tree.addChild(parent_id);
             const n = entry.data;
             n.* = try self.pop_line() orelse unreachable;
-            n.type = .bullet;
+            n.type = .{ .text = .{ .kind = .Bullet } };
 
             while (self.tokenizer.peek()) |token| {
                 if (is_bullet(token)) |depth| {

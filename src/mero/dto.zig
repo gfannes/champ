@@ -101,14 +101,24 @@ pub const Node = struct {
         terms: Terms = .{},
     };
 
+    pub const Text = struct {
+        pub const Kind = enum { Section, Paragraph, Bullet, Line };
+        kind: Kind,
+        line: Line = .{},
+    };
+
     pub const Type = union(enum) {
         grove: void,
         folder: void,
         file: File,
-        section: void,
-        paragraph: void,
-        bullet: void,
-        line: void,
+        text: Text,
+
+        pub fn isText(my: @This(), kind: Text.Kind) bool {
+            return switch (my) {
+                .text => |text| text.kind == kind,
+                else => false,
+            };
+        }
     };
 
     a: std.mem.Allocator,
@@ -127,7 +137,6 @@ pub const Node = struct {
     agg_amps: DefIxs = .{},
 
     // &perf: Only activate relevant fields depending on type
-    line: Line = .{},
     path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
     content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: subslices are present many times
 
@@ -162,11 +171,13 @@ pub const Node = struct {
             n.attr("chore_id", id);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
-        self.line.terms_ixr.write(&n, "line");
         switch (self.type) {
             .file => |file| {
                 for (file.terms.items) |term|
                     term.write(&n);
+            },
+            .text => |text| {
+                text.line.terms_ixr.write(&n, "line");
             },
             else => {},
         }

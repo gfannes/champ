@@ -137,7 +137,7 @@ pub const Export = struct {
                         // We record the section_id _before_ we add any potential id: a section itself is attributed to its parent
                         const maybe_section: ?Section = rubr.slc.last(my.section_stack.items);
 
-                        if (n.type == .section) {
+                        if (n.type.isText(.Section)) {
                             if (before) {
                                 my.section_level += 1;
                                 var section = Section{ .id = entry.id };
@@ -175,7 +175,7 @@ pub const Export = struct {
                             try res.value_ptr.append(my.env.a, chore_id);
                         }
 
-                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
+                        for (n.type.text.line.terms_ixr.begin..n.type.text.line.terms_ixr.end) |ix| {
                             const term = my.terms[ix];
                             if (false)
                                 try my.output.print("[{any}]({s})", .{ term.kind, term.word })
@@ -215,7 +215,7 @@ pub const Export = struct {
                                         }
                                     },
                                     .Newline => {
-                                        if (n.type == .section)
+                                        if (n.type.isText(.Section))
                                             try my.output.print(" {{#section:{}}}", .{entry.id});
                                     },
                                     else => {},
@@ -225,7 +225,7 @@ pub const Export = struct {
                             }
                         }
 
-                        my.add_newline_before_bullet = n.type == .paragraph;
+                        my.add_newline_before_bullet = n.type.isText(.Paragraph);
                     },
                 }
             }
@@ -309,7 +309,7 @@ pub const Export = struct {
                         if (ancestors.file) |file| {
                             var trim: []const u8 = " ";
                             var maybe_word: ?[]const u8 = null;
-                            for (section.line.terms_ixr.begin..section.line.terms_ixr.end) |ix| {
+                            for (section.type.text.line.terms_ixr.begin..section.type.text.line.terms_ixr.end) |ix| {
                                 const term = file.type.file.terms.items[ix];
                                 switch (term.kind) {
                                     .Section, .Amp, .Checkbox, .Capital, .Newline => {},
@@ -350,7 +350,7 @@ pub const Export = struct {
                                 const n = self.forest.tree.cptr(ch.node_id);
                                 var ancestors = Ancestors{};
                                 self.forest.tree.toRoot(ch.node_id, &ancestors);
-                                for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
+                                for (n.type.text.line.terms_ixr.begin..n.type.text.line.terms_ixr.end) |ix| {
                                     if (ancestors.file) |file| {
                                         const term = file.type.file.terms.items[ix];
                                         switch (term.kind) {
