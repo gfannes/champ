@@ -18,6 +18,7 @@ pub const Error = error{
     CouldNotFindSection,
     ExpectedSection,
     ExpectedWbs,
+    UnexpectedStatus,
 };
 
 pub const Export = struct {
@@ -248,39 +249,62 @@ pub const Export = struct {
             try self.forest.tree.dfsAll(&cb);
         }
 
+        const Ancestors = struct {
+            file: ?*const mero.Node = null,
+            pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
+                switch (entry.data.type) {
+                    .file => if (an.file == null) {
+                        an.file = entry.data;
+                    },
+                    else => {},
+                }
+            }
+        };
+
         {
             const w = &output_w.interface;
             try w.print("\n# Tasks\n\n", .{});
             try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});
 
-            var act_section_id: ?usize = null;
-
             var it = self.section_chores.iterator();
             while (it.next()) |e| {
                 const section_id = e.key_ptr.*;
-                for (e.value_ptr.items) |chore_id| {
-                    const ch = &self.forest.chores.list.items[chore_id];
 
-                    const Ancestors = struct {
-                        file: ?*const mero.Node = null,
-                        pub fn call(an: *@This(), entry: *const mero.Tree.Entry) void {
-                            switch (entry.data.type) {
-                                .file => if (an.file == null) {
-                                    an.file = entry.data;
-                                },
-                                else => {},
-                            }
+                const Status_ChoreIds = std.AutoArrayHashMapUnmanaged(amp.Status.Kind, std.ArrayList(usize));
+                var status_choreids = Status_ChoreIds{};
+                defer {
+                    var it_ = status_choreids.iterator();
+                    while (it_.next()) |*e_| {
+                        e_.value_ptr.deinit(self.env.a);
+                    }
+                    status_choreids.deinit(self.env.a);
+                }
+                {
+                    const chore_ids = e.value_ptr.items;
+                    for (chore_ids) |chore_id| {
+                        const ch = &self.forest.chores.list.items[chore_id];
+
+                        const status_value = ch.value("status", .Org) orelse continue;
+                        var status = (status_value.status orelse continue).kind;
+                        switch (status) {
+                            .Blocked, .Todo, .Wip, .Done => {},
+                            .Next, .Question => status = .Todo,
+                            else => continue,
                         }
-                    };
 
-                    if (act_section_id != section_id)
-                        act_section_id = null;
+                        var gop = try status_choreids.getOrPut(self.env.a, status);
+                        if (!gop.found_existing)
+                            gop.value_ptr.* = .{};
+                        try gop.value_ptr.append(self.env.a, chore_id);
+                    }
+                }
 
-                    if (act_section_id == null) {
-                        act_section_id = section_id;
+                if (status_choreids.entries.len > 0) {
+                    // Write title
+                    {
                         const section = try self.forest.tree.cget(section_id);
 
-                        try w.print("\n### [", .{});
+                        try w.print("\n### ", .{});
                         var ancestors = Ancestors{};
                         self.forest.tree.toRoot(section_id, &ancestors);
                         if (ancestors.file) |file| {
@@ -302,31 +326,50 @@ pub const Export = struct {
                             if (maybe_word) |word|
                                 try w.print("{s}", .{std.mem.trimEnd(u8, std.mem.trimStart(u8, word, trim), " ")});
                         }
-                        try w.print("](#section:{})\n\n", .{section_id});
+                        try w.print("\n\nDetailed description can be found [here](#section:{}).\n\n", .{section_id});
                     }
 
-                    {
-                        var first: bool = true;
-                        const n = self.forest.tree.cptr(ch.node_id);
-                        var ancestors = Ancestors{};
-                        self.forest.tree.toRoot(ch.node_id, &ancestors);
-                        for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
-                            if (ancestors.file) |file| {
-                                const term = file.type.file.terms.items[ix];
-                                switch (term.kind) {
-                                    .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
-                                    else => {
-                                        if (first) {
-                                            first = false;
-                                            try w.print("- ", .{});
+                    for (&[_]amp.Status.Kind{ .Blocked, .Todo, .Wip, .Done }) |status| {
+                        const chore_ids = (status_choreids.getPtr(status) orelse continue).items;
+                        if (rubr.slc.isEmpty(chore_ids))
+                            continue;
+
+                        const str = switch (status) {
+                            .Blocked => "Blocked",
+                            .Todo => "Todo",
+                            .Wip => "In progress",
+                            .Done => "Done",
+                            else => return error.UnexpectedStatus,
+                        };
+                        try w.print("\n#### {s}\n\n", .{str});
+
+                        for (chore_ids) |chore_id| {
+                            const ch = &self.forest.chores.list.items[chore_id];
+
+                            {
+                                var first: bool = true;
+                                const n = self.forest.tree.cptr(ch.node_id);
+                                var ancestors = Ancestors{};
+                                self.forest.tree.toRoot(ch.node_id, &ancestors);
+                                for (n.line.terms_ixr.begin..n.line.terms_ixr.end) |ix| {
+                                    if (ancestors.file) |file| {
+                                        const term = file.type.file.terms.items[ix];
+                                        switch (term.kind) {
+                                            .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
+                                            else => {
+                                                if (first) {
+                                                    first = false;
+                                                    try w.print("- ", .{});
+                                                }
+                                                try w.print("{s}", .{term.word});
+                                            },
                                         }
-                                        try w.print("{s}", .{term.word});
-                                    },
+                                    }
                                 }
+                                if (!first)
+                                    try w.print("\n", .{});
                             }
                         }
-                        if (!first)
-                            try w.print("\n", .{});
                     }
                 }
             }
