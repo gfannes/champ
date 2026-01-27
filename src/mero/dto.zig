@@ -5,7 +5,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Parser = @import("Parser.zig");
-const chore = @import("../chore.zig");
+const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
 const rubr = @import("rubr");

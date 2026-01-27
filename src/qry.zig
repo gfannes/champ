@@ -2,7 +2,7 @@ const std = @import("std");
 
 const rubr = @import("rubr");
 
-const Chore = @import("chore.zig").Chore;
+const Chore = @import("chorex.zig").Chore;
 
 pub const Query = struct {
     const Self = @This();

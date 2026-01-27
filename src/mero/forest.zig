@@ -9,7 +9,7 @@ const Text = dto.Text;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
-const chore = @import("../chore.zig");
+const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
 const rubr = @import("rubr");
@@ -34,7 +34,7 @@ pub const Forest = struct {
     valid: bool = false,
     tree: Tree = undefined,
     defmgr: amp.DefMgr = undefined,
-    chores: chore.Chores = undefined,
+    chores: chorex.Chores = undefined,
 
     pub fn init(self: *Self) void {
         // &perf: Using a FBA works a bit faster.
@@ -49,7 +49,7 @@ pub const Forest = struct {
         self.aral = std.heap.ArenaAllocator.init(self.env.a);
         self.tree = Tree.init(self.env.a);
         self.defmgr = amp.DefMgr.init(self.env, "?");
-        self.chores = chore.Chores.init(self.env);
+        self.chores = chorex.Chores.init(self.env);
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
@@ -382,7 +382,7 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
 
-            chores: *chore.Chores,
+            chores: *chorex.Chores,
             tree: *const Tree,
             defmgr: *const amp.DefMgr,
 

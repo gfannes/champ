@@ -10,7 +10,7 @@ const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
 const amp = @import("../amp.zig");
 const markdown = @import("../markdown.zig");
-const chore = @import("../chore.zig");
+const chorex = @import("../chorex.zig");
 
 pub const Error = error{
     UnexpectedEmptyStack,
@@ -54,7 +54,7 @@ pub const Export = struct {
 
             env: rubr.Env,
             tree: *mero.Tree,
-            chores: *const chore.Chores,
+            chores: *const chorex.Chores,
             output_dir: *std.Io.Dir,
             output: *std.Io.Writer,
 
@@ -161,25 +161,45 @@ pub const Export = struct {
                         if (!before)
                             return;
 
+                        var status_str: ?[]const u8 = null;
                         if (n.chore_id) |chore_id| {
-                            const section = maybe_section orelse {
-                                try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
-                                return error.ExpectedSection;
-                            };
-                            const res = try my.section_chores.getOrPut(my.env.a, section.id);
-                            if (!res.found_existing)
-                                res.value_ptr.* = .{};
-                            try res.value_ptr.append(my.env.a, chore_id);
+                            const chore = my.chores.list.items[chore_id];
+                            if (chore.value("status", .Org)) |status_value| {
+                                if (status_value.status) |status| {
+                                    status_str = switch (status.kind) {
+                                        .Todo, .Next, .Question => "_TODO_ ",
+                                        .Wip => "_IN PROGRESS_ ",
+                                        .Blocked => "**BLOCKED** ",
+                                        .Done => "_DONE_ ",
+                                        else => null,
+                                    };
+                                    switch (status.kind) {
+                                        .Todo, .Wip, .Next, .Blocked, .Question => {
+                                            const section = maybe_section orelse {
+                                                try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
+                                                return error.ExpectedSection;
+                                            };
+
+                                            // Keep track of the chores per section
+                                            const res = try my.section_chores.getOrPut(my.env.a, section.id);
+                                            if (!res.found_existing)
+                                                res.value_ptr.* = .{};
+                                            try res.value_ptr.append(my.env.a, chore_id);
+                                        },
+                                        else => {},
+                                    }
+                                }
+                            }
                         }
 
                         for (n.type.text.terms.slice) |term| {
-                            if (false)
-                                try my.output.print("[{any}]({s})", .{ term.kind, term.word })
-                            else {
+                            if (false) {
+                                try my.output.print("[{any}]({s})", .{ term.kind, term.word });
+                            } else {
                                 var do_write: bool = true;
+                                var wait_status_write: bool = false;
                                 switch (term.kind) {
-                                    .Amp => {
-                                        // Skip amp
+                                    .Checkbox, .Amp, .Capital => {
                                         do_write = false;
                                     },
                                     .Section => {
@@ -193,6 +213,7 @@ pub const Export = struct {
                                     .Bullet => {
                                         if (my.add_newline_before_bullet)
                                             try my.output.print("\n", .{});
+                                        wait_status_write = true;
                                     },
                                     .Link => {
                                         const link = markdown.Link{ .content = term.word };
@@ -218,6 +239,13 @@ pub const Export = struct {
                                 }
                                 if (do_write)
                                     try my.output.print("{s}", .{term.word});
+                                if (!wait_status_write) {
+                                    wait_status_write = false;
+                                    if (status_str) |str| {
+                                        try my.output.print("{s}", .{str});
+                                        status_str = null;
+                                    }
+                                }
                             }
                         }
 

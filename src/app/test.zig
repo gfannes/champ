@@ -10,7 +10,6 @@ const Env = rubr.Env;
 
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
-const chore = @import("../chore.zig");
 
 pub const Test = struct {
     const Self = @This();
