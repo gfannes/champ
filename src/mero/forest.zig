@@ -238,7 +238,10 @@ pub const Forest = struct {
         }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.tree };
         defer cb.deinit();
 
-        var dir = try std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.path, .{});
+        var dir = std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.path, .{}) catch |err| {
+            try self.env.log.err("Could not open grove folder '{s}'.\n", .{cfg_grove.path});
+            return err;
+        };
         defer dir.close(self.env.io);
 
         var w = walker.Walker{ .env = self.env };
