@@ -24,6 +24,7 @@ pub const Error = error{
     CouldNotParseAmp,
     ExpectedGroveId,
     TooManyIterations,
+    ExpectedConfigDefault,
 };
 
 pub const Forest = struct {
@@ -72,12 +73,8 @@ pub const Forest = struct {
         self.init();
     }
 
-    pub fn load(self: *Self, config: *const cfg.file.Config, cli_args: *const cfg.cli.Args) !void {
-        var wanted_groves: [][]const u8 = cli_args.groves.items;
-        if (rubr.slc.isEmpty(wanted_groves)) {
-            if (config.default) |default|
-                wanted_groves = default;
-        }
+    pub fn load(self: *Self, config: *const cfg.file.Config) !void {
+        const wanted_groves = config.default orelse return error.ExpectedConfigDefault;
         if (rubr.slc.isEmpty(wanted_groves))
             return error.ExpectedAtLeastOneGrove;
 

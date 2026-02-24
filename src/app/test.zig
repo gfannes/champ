@@ -16,7 +16,6 @@ pub const Test = struct {
 
     env: Env,
     config: *const cfg.file.Config,
-    cli_args: *const cfg.cli.Args,
 
     forest: mero.Forest = undefined,
 
@@ -29,7 +28,7 @@ pub const Test = struct {
     }
 
     pub fn call(self: *Self) !void {
-        try self.forest.load(self.config, self.cli_args);
+        try self.forest.load(self.config);
 
         var root = naft.Node{ .w = self.env.log.writer() };
         defer root.deinit();

@@ -20,6 +20,9 @@
 # TODO Cleanup old logs &&cleanup:log
 - Log files are in '/tmp/champ-<process_id>.log'
 
+# DONE Merge cfg.file.Config and cfg.cli.Args in only one place
+- This is now done in cfg.file.Loader
+
 # DONE Support trailing `?.!`
 
 # DONE Inline formula should end at end of line

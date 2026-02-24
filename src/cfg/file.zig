@@ -1,6 +1,73 @@
 const std = @import("std");
 const rubr = @import("rubr");
-const Env = rubr.Env;
+const cli = @import("cli.zig");
+
+// Main configuration
+// '~/.config/champ/config.zon'
+pub const Config = struct {
+    groves: []Grove = &.{},
+    max_memsize: ?usize = null,
+    default: ?[][]const u8 = null,
+    lsp: Lsp = .{},
+
+    pub fn write(self: Config, parent: *rubr.naft.Node) void {
+        var n = parent.node("Config");
+        defer n.deinit();
+        if (self.max_memsize) |max_memsize|
+            n.attr("max_memsize", max_memsize);
+        for (self.groves) |grove| {
+            if (self.default) |wanted_groves| {
+                if (!rubr.strings.contains(u8, wanted_groves, grove.name))
+                    continue;
+            }
+            grove.write(&n);
+        }
+        self.lsp.write(&n);
+    }
+};
+pub const Grove = struct {
+    id: ?usize = null,
+
+    name: []const u8,
+    path: []const u8,
+    include: ?[][]const u8 = null,
+    max_size: ?usize = null,
+    max_count: ?usize = null,
+    autodef: bool = false,
+
+    pub fn write(self: Grove, parent: *rubr.naft.Node) void {
+        var n = parent.node("Grove");
+        defer n.deinit();
+        n.attr("name", self.name);
+        n.attr("path", self.path);
+        n.attr("autodef", self.autodef);
+        if (self.max_size) |max_size|
+            n.attr("max_size", max_size);
+        if (self.max_count) |max_count|
+            n.attr("max_count", max_count);
+        if (self.include) |include| {
+            var nn = n.node("Includes");
+            defer nn.deinit();
+            for (include) |inc|
+                nn.attr1(inc);
+        }
+    }
+};
+pub const Lsp = struct {
+    max_array_size: usize = 100,
+
+    pub fn write(self: Lsp, parent: *rubr.naft.Node) void {
+        var n = parent.node("Lsp");
+        defer n.deinit();
+        n.attr("max_array_size", self.max_array_size);
+    }
+};
+
+// File-UI configuration
+// '~/.config/champ/fui.zon'
+pub const Fui = struct {
+    extra: ?[][]const u8 = null,
+};
 
 // Loads Config from a file in ZON format
 pub const Loader = struct {
@@ -10,22 +77,16 @@ pub const Loader = struct {
 
     pub const What = enum { Config, Fui };
 
+    env: rubr.Env,
+    cli_args: *const cli.Args,
+
     config: ?Config = null,
     config_hash: ?Hash = null,
 
     fui: ?Fui = null,
     fui_hash: ?Hash = null,
 
-    env: Env,
-    aral: std.heap.ArenaAllocator,
-
-    // We hold an std.heap.ArenaAllocator: do not move me once an ArenaAllocator.allocator() is created/used
-    pub fn init(env: Env) !Self {
-        return Self{ .env = env, .aral = std.heap.ArenaAllocator.init(env.a) };
-    }
-    pub fn deinit(self: *Self) void {
-        self.aral.deinit();
-    }
+    tmp_content: ?[:0]u8 = null,
 
     // For some reason, std.zon.parse.fromSliceAlloc() expects a sentinel string
     // Returns true if the loaded config is different from before
@@ -39,17 +100,21 @@ pub const Loader = struct {
                     if (std.mem.eql(u8, &hash, &my_hash))
                         return false;
                 }
-                self.config = try std.zon.parse.fromSliceAlloc(Config, self.aral.allocator(), content, null, .{});
+                self.config = try std.zon.parse.fromSliceAlloc(Config, self.env.aa, content, null, .{});
                 self.config_hash = my_hash;
 
                 try self.normalize();
+
+                if (self.cli_args.groves.items.len > 0)
+                    // cli.Args.groves overrules Config.default
+                    self.config.?.default = self.cli_args.groves.items;
             },
             .Fui => {
                 if (self.fui_hash) |hash| {
                     if (std.mem.eql(u8, &hash, &my_hash))
                         return false;
                 }
-                self.fui = try std.zon.parse.fromSliceAlloc(Fui, self.aral.allocator(), content, null, .{});
+                self.fui = try std.zon.parse.fromSliceAlloc(Fui, self.env.aa, content, null, .{});
                 self.fui_hash = my_hash;
             },
         }
@@ -65,23 +130,27 @@ pub const Loader = struct {
         var readbuf: [1024]u8 = undefined;
         var reader = file.reader(self.env.io, &readbuf);
         const size = try reader.getSize();
-        const content: [:0]u8 = try self.aral.allocator().allocSentinel(u8, size, 0);
-        try reader.interface.readSliceAll(content);
 
-        return try self.loadFromContent(content, what);
+        // Avoid allocating this buffer each time: the LSP server loads the Config on a regular basis.
+        if (self.tmp_content == null or self.tmp_content.?.len < size)
+            self.tmp_content = try self.env.aa.allocSentinel(u8, size, 0);
+
+        try reader.interface.readSliceAll(self.tmp_content.?);
+
+        return try self.loadFromContent(self.tmp_content.?, what);
     }
 
     // - Rework include extensions from 'md' to '.md'
     fn normalize(self: *Self) !void {
-        const a = self.aral.allocator();
+        const aa = self.env.aa;
         if (self.config) |config| {
             for (config.groves, 0..) |*grove, id| {
                 grove.id = id;
                 if (grove.include) |include| {
-                    const new_include = try a.alloc([]const u8, include.len);
+                    const new_include = try aa.alloc([]const u8, include.len);
                     for (include, 0..) |ext, ix| {
                         new_include[ix] = if (ext.len > 0 and ext[0] != '.')
-                            try std.mem.concat(a, u8, &[_][]const u8{ ".", ext })
+                            try std.mem.concat(aa, u8, &[_][]const u8{ ".", ext })
                         else
                             ext;
                     }
@@ -90,32 +159,6 @@ pub const Loader = struct {
             }
         }
     }
-};
-
-pub const Grove = struct {
-    id: ?usize = null,
-
-    name: []const u8,
-    path: []const u8,
-    include: ?[][]const u8 = null,
-    max_size: ?usize = null,
-    max_count: ?usize = null,
-    autodef: bool = false,
-};
-
-pub const Lsp = struct {
-    max_array_size: usize = 100,
-};
-
-pub const Config = struct {
-    groves: []Grove = &.{},
-    max_memsize: ?usize = null,
-    default: ?[][]const u8 = null,
-    lsp: Lsp = .{},
-};
-
-pub const Fui = struct {
-    extra: ?[][]const u8 = null,
 };
 
 test "cfg" {
@@ -140,7 +183,7 @@ test "cfg" {
         \\}
     ;
 
-    var env_inst = Env.Instance{};
+    var env_inst = rubr.Env.Instance{};
     env_inst.init();
     defer env_inst.deinit();
 

@@ -181,8 +181,7 @@ pub const Lsp = struct {
                     const prio = Prio.max(.Week);
                     _ = prio;
 
-                    var loader = try cfg.file.Loader.init(self.env);
-                    defer loader.deinit();
+                    var loader = cfg.file.Loader{ .env = self.env, .cli_args = self.cli_args };
                     const fui_config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/fui.zon" else "/home/geertf/.config/champ/fui.zon";
                     if (loader.loadFromFile(fui_config_fp, .Fui)) |_| {
                         std.debug.print("Found new fui\n", .{});
@@ -446,7 +445,7 @@ pub const ForestPP = struct {
     reload_counter: usize = 0,
 
     pub fn init(self: *Self) void {
-        self.config_loader = try cfg.file.Loader.init(self.env);
+        self.config_loader = cfg.file.Loader{ .env = self.env, .cli_args = self.cli_args };
         for (&self.pp) |*forest| {
             forest.* = .{ .env = self.env };
             forest.init();
@@ -454,7 +453,6 @@ pub const ForestPP = struct {
     }
     pub fn deinit(self: *Self) void {
         self.stopThread();
-        self.config_loader.deinit();
         for (&self.pp) |*forest|
             forest.deinit();
     }
@@ -544,7 +542,7 @@ pub const ForestPP = struct {
 
                 const forest = self.pong();
                 forest.reinit();
-                try forest.load(&config, self.cli_args);
+                try forest.load(&config);
 
                 // Swap ping and pong
                 {

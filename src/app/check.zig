@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const rubr = @import("rubr");
-const Env = rubr.Env;
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 
@@ -22,8 +21,8 @@ pub const Check = struct {
         entries: []const Entry,
     };
 
-    env: Env,
-    cli_args: *const cfg.cli.Args,
+    env: rubr.Env,
+    config: *const cfg.file.Config,
     forest: *mero.Forest,
 
     segments: std.ArrayList(Segment) = .{},
@@ -41,6 +40,10 @@ pub const Check = struct {
     pub fn show(self: *Self, details: u8) !void {
         var root = rubr.naft.Node.root(self.env.stdout);
         defer root.deinit();
+
+        {
+            self.config.write(&root);
+        }
 
         {
             var n = root.node("Tree");

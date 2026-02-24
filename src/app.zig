@@ -71,9 +71,6 @@ pub const App = struct {
         if (self.maybe_forest) |*forest|
             forest.deinit();
 
-        if (self.config_loader) |*loader|
-            loader.deinit();
-
         self.cli_args.deinit();
 
         if (self.maybe_fba) |fba|
@@ -103,8 +100,8 @@ pub const App = struct {
     }
 
     pub fn loadConfig(self: *Self) !bool {
-        self.config_loader = try cfg.file.Loader.init(self.env);
-        const cfg_loader = &(self.config_loader orelse unreachable);
+        self.config_loader = cfg.file.Loader{ .env = self.env, .cli_args = &self.cli_args };
+        const cfg_loader = &self.config_loader.?;
 
         // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
@@ -183,7 +180,7 @@ pub const App = struct {
 
                     var obj = Check{
                         .env = self.env,
-                        .cli_args = &self.cli_args,
+                        .config = &self.config,
                         .forest = forest,
                     };
                     defer obj.deinit();
@@ -203,7 +200,6 @@ pub const App = struct {
                     var obj = Test{
                         .env = self.env,
                         .config = &self.config,
-                        .cli_args = &self.cli_args,
                     };
                     try obj.init();
                     defer obj.deinit();
@@ -221,7 +217,7 @@ pub const App = struct {
 
         var forest = if (self.maybe_forest) |*ptr| ptr else return error.ExpectedForest;
         forest.init();
-        try forest.load(&self.config, &self.cli_args);
+        try forest.load(&self.config);
 
         return forest;
     }

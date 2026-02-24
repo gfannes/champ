@@ -10,6 +10,10 @@ const cfg = @import("../cfg.zig");
 const tkn = @import("../tkn.zig");
 const mero = @import("../mero.zig");
 
+const Error = error{
+    ExpectedConfigDefault,
+};
+
 pub const Perf = struct {
     const Self = @This();
 
@@ -18,8 +22,10 @@ pub const Perf = struct {
     cli_args: *const cfg.cli.Args,
 
     pub fn call(self: Self) !void {
+        const wanted_groves = self.config.default orelse return error.ExpectedConfigDefault;
+
         for (self.config.groves) |grove| {
-            if (!strings.contains(u8, self.cli_args.groves.items, grove.name))
+            if (!strings.contains(u8, wanted_groves, grove.name))
                 // Skip this grove
                 continue;
 
