@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const naft = rubr.naft;
 
 const tkn = @import("../tkn.zig");

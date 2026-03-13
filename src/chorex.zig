@@ -2,7 +2,7 @@ const std = @import("std");
 
 const amp = @import("amp.zig");
 
-const rubr = @import("rubr");
+const rubr = @import("rubr.zig");
 const naft = rubr.naft;
 
 const mero = @import("mero.zig");
@@ -33,7 +33,7 @@ pub const Chore = struct {
     // String repr of Node.org_amps + Node.agg_amps
     str: []const u8 = &.{},
 
-    parts: Parts = .{},
+    parts: Parts = .empty,
     // Indicates the number of Parts that are orgs
     org_count: usize = 0,
 
@@ -127,9 +127,9 @@ pub const Chores = struct {
     env: rubr.Env,
     aral: std.heap.ArenaAllocator,
 
-    list: List = .{},
+    list: List = .empty,
 
-    tmp_concat: TmpConcat = .{},
+    tmp_concat: TmpConcat = .empty,
 
     pub fn init(env: rubr.Env) Self {
         return .{

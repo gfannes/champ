@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Log = rubr.log.Log;
 const lsp = rubr.lsp;
 const strings = rubr.strings;

@@ -2,7 +2,7 @@ const std = @import("std");
 const Def = @import("Def.zig");
 const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 
 const Self = @This();
 
@@ -13,9 +13,9 @@ env: rubr.Env,
 aral: std.heap.ArenaAllocator,
 phony_prefix: []const u8,
 
-defs: Defs = .{},
+defs: Defs = .empty,
 
-tmp_concat: TmpConcat = .{},
+tmp_concat: TmpConcat = .empty,
 
 pub fn init(env: rubr.Env, phony_prefix: []const u8) Self {
     return .{

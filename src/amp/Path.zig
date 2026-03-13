@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Status = @import("Status.zig");
 const Prio = @import("Prio.zig");
 const Date = @import("Date.zig");
@@ -45,7 +45,7 @@ a: std.mem.Allocator,
 is_definition: bool = false,
 is_absolute: bool = false,
 is_dependency: bool = false,
-parts: Parts = .{},
+parts: Parts = .empty,
 
 pub fn init(a: std.mem.Allocator) Self {
     return Self{ .a = a };

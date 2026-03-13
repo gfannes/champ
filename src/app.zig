@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const rubr = @import("rubr");
+const rubr = @import("rubr.zig");
 const Strange = rubr.strange.Strange;
 const strings = rubr.strings;
 const walker = rubr.walker;
@@ -77,7 +77,7 @@ pub const App = struct {
             self.env.a.free(fba.buffer);
 
         {
-            const duration_ms = self.env.duration_ns() / 1000 / 1000;
+            const duration_ms = @divExact(self.env.duration_ns(), 1_000_000);
             self.witf.print("Duration: {}ms\n", .{duration_ms}) catch {};
         }
         self.env_inst.deinit();

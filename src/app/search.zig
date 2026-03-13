@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Env = rubr.Env;
 const lsp = rubr.lsp;
 const strings = rubr.strings;
@@ -39,8 +39,8 @@ pub const Search = struct {
     config: *const cfg.file.Config,
     forest: *const mero.Forest,
 
-    segments: std.ArrayList(Segment) = .{},
-    all_entries: std.ArrayList(Entry) = .{},
+    segments: std.ArrayList(Segment) = .empty,
+    all_entries: std.ArrayList(Entry) = .empty,
     max: Max = .{},
 
     pub fn deinit(self: *Self) void {

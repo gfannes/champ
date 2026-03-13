@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 const fuzz = rubr.fuzz;
@@ -45,7 +45,7 @@ pub const Lsp = struct {
     }
 
     pub fn call(self: *Self) !void {
-        try self.env.log.info("Lsp server started {}\n", .{(try std.time.Instant.now()).timestamp});
+        try self.env.log.info("Lsp server started {}\n", .{(std.Io.Clock.now(.real, self.env.io))});
 
         var readbuf: [1024]u8 = undefined;
         var cin = std.Io.File.stdin().reader(self.env.io, &readbuf);
@@ -67,7 +67,7 @@ pub const Lsp = struct {
             const request = try server.receive();
 
             const forest, const mutex = try self.forest_pp.waitForPing();
-            defer mutex.unlock();
+            defer mutex.unlock(self.env.io);
 
             const dto = lsp.dto;
             if (request.id) |_| {
@@ -192,7 +192,7 @@ pub const Lsp = struct {
 
                     try plan.call(null, query_input, false);
 
-                    var locations = std.ArrayList(dto.Location){};
+                    var locations = std.ArrayList(dto.Location).empty;
                     for (plan.segments.items) |segment| {
                         const entries_count = if (request.is("textDocument/declaration"))
                             if (std.mem.endsWith(u8, src_filename, segment.path)) segment.entries.len else 0
@@ -243,7 +243,7 @@ pub const Lsp = struct {
 
                     // Find all usage locations
                     if (maybe_ap) |ap| {
-                        var locations = std.ArrayList(dto.Location){};
+                        var locations = std.ArrayList(dto.Location).empty;
                         for (forest.chores.list.items) |chore| {
                             for (chore.parts.items[0..chore.org_count]) |part| {
                                 if (ap.isFit(part.ap)) {
@@ -273,7 +273,7 @@ pub const Lsp = struct {
                     var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa, self.env.io);
 
-                    var document_symbols = std.ArrayList(dto.DocumentSymbol){};
+                    var document_symbols = std.ArrayList(dto.DocumentSymbol).empty;
 
                     for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, filename, chore.path))
@@ -309,7 +309,7 @@ pub const Lsp = struct {
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
-                    var completions = std.ArrayList(dto.CompletionItem){};
+                    var completions = std.ArrayList(dto.CompletionItem).empty;
 
                     for (forest.defmgr.defs.items) |item| {
                         if (rubr.slc.lastPtr(item.ap.parts.items)) |part| {
@@ -330,7 +330,7 @@ pub const Lsp = struct {
                     var aa = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa.deinit();
                     const aaa = aa.allocator();
-                    var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol){};
+                    var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
                     var q = qry.Query{ .a = self.env.a };
                     defer q.deinit();
@@ -434,7 +434,7 @@ pub const ForestPP = struct {
 
     config_loader: cfg.file.Loader = undefined,
 
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = .init,
 
     thread: ?std.Thread = null,
     quit_thread: bool = false,
@@ -458,18 +458,18 @@ pub const ForestPP = struct {
     }
 
     // Unlock the mutex when finished working with forest
-    pub fn waitForPing(self: *Self) !struct { *mero.Forest, *std.Thread.Mutex } {
+    pub fn waitForPing(self: *Self) !struct { *mero.Forest, *std.Io.Mutex } {
         while (true) {
             {
-                self.mutex.lock();
+                try self.mutex.lock(self.env.io);
                 if (self.quit_thread) {
-                    self.mutex.unlock();
+                    self.mutex.unlock(self.env.io);
                     return error.ThreadNotRunning;
                 }
                 const forest = self.ping();
                 if (forest.valid)
                     return .{ forest, &self.mutex };
-                self.mutex.unlock();
+                self.mutex.unlock(self.env.io);
             }
 
             try self.env.io.sleep(std.Io.Duration.fromMilliseconds(10), std.Io.Clock.real);
@@ -484,9 +484,9 @@ pub const ForestPP = struct {
     }
     fn stopThread(self: *Self) void {
         if (self.thread) |thr| {
-            self.mutex.lock();
+            self.mutex.lock(self.env.io) catch {};
             self.quit_thread = true;
-            self.mutex.unlock();
+            self.mutex.unlock(self.env.io);
 
             thr.join();
         }
@@ -505,8 +505,8 @@ pub const ForestPP = struct {
             var reload: bool = false;
 
             {
-                self.mutex.lock();
-                defer self.mutex.unlock();
+                try self.mutex.lock(self.env.io);
+                defer self.mutex.unlock(self.env.io);
 
                 if (self.quit_thread) {
                     std.debug.print("Stopping Thread\n", .{});
@@ -546,8 +546,8 @@ pub const ForestPP = struct {
 
                 // Swap ping and pong
                 {
-                    self.mutex.lock();
-                    defer self.mutex.unlock();
+                    try self.mutex.lock(self.env.io);
+                    defer self.mutex.unlock(self.env.io);
                     self.ping_is_first = !self.ping_is_first;
                 }
             }

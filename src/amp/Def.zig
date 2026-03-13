@@ -1,5 +1,5 @@
 const std = @import("std");
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
 

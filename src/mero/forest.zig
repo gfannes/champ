@@ -12,7 +12,7 @@ const amp = @import("../amp.zig");
 const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Env = rubr.Env;
 const walker = rubr.walker;
 const strings = rubr.strings;
@@ -114,7 +114,7 @@ pub const Forest = struct {
             cfg_grove: *const cfg.file.Grove,
             tree: *Tree,
 
-            node_stack: Stack = .{},
+            node_stack: Stack = .empty,
             file_count: usize = 0,
 
             pub fn deinit(my: *My) void {

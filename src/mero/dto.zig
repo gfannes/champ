@@ -8,7 +8,7 @@ const Parser = @import("Parser.zig");
 const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const naft = rubr.naft;
 const strings = rubr.strings;
 const walker = rubr.walker;
@@ -104,7 +104,7 @@ pub const Node = struct {
 
     pub const File = struct {
         language: Language,
-        terms: Terms = .{},
+        terms: Terms = .empty,
     };
 
     pub const Type = union(enum) {
@@ -130,11 +130,11 @@ pub const Node = struct {
     def: ?Def = null,
     // Refs to resolved AMPs that are directly present in this Node
     // Only the first can be a def
-    org_amps: Defs = .{},
+    org_amps: Defs = .empty,
     // Refs to resolved AMPs that are inherited
     // Move to Chore to gain 250MB memory
     // Maybe replace with a set. Do take into account that in Chore.value, the order currently influences ~status
-    agg_amps: DefIxs = .{},
+    agg_amps: DefIxs = .empty,
 
     // &perf: Only activate relevant fields depending on type
     path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times

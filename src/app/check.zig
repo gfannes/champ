@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 
@@ -25,8 +25,8 @@ pub const Check = struct {
     config: *const cfg.file.Config,
     forest: *mero.Forest,
 
-    segments: std.ArrayList(Segment) = .{},
-    all_entries: std.ArrayList(Entry) = .{},
+    segments: std.ArrayList(Segment) = .empty,
+    all_entries: std.ArrayList(Entry) = .empty,
 
     pub fn deinit(self: *Self) void {
         self.segments.deinit(self.env.a);

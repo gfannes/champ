@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("rubr.zig");
 
 const Chore = @import("chorex.zig").Chore;
 
@@ -36,7 +36,7 @@ pub const Query = struct {
     a: std.mem.Allocator,
     include: Include = .{},
     only_status: bool = false,
-    parts: Parts = .{},
+    parts: Parts = .empty,
 
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|

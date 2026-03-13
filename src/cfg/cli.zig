@@ -1,7 +1,7 @@
 // Command-line interface arguments
 
 const std = @import("std");
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Env = rubr.Env;
 
 const Error = error{
@@ -48,8 +48,8 @@ pub const Args = struct {
         self.args = rubr.cli.Args{ .env = self.env };
         try self.args.setupFromOS(os_args);
 
-        self.groves = Strings{};
-        self.extra = Strings{};
+        self.groves = Strings.empty;
+        self.extra = Strings.empty;
     }
     pub fn deinit(_: *Self) void {}
 

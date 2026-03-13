@@ -1,4 +1,4 @@
-const rubr = @import("rubr");
+const rubr = @import("rubr.zig");
 
 pub const Pos = struct {
     row: usize = 0,

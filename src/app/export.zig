@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Env = rubr.Env;
 const lsp = rubr.lsp;
 const strings = rubr.strings;
@@ -61,11 +61,11 @@ pub const Export = struct {
             needle: ?[]const u8 = null,
 
             // Indicates if a folder has a metadata file '&.md' with a section in it. If so, this will be used to nest the sections from other files.
-            has_section_stack: BoolStack = .{},
+            has_section_stack: BoolStack = .empty,
 
-            section_chores: SectionChoreIds = .{},
+            section_chores: SectionChoreIds = .empty,
             section_level: usize = 0,
-            section_stack: SectionStack = .{},
+            section_stack: SectionStack = .empty,
             add_newline_before_bullet: bool = false,
             write_section_id_on_newline: bool = false,
             mode: Mode = .Search,
@@ -183,7 +183,7 @@ pub const Export = struct {
                                             // Keep track of the chores per section
                                             const res = try my.section_chores.getOrPut(my.env.a, section.id);
                                             if (!res.found_existing)
-                                                res.value_ptr.* = .{};
+                                                res.value_ptr.* = .empty;
                                             try res.value_ptr.append(my.env.a, chore_id);
                                         },
                                         else => {},
@@ -305,7 +305,7 @@ pub const Export = struct {
 
                         var gop = try status_choreids.getOrPut(self.env.a, status);
                         if (!gop.found_existing)
-                            gop.value_ptr.* = .{};
+                            gop.value_ptr.* = .empty;
                         try gop.value_ptr.append(self.env.a, chore_id);
                     }
                 }

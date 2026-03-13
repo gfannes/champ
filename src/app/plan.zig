@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const Env = rubr.Env;
 const lsp = rubr.lsp;
 const strings = rubr.strings;
@@ -30,8 +30,8 @@ pub const Plan = struct {
     env: Env,
     forest: *const mero.Forest,
 
-    segments: std.ArrayList(Segment) = .{},
-    all_entries: std.ArrayList(Entry) = .{},
+    segments: std.ArrayList(Segment) = .empty,
+    all_entries: std.ArrayList(Entry) = .empty,
 
     pub fn deinit(self: *Self) void {
         self.segments.deinit(self.env.a);
@@ -39,7 +39,7 @@ pub const Plan = struct {
     }
 
     pub fn call(self: *Self, prio_threshold: ?Prio, query_input: []const []const u8, reverse: bool) !void {
-        const today = try rubr.datex.Date.today();
+        const today = try rubr.datex.Date.today(self.env.io);
 
         var query = qry.Query{ .a = self.env.a };
         defer query.deinit();

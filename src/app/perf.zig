@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const rubr = @import("rubr");
+const rubr = @import("../rubr.zig");
 const strings = rubr.strings;
 const walker = rubr.walker;
 const naft = rubr.naft;
@@ -35,7 +35,7 @@ pub const Perf = struct {
             defer w.deinit();
 
             const String = std.ArrayList(u8);
-            var content = String{};
+            var content = String.empty;
             defer content.deinit(self.env.a);
 
             var cb = struct {
