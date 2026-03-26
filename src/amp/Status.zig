@@ -4,13 +4,13 @@ const rubr = @import("../rubr.zig");
 const Self = @This();
 
 // Capital status spelling, similar to [todo-comments](https://github.com/folke/todo-comments.nvim)
-const capitals = [_][]const u8{ "TODO", "NEXT", "WIP", "DONE", "QUESTION", "INFO", "BLOCKED", "FORWARD", "CANCELED" };
+const capitals = [_][]const u8{ "TODO", "GO", "WIP", "DONE", "QUESTION", "INFO", "BLOCKED", "FORWARD", "CANCELED" };
 // Lower-case variant. Infinite lifetime is important: amp.Path.Part blindly assumes its content lives long enough.
-const lowers = [_][]const u8{ "todo", "next", "wip", "done", "question", "info", "blocked", "forward", "canceled" };
+const lowers = [_][]const u8{ "todo", "go", "wip", "done", "question", "info", "blocked", "forward", "canceled" };
 
 pub const Kind = enum(usize) {
     Todo,
-    Next,
+    Go,
     Wip,
     Done,
     Question,

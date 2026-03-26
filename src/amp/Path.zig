@@ -172,7 +172,7 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
         if (strange.popOne()) |ch| {
             const content: []const u8 = switch (ch) {
                 ' ' => "todo",
-                '*' => "next",
+                '*' => "go",
                 '/' => "wip",
                 'x' => "done",
                 '?' => "question",

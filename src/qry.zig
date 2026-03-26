@@ -11,7 +11,7 @@ pub const Query = struct {
         const My = @This();
         done: bool = false,
         todo: bool = false,
-        next: bool = false,
+        go: bool = false,
         wip: bool = false,
         canceled: bool = false,
         question: bool = false,
@@ -62,7 +62,7 @@ pub const Query = struct {
                     self.include.wip = true;
                     self.only_status = true;
                 } else if (strange.popChar('*')) {
-                    self.include.next = true;
+                    self.include.go = true;
                     self.only_status = true;
                 } else if (strange.popChar('-')) {
                     self.include.canceled = true;
@@ -103,8 +103,8 @@ pub const Query = struct {
                     break :block self.include.todo;
                 if (std.mem.eql(u8, last, "wip"))
                     break :block self.include.wip;
-                if (std.mem.eql(u8, last, "next"))
-                    break :block self.include.next;
+                if (std.mem.eql(u8, last, "go"))
+                    break :block self.include.go;
                 if (std.mem.eql(u8, last, "info"))
                     break :block self.include.info;
                 if (std.mem.eql(u8, last, "blocked"))

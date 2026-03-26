@@ -167,14 +167,14 @@ pub const Export = struct {
                             if (chore.value("status", .Org)) |status_value| {
                                 if (status_value.status) |status| {
                                     status_str = switch (status.kind) {
-                                        .Todo, .Next, .Question => "_TODO_ ",
+                                        .Todo, .Go, .Question => "_TODO_ ",
                                         .Wip => "_IN PROGRESS_ ",
                                         .Blocked => "**BLOCKED** ",
                                         .Done => "_DONE_ ",
                                         else => null,
                                     };
                                     switch (status.kind) {
-                                        .Todo, .Wip, .Next, .Blocked, .Question => {
+                                        .Todo, .Wip, .Go, .Blocked, .Question => {
                                             const section = maybe_section orelse {
                                                 try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
                                                 return error.ExpectedSection;
@@ -299,7 +299,7 @@ pub const Export = struct {
                         var status = (status_value.status orelse continue).kind;
                         switch (status) {
                             .Blocked, .Todo, .Wip, .Done => {},
-                            .Next, .Question => status = .Todo,
+                            .Go, .Question => status = .Todo,
                             else => continue,
                         }
 

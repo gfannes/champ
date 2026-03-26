@@ -49,11 +49,11 @@ pub const Plan = struct {
         for (self.forest.chores.list.items, 0..) |chore, ix| {
             _ = ix;
 
-            // Check that this is a todo, wip or next chore
+            // Check that this is a todo, go or wip chore
             const status_value = chore.value("status", .Org) orelse continue;
             const status = status_value.status orelse continue;
             switch (status.kind) {
-                .Todo, .Wip, .Next, .Blocked, .Question => {},
+                .Todo, .Wip, .Go, .Blocked, .Question => {},
                 else => continue,
             }
 
