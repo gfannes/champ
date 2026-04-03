@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi]` from https://github.com/gfannes/rubr from 2026-03-15
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi]` from https://github.com/gfannes/rubr from 2026-04-03
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -89,6 +89,15 @@ pub const Env = struct {
             return duration.nanoseconds;
         }
     };
+    
+    pub fn for_ut() Env_ {
+        const ut = std.testing;
+        return .{
+            .a = ut.allocator,
+            .aa = ut.allocator,
+            .io = ut.io,
+        };
+    }
     
     pub fn duration_ns(env: Env_) i96 {
         const inst: *const Instance = @alignCast(@fieldParentPtr("log", env.log));
@@ -1127,12 +1136,16 @@ pub const cli = struct {
     
             self.argv = try a.alloc([]const u8, os_args.vector.len);
     
-            var it = os_args.iterate();
+            var it = try os_args.iterateAllocator(self.env.a);
+            defer it.deinit();
             var ix: usize = 0;
             while (it.next()) |os_arg| {
                 self.argv[ix] = try a.dupe(u8, os_arg);
                 ix += 1;
             }
+    
+            // This is necessary for Windows: os_args.vector.len is too long.
+            self.argv.len = ix;
         }
         pub fn setupFromData(self: *Self, argv: []const []const u8) !void {
             const a = self.env.aa;
@@ -1147,11 +1160,17 @@ pub const cli = struct {
             if (self.argv.len == 0) return null;
     
             const a = self.env.aa;
-            const arg = a.dupe(u8, std.mem.sliceTo(self.argv[0], 0)) catch return null;
+            const arg = a.dupe(u8, self.argv[0]) catch return null;
             self.argv.ptr += 1;
             self.argv.len -= 1;
     
             return Arg{ .arg = arg };
+        }
+    
+        // Can only be called when there was something popped first
+        pub fn unpop(self: *Self) void {
+            self.argv.ptr -= 1;
+            self.argv.len += 1;
         }
     };
     
@@ -1441,7 +1460,7 @@ pub const lsp = struct {
                 try log.print("[Request]({s})\n", .{self.content.items});
                 try log.flush();
             }
-            self.request = (try std.json.parseFromSlice(dto.Request, self.aa.allocator(), self.content.items, .{})).value;
+            self.request = (try std.json.parseFromSlice(dto.Request, self.aa.allocator(), self.content.items, .{ .ignore_unknown_fields = true })).value;
     
             return &(self.request orelse unreachable);
         }
@@ -1574,7 +1593,7 @@ pub const lsp = struct {
             }
     
             const resp = self.response_(T);
-            resp.* = (try std.json.parseFromSlice(T, self.aa.allocator(), self.content.items, .{})).value;
+            resp.* = (try std.json.parseFromSlice(T, self.aa.allocator(), self.content.items, .{ .ignore_unknown_fields = true })).value;
     
             return resp;
         }
