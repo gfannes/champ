@@ -451,9 +451,14 @@ pub const Forest = struct {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 
-                            if (term.kind == Term.Kind.Amp or term.kind == Term.Kind.Checkbox or term.kind == Term.Kind.Capital) {
+                            if (term.kind == .Amp or term.kind == .Wikilink or term.kind == .Checkbox or term.kind == .Capital) {
                                 var strange = rubr.strng.Strange{ .content = term.word };
-                                var path = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
+                                var path = try amp.Path.parse(&strange, my.env.a) orelse {
+                                    if (my.env.log.level(1)) |w| {
+                                        try w.print("Term: '{s}'\n", .{term.word});
+                                    }
+                                    return error.CouldNotParseAmp;
+                                };
                                 defer path.deinit();
                                 if (!path.is_definition) {
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
@@ -477,7 +482,7 @@ pub const Forest = struct {
                                         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }
                                 }
-                            } else if (term.kind == Term.Kind.Newline) {
+                            } else if (term.kind == .Newline) {
                                 line += term.word.len;
                                 cols = .{};
                             }
@@ -537,6 +542,13 @@ pub const Forest = struct {
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
                         my.do_process_other = if (amp.is_folder_metadata_fp(n.path)) my.do_process_amp_md else true;
+
+                        if (std.mem.endsWith(u8, n.path, ".md")) {
+                            var wiki_ap = amp.Path{ .a = my.env.a };
+                            var s = rubr.strng.Strange{ .content = n.path };
+                            try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part.init(&s));
+                            _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.path, entry.id, .{});
+                        }
                     },
                     .text => |text| {
                         if (my.do_process_other)
@@ -560,7 +572,7 @@ pub const Forest = struct {
                     cols.begin = cols.end;
                     cols.end += term.word.len;
 
-                    if (term.kind == Term.Kind.Amp) {
+                    if (term.kind == .Amp) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
                         var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
@@ -606,7 +618,7 @@ pub const Forest = struct {
                                 try my.env.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
-                    } else if (term.kind == Term.Kind.Newline) {
+                    } else if (term.kind == .Newline) {
                         line += term.word.len;
                         cols = .{};
                     }

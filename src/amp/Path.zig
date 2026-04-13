@@ -165,6 +165,12 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
             };
 
         return path;
+    } else if (strange.popStr("[[") and strange.popStrBack("]]")) {
+        var path = Self.init(a);
+        errdefer path.deinit();
+        try path.parts.append(a, Part.init(strange));
+
+        return path;
     } else if (strange.popChar('[')) {
         var path = Self.init(a);
         errdefer path.deinit();
