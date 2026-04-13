@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi]` from https://github.com/gfannes/rubr from 2026-04-03
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi]` from https://github.com/gfannes/rubr from 2026-04-13
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -331,10 +331,24 @@ pub const strng = struct {
             }
             return null;
         }
+        pub fn popOneBack(self: *Self) ?u8 {
+            if (self.content.len > 0) {
+                defer self._popBack(1);
+                return self.content[self.content.len - 1];
+            }
+            return null;
+        }
     
         pub fn popStr(self: *Self, s: []const u8) bool {
             if (std.mem.startsWith(u8, self.content, s)) {
                 self._popFront(s.len);
+                return true;
+            }
+            return false;
+        }
+        pub fn popStrBack(self: *Self, s: []const u8) bool {
+            if (std.mem.endsWith(u8, self.content, s)) {
+                self._popBack(s.len);
                 return true;
             }
             return false;
@@ -403,6 +417,12 @@ pub const strng = struct {
                 return null;
             defer self._popFront(count);
             return self.content[0..count];
+        }
+        pub fn popBack(self: *Self, count: usize) ?[]const u8 {
+            if (self.content.len < count)
+                return null;
+            defer self._popBack(count);
+            return self.content[self.content.len - count ..];
         }
     
         fn _popFront(self: *Self, count: usize) void {
