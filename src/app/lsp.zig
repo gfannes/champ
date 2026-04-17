@@ -309,7 +309,7 @@ pub const Lsp = struct {
                     defer aa.deinit();
                     const aaa = aa.allocator();
 
-                    var completions = std.ArrayList(dto.CompletionItem).empty;
+                    var completions: std.ArrayList(dto.CompletionItem) = .empty;
 
                     for (forest.defmgr.defs.items) |item| {
                         if (rubr.slc.lastPtr(item.ap.parts.items)) |part| {
