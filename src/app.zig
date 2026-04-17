@@ -2,13 +2,6 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const rubr = @import("rubr.zig");
-const Strange = rubr.strange.Strange;
-const strings = rubr.strings;
-const walker = rubr.walker;
-const ignore = rubr.ignore;
-const naft = rubr.naft;
-const Log = rubr.Log;
-const Env = rubr.Env;
 
 const tkn = @import("tkn.zig");
 const mero = @import("mero.zig");
@@ -36,8 +29,8 @@ pub const App = struct {
     const Self = @This();
     const FBA = std.heap.FixedBufferAllocator;
 
-    env_inst: Env.Instance = .{},
-    env: Env = undefined,
+    env_inst: rubr.Env.Instance = .{},
+    env: rubr.Env = undefined,
 
     buffer: [1024]u8 = undefined,
     stdoutw: std.Io.File.Writer = undefined,
@@ -92,10 +85,8 @@ pub const App = struct {
 
         if (self.cli_args.logfile) |logfile| {
             try self.env_inst.log.toFile(logfile, .{});
-        } else if (self.cli_args.mode == cfg.cli.Mode.Lsp) {
-            // &:zig:build:info Couple filename with build.zig.zon#name
-            // &cleanup:log &todo Cleanup old log files
-            try self.env_inst.log.toFile("/tmp/champ-%.log", .{ .autoclean = false });
+        } else if (self.cli_args.mode == .Lsp) {
+            try self.env_inst.log.toStderr();
         }
     }
 
@@ -103,14 +94,15 @@ pub const App = struct {
         self.config_loader = cfg.file.Loader{ .env = self.env, .cli_args = &self.cli_args };
         const cfg_loader = &self.config_loader.?;
 
-        // &todo: Replace hardcoded HOME folder
         // &:zig:build:info Couple filename with build.zig.zon#name
-        const config_fp = switch (builtin.os.tag) {
-            .macos => "/Users/geertf/.config/champ/config.zon",
-            .windows => "C:/Users/geertf/.config/champ/config.zon",
-            else => "/home/geertf/.config/champ/config.zon",
-        };
-        const ret = try cfg_loader.loadFromFile(config_fp, .Config);
+        var config_path = try rubr.fs.Path.home(self.env.envmap);
+        try config_path.add(".config");
+        try config_path.add("champ");
+        try config_path.add("config.zon");
+
+        const ret = try cfg_loader.loadFromFile(config_path.path(), .Config);
+        if (ret)
+            std.debug.print("Loaded config from '{s}'\n", .{config_path.path()});
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
 

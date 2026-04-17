@@ -5,7 +5,6 @@ const rubr = @import("../rubr.zig");
 const lsp = rubr.lsp;
 const strings = rubr.strings;
 const fuzz = rubr.fuzz;
-const Env = rubr.Env;
 
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
@@ -29,7 +28,7 @@ pub const Error = error{
 pub const Lsp = struct {
     const Self = @This();
 
-    env: Env,
+    env: rubr.Env,
     config: *const cfg.file.Config,
     fui: *const cfg.file.Fui,
     cli_args: *const cfg.cli.Args,
@@ -182,8 +181,12 @@ pub const Lsp = struct {
                     _ = prio;
 
                     var loader = cfg.file.Loader{ .env = self.env, .cli_args = self.cli_args };
-                    const fui_config_fp = if (builtin.os.tag == .macos) "/Users/geertf/.config/champ/fui.zon" else "/home/geertf/.config/champ/fui.zon";
-                    if (loader.loadFromFile(fui_config_fp, .Fui)) |_| {
+
+                    var fui_config_path = try rubr.fs.Path.home(self.env.envmap);
+                    try fui_config_path.add(".config");
+                    try fui_config_path.add("champ");
+                    try fui_config_path.add("fui.zon");
+                    if (loader.loadFromFile(fui_config_path.path(), .Fui)) |_| {
                         std.debug.print("Found new fui\n", .{});
                     } else |err| {
                         std.debug.print("Failed to load fui: {}", .{err});
@@ -429,7 +432,7 @@ pub const Lsp = struct {
 pub const ForestPP = struct {
     const Self = @This();
 
-    env: Env,
+    env: rubr.Env,
     cli_args: *const cfg.cli.Args,
 
     config_loader: cfg.file.Loader = undefined,
@@ -525,15 +528,13 @@ pub const ForestPP = struct {
                 }
             }
 
-            // &todo: Replace hardcoded HOME folder
             // &:zig:build:info Couple filename with build.zig.zon#name
-            const config_fp = switch (builtin.os.tag) {
-                .macos => "/Users/geertf/.config/champ/config.zon",
-                .windows => "C:/Users/geertf/.config/champ/config.zon",
-                else => "/home/geertf/.config/champ/config.zon",
-            };
-            if (try self.config_loader.loadFromFile(config_fp, .Config)) {
-                std.debug.print("Found new config\n", .{});
+            var config_path = try rubr.fs.Path.home(self.env.envmap);
+            try config_path.add(".config");
+            try config_path.add("champ");
+            try config_path.add("config.zon");
+            if (try self.config_loader.loadFromFile(config_path.path(), .Config)) {
+                std.debug.print("Loaded new config from '{s}'\n", .{config_path.path()});
                 reload = true;
             }
 
