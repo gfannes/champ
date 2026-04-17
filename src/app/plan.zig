@@ -24,6 +24,7 @@ pub const Plan = struct {
     };
     const Segment = struct {
         path: []const u8,
+        prio: ?Prio,
         entries: []const Entry,
     };
 
@@ -65,7 +66,7 @@ pub const Plan = struct {
             if (Prio.order(prio_threshold, myprio) == .lt)
                 continue;
 
-            // Check correspondance with provided query
+            // Check correspondence with provided query
             const distance = query.distance(chore) orelse continue;
             if (distance > 1.0)
                 continue;
@@ -117,8 +118,9 @@ pub const Plan = struct {
 
         for (self.all_entries.items, 0..) |entry, ix0| {
             const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
-            if (!std.mem.eql(u8, prev_path, entry.path)) {
-                try self.segments.append(self.env.a, Segment{ .path = entry.path, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
+            const prev_prio = if (rubr.slc.last(self.segments.items)) |item| item.prio else null;
+            if (!std.mem.eql(u8, prev_path, entry.path) or Prio.order(entry.prio, prev_prio) == .eq) {
+                try self.segments.append(self.env.a, Segment{ .path = entry.path, .prio = entry.prio, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
             } else {
                 if (rubr.slc.lastPtr(self.segments.items)) |ptr|
                     ptr.entries.len += 1;
@@ -130,11 +132,16 @@ pub const Plan = struct {
             std.mem.reverse(Segment, self.segments.items);
     }
 
-    pub fn show(self: Self, details: bool) !void {
+    pub fn show(self: Self, all: bool, details: bool) !void {
         for (self.segments.items) |segment| {
+            if (segment.prio == null and !all)
+                // We only show tasks without prio when `all` is specified
+                continue;
+
             const filename_style = rubr.ansi.Style{ .fg = .{ .color = .White, .intense = true }, .underline = true };
             const reset_style = rubr.ansi.Style{ .reset = true };
             try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
+
             for (segment.entries) |entry| {
                 var entry_style = rubr.ansi.Style{ .fg = .{ .color = .White } };
                 if (entry.prio) |prio| {

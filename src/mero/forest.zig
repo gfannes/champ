@@ -25,6 +25,7 @@ pub const Error = error{
     ExpectedGroveId,
     TooManyIterations,
     ExpectedConfigDefault,
+    DefinitionCannotBePrio,
 };
 
 pub const Forest = struct {
@@ -543,11 +544,14 @@ pub const Forest = struct {
 
                         my.do_process_other = if (amp.is_folder_metadata_fp(n.path)) my.do_process_amp_md else true;
 
-                        if (std.mem.endsWith(u8, n.path, ".md")) {
-                            var wiki_ap = amp.Path{ .a = my.env.a };
-                            var s = rubr.strng.Strange{ .content = n.path };
-                            try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part.init(&s));
-                            _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.path, entry.id, .{});
+                        // &wikilink: Add filepaths
+                        if (false) {
+                            if (std.mem.endsWith(u8, n.path, ".md")) {
+                                var wiki_ap = amp.Path{ .a = my.env.a };
+                                var s = rubr.strng.Strange{ .content = n.path };
+                                try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part.init(&s));
+                                _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.path, entry.id, .{});
+                            }
                         }
                     },
                     .text => |text| {
@@ -582,6 +586,14 @@ pub const Forest = struct {
                                 try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, def_ap });
                                 return error.OnlyOneDefAllowed;
                             }
+
+                            if (rubr.slc.last(def_ap.parts.items)) |part| {
+                                if (amp.Prio.parse(part.content, .{})) |_| {
+                                    try my.env.log.err("Definition '{s}' from '{s}' matches with Prio\n", .{ part.content, my.path });
+                                    return error.DefinitionCannotBePrio;
+                                }
+                            }
+
                             // Make the def amp absolute, if necessary
                             if (!def_ap.is_absolute) {
                                 var child_id = entry.id;
@@ -615,7 +627,7 @@ pub const Forest = struct {
                                 n.def = .{ .ix = amp_ix, .pos = pos };
                                 try n.org_amps.append(my.env.a, n.def.?);
                             } else {
-                                try my.env.log.warning("Duplicate definition found in '{s}'\n", .{my.path});
+                                try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
                             }
                         }
                     } else if (term.kind == .Newline) {

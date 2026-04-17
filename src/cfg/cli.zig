@@ -39,6 +39,7 @@ pub const Args = struct {
     prio: ?[]const u8 = null,
     reverse: bool = false,
     details: u8 = 0,
+    all: bool = false,
     output: ?[]const u8 = null,
     extra: Strings = undefined,
 
@@ -84,6 +85,8 @@ pub const Args = struct {
                 self.prio = prio.arg;
             } else if (arg.is("-r", "--reverse")) {
                 self.reverse = true;
+            } else if (arg.is("-a", "--all")) {
+                self.all = true;
             } else if (arg.is("-d", "--details")) {
                 self.details += 1;
             } else {
@@ -130,6 +133,7 @@ pub const Args = struct {
             "    -P  --parse          Parse\n" ++
             "    -p  --prio           Prio (top: a0)\n" ++
             "    -r  --reverse        Reverse\n" ++
+            "    -a  --all        Show all\n" ++
             "    -d  --details        Details, more than one can be specified\n" ++
             "  Commands:\n" ++
             "    lsp                  Lsp server\n" ++
