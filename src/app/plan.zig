@@ -101,7 +101,9 @@ pub const Plan = struct {
             );
         }
 
-        // Sort according to prio, if any
+        // Sort according to:
+        // - Prio, if any
+        // - Date: recent chores first
         const Fn = struct {
             pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
                 _ = ctx;
@@ -111,7 +113,7 @@ pub const Plan = struct {
                 const ord = Prio.order(a.prio, b.prio);
                 if (ord != .eq)
                     return ord;
-                return Date.order(a.date, b.date);
+                return Date.order(b.date, a.date);
             }
         };
         std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
