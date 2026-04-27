@@ -143,6 +143,19 @@ pub const Args = struct {
             "    ch/check             Check\n" ++
             "    perf                 Performance tests\n" ++
             "    test                 Test\n" ++
+            "  Query:\n" ++
+            "    .: Chores with any status\n" ++
+            "    ,: Chores status [ ] TODO\n" ++
+            "    *: Chores status [*] GO\n" ++
+            "    /: Chores status [/] WIP\n" ++
+            "    @: Chores status [x] DONE\n" ++
+            "    ?: Chores status [?] QUESTION\n" ++
+            "    ;: Chores status [i] INFO\n" ++
+            "    !: Chores status [!] BLOCKED\n" ++
+            "    <: Chores status [<] HANDLED\n" ++
+            "    >: Chores status [>] PLANNED\n" ++
+            "    ~: Chores status [~] ASSIGNED\n" ++
+            "    -: Chores status [-] CANCELED\n" ++
             "Developed by Geert Fannes\n";
         return msg;
     }

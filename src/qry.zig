@@ -19,11 +19,11 @@ pub const Query = struct {
         blocked: bool = false,
         forward: bool = false,
 
-        pub fn set(my: *My, val: bool) void {
+        pub fn set_all(my: *My, val: bool) void {
             inline for (@typeInfo(My).@"struct".fields) |field|
                 @field(my, field.name) = val;
         }
-        pub fn all(my: My, val: bool) bool {
+        pub fn is_all(my: My, val: bool) bool {
             inline for (@typeInfo(My).@"struct".fields) |field| {
                 const my_val = @field(my, field.name);
                 if (my_val != val)
@@ -50,7 +50,7 @@ pub const Query = struct {
 
             while (!strange.empty()) {
                 if (strange.popChar('.')) {
-                    self.include.set(true);
+                    self.include.set_all(true);
                     self.only_status = true;
                 } else if (strange.popChar(' ') or strange.popChar(',')) {
                     self.include.todo = true;
@@ -87,8 +87,8 @@ pub const Query = struct {
             }
         }
 
-        if (self.include.all(false)) {
-            self.include.set(true);
+        if (self.include.is_all(false)) {
+            self.include.set_all(true);
             self.include.done = false;
         }
     }
