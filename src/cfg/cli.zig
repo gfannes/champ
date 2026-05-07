@@ -92,7 +92,7 @@ pub const Args = struct {
             } else {
                 if (self.mode) |mode| {
                     switch (mode) {
-                        .Search, .Export, .Plan, .Test => try self.extra.append(self.env.aa, arg.arg),
+                        .Search, .Export, .Plan, .Check, .Test => try self.extra.append(self.env.aa, arg.arg),
                         else => {
                             std.debug.print("{} does not support extra argument '{s}'\n", .{ mode, arg.arg });
                             return error.ModeDoesNotSupportExtra;
@@ -140,7 +140,7 @@ pub const Args = struct {
             "    se/search            Search\n" ++
             "    ex/export            Export\n" ++
             "    pl/plan              Plan\n" ++
-            "    ch/check             Check\n" ++
+            "    ch/check             Check [tree|defs|chores]\n" ++
             "    perf                 Performance tests\n" ++
             "    test                 Test\n" ++
             "  Query:\n" ++

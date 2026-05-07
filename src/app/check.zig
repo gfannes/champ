@@ -20,6 +20,16 @@ pub const Check = struct {
         path: []const u8,
         entries: []const Entry,
     };
+    const Details = struct {
+        tree: bool = false,
+        defs: bool = false,
+        chores: bool = false,
+        fn setAll(self: *@This(), b: bool) void {
+            self.tree = b;
+            self.defs = b;
+            self.chores = b;
+        }
+    };
 
     env: rubr.Env,
     config: *const cfg.file.Config,
@@ -27,17 +37,27 @@ pub const Check = struct {
 
     segments: std.ArrayList(Segment) = .empty,
     all_entries: std.ArrayList(Entry) = .empty,
+    details: Details = .{},
 
     pub fn deinit(self: *Self) void {
         self.segments.deinit(self.env.a);
         self.all_entries.deinit(self.env.a);
     }
 
-    pub fn call(self: *Self) !void {
-        _ = self;
+    pub fn call(self: *Self, what: [][]const u8, details: u8) !void {
+        if (details > 0)
+            self.details.setAll(true);
+        for (what) |str| {
+            if (std.mem.eql(u8, str, "tree"))
+                self.details.tree = true;
+            if (std.mem.eql(u8, str, "defs"))
+                self.details.defs = true;
+            if (std.mem.eql(u8, str, "chores"))
+                self.details.chores = true;
+        }
     }
 
-    pub fn show(self: *Self, details: u8) !void {
+    pub fn show(self: *Self) !void {
         var root = rubr.naft.Node.root(self.env.stdout);
         defer root.deinit();
 
@@ -49,7 +69,20 @@ pub const Check = struct {
             var n = root.node("Tree");
             defer n.deinit();
 
-            if (details == 0) {
+            if (self.details.tree) {
+                const Cb = struct {
+                    env: rubr.Env,
+                    n: *rubr.naft.Node,
+
+                    pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
+                        if (!before)
+                            return;
+                        entry.data.write(my.n, entry.id);
+                    }
+                };
+                const cb = Cb{ .env = self.env, .n = &n };
+                try self.forest.tree.dfsAll(&cb);
+            } else {
                 const Cb = struct {
                     env: rubr.Env,
                     node_count: u64 = 0,
@@ -69,43 +102,30 @@ pub const Check = struct {
                 try self.forest.tree.dfsAll(&cb);
                 n.attr("node_count", cb.node_count);
                 n.attr("term_count", cb.term_count);
-            } else {
-                const Cb = struct {
-                    env: rubr.Env,
-                    n: *rubr.naft.Node,
-
-                    pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
-                        if (!before)
-                            return;
-                        entry.data.write(my.n, entry.id);
-                    }
-                };
-                const cb = Cb{ .env = self.env, .n = &n };
-                try self.forest.tree.dfsAll(&cb);
             }
         }
 
         {
             var n = root.node("DefMgr");
             defer n.deinit();
-            if (details == 0) {
-                n.attr("count", self.forest.defmgr.defs.items.len);
-            } else {
+            if (self.details.defs) {
                 for (self.forest.defmgr.defs.items, 0..) |def, ix| {
                     var nn = n.node("Def");
                     defer nn.deinit();
                     nn.attr("ix", ix);
                     nn.attr("ap", def.ap);
                 }
+            } else {
+                n.attr("count", self.forest.defmgr.defs.items.len);
             }
         }
 
-        if (details == 0) {
+        if (self.details.chores) {
+            self.forest.chores.write(&root);
+        } else {
             var n = root.node("Chores");
             defer n.deinit();
             n.attr("count", self.forest.chores.list.items.len);
-        } else {
-            self.forest.chores.write(&root);
         }
     }
 };

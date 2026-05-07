@@ -177,8 +177,8 @@ pub const App = struct {
                     };
                     defer obj.deinit();
 
-                    try obj.call();
-                    try obj.show(self.cli_args.details);
+                    try obj.call(self.cli_args.extra.items, self.cli_args.details);
+                    try obj.show();
                 },
                 cfg.cli.Mode.Perf => {
                     var obj = Perf{
