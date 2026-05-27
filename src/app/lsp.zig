@@ -406,7 +406,7 @@ pub const Lsp = struct {
         }
     }
 
-    // Converts a URI with format 'file:///home/geertf/a%20b.md' into '/home/geert/a b.md'
+    // Converts a URI with format 'file:///home/geertf/a%20b.md' into '/home/geertf/a b.md'
     fn uriToPath_(uri: []const u8, buf: *[std.fs.max_path_bytes]u8, a: std.mem.Allocator, io: std.Io) ![]const u8 {
         const prefix = "file://";
 
