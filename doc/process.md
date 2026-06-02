@@ -11,10 +11,9 @@ Goal: create a plan for the day
 	- Handle quick items
 - Check champ urgencies
 	- [ ] `champ pl` must support hard filtering against `auro` or `so1a`
-	- [ ] Collate all chores per file &b0
-		- Some collation seems to happen, probably on path
+	- [x] Collate all chores per file &b0
 - Update prio
-	- [ ] Open master project list efficiently from hx &b1
+	- [x] Open master project list efficiently from hx &b1
 - Update searchability
 	- Move items to storage
 	- Annotate

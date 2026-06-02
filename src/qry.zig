@@ -36,6 +36,8 @@ pub const Query = struct {
     a: std.mem.Allocator,
     include: Include = .{},
     only_status: bool = false,
+    only_def: bool = false,
+    only_org: bool = false,
     parts: Parts = .empty,
 
     pub fn deinit(self: *Self) void {
@@ -94,38 +96,49 @@ pub const Query = struct {
     }
 
     pub fn distance(self: Self, chore: Chore) ?f64 {
-        const status_is_match = block: {
-            for (chore.parts.items) |part| {
-                const last = rubr.slc.lastPtrUnsafe(part.ap.parts.items).content;
-                if (std.mem.eql(u8, last, "done"))
-                    break :block self.include.done;
-                if (std.mem.eql(u8, last, "todo"))
-                    break :block self.include.todo;
-                if (std.mem.eql(u8, last, "wip"))
-                    break :block self.include.wip;
-                if (std.mem.eql(u8, last, "go"))
-                    break :block self.include.go;
-                if (std.mem.eql(u8, last, "info"))
-                    break :block self.include.info;
-                if (std.mem.eql(u8, last, "blocked"))
-                    break :block self.include.blocked;
-                if (std.mem.eql(u8, last, "question"))
-                    break :block self.include.question;
-                if (std.mem.eql(u8, last, "forward"))
-                    break :block self.include.forward;
-                if (std.mem.eql(u8, last, "canceled"))
-                    break :block self.include.canceled;
-            }
-            break :block !self.only_status;
-        };
-        if (!status_is_match)
+        var has_def: bool = false;
+        var status_is_match: ?bool = null;
+
+        const chore_parts = if (self.only_org) chore.parts.items[0..chore.org_count] else chore.parts.items;
+
+        for (chore_parts) |part| {
+            if (part.ap.is_definition)
+                has_def = true;
+
+            const last = rubr.slc.lastPtrUnsafe(part.ap.parts.items).content;
+            if (std.mem.eql(u8, last, "done") and self.include.done)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "todo") and self.include.todo)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "wip") and self.include.wip)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "go") and self.include.go)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "info") and self.include.info)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "blocked") and self.include.blocked)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "question") and self.include.question)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "forward") and self.include.forward)
+                status_is_match = true;
+            if (std.mem.eql(u8, last, "canceled") and self.include.canceled)
+                status_is_match = true;
+        }
+
+        if (self.only_def and !has_def)
+            return null;
+        if (self.only_status and status_is_match == null)
             return null;
 
         var sum_score: f64 = 0;
         for (self.parts.items) |q_part| {
             // std.debug.print("Matching '{s}'\n", .{q_part});
             var maybe_min_score: ?f64 = null;
-            for (chore.parts.items) |c_part| {
+            for (chore_parts) |c_part| {
+                if (self.only_def and !c_part.ap.is_definition)
+                    continue;
+
                 // std.debug.print("\t{}\n", .{c_part});
                 for (c_part.ap.parts.items) |a_part| {
                     var skip_count: usize = undefined;

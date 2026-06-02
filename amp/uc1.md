@@ -48,7 +48,7 @@ Support collecting, finding and walking information.
 - [x] Search smart-case
 	- Impl in rubr.fuzz based on casing of needle
 - [x] Reload when file is changed/created
-	- [*] Check for time stamp diff iso full reload
+	- [ ] Check for time stamp diff iso full reload
 - [x] Allow ambiguous resolving when only a single match is found within its own Grove
 - Support searching for next Chore to execute
 	- [x] Interpret '[?]' as AMP
@@ -95,15 +95,13 @@ Support collecting, finding and walking information.
 			- Only for tags, not for templates or numbers etc.
 	- [x] Do not inherit ~status
 		- Do not inherit if there is already an AMP with the same def
-	- [/] Trailing `&` indicates dependency: current Chore _uses_ AMP
+	- [x] Trailing `&` indicates dependency: current Chore _uses_ AMP
 		- Default behavior is that current Chore _is part of_ AMP
 		- Is this the same as a reverse tag? Might be handy to push a start date from the logbook
 	- [ ] Support Markdown and Wiki links to other files
 		- [?] Do we need some marker to take them into account
 - [x] Support specification of AMP tags for a folder
 	- [x] Find good name to store metadata for Folder: '_amp.md', '&amp.md', '&tree.md', '&index.md', '&meta.md', '&root.md', '&.md'
-		- [*] Make this name(s) configurable from config.zon
-		- [*] Maybe 'readme.md' is better than '_amp.md'
 		- Extension should be a known extension to leverage existing bindings
 		- Start with an '_' to avoid collisions. Starting with a '.' is to impractical.
 		- Start with an '&' to ensure lexicographical sorting places the before other filenames

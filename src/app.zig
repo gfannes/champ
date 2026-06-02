@@ -44,7 +44,6 @@ pub const App = struct {
 
     config_loader: ?cfg.file.Loader = null,
     config: cfg.file.Config = .{},
-    fui: cfg.file.Fui = .{},
 
     maybe_forest: ?mero.Forest = null,
 
@@ -118,7 +117,6 @@ pub const App = struct {
                     var obj = Lsp{
                         .env = self.env,
                         .config = &self.config,
-                        .fui = &self.fui,
                         .cli_args = &self.cli_args,
                     };
                     try obj.init();

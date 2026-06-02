@@ -30,7 +30,6 @@ pub const Lsp = struct {
 
     env: rubr.Env,
     config: *const cfg.file.Config,
-    fui: *const cfg.file.Fui,
     cli_args: *const cfg.cli.Args,
 
     forest_pp: ForestPP = undefined,
@@ -159,8 +158,13 @@ pub const Lsp = struct {
                     }
                 } else if (request.is("textDocument/declaration") or request.is("textDocument/implementation") or request.is("textDocument/typeDefinition")) {
                     // Declaration: Show each task in this file
+                    const show_local_tasks = request.is("textDocument/declaration");
+
                     // Implementation: Show each task in all files
+                    const show_all_tasks = request.is("textDocument/implementation");
+
                     // TypeDefinition: Show only the first task per segment in all files
+                    const show_first_task = request.is("textDocument/typeDefinition");
 
                     const params = request.params orelse return error.ExpectedParams;
                     const textdoc = params.textDocument orelse return error.ExpectedTextDocument;
@@ -191,18 +195,25 @@ pub const Lsp = struct {
                     } else |err| {
                         std.debug.print("Failed to load fui: {}", .{err});
                     }
-                    const query_input = if (loader.fui != null and loader.fui.?.extra != null) loader.fui.?.extra.? else &.{};
+                    const query_input = if (show_local_tasks)
+                        &.{}
+                    else if (loader.fui != null and loader.fui.?.extra != null)
+                        loader.fui.?.extra.?
+                    else
+                        &.{};
 
                     try plan.call(null, query_input, false);
 
                     var locations = std.ArrayList(dto.Location).empty;
                     for (plan.segments.items) |segment| {
-                        const entries_count = if (request.is("textDocument/declaration"))
+                        const entries_count: usize = if (show_local_tasks)
                             if (std.mem.endsWith(u8, src_filename, segment.path)) segment.entries.len else 0
-                        else if (request.is("textDocument/implementation"))
+                        else if (show_all_tasks)
                             segment.entries.len
+                        else if (show_first_task)
+                            1
                         else
-                            1;
+                            0;
 
                         for (segment.entries[0..entries_count]) |entry| {
                             const uri = try pathToUri_(entry.path, aaa);
@@ -335,15 +346,14 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
-                    var q = qry.Query{ .a = self.env.a };
+                    var q = qry.Query{ .a = self.env.a, .only_def = true, .only_org = true };
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (rubr.slc.isEmpty(chore.parts.items[0..chore.org_count])) {
-                            try self.env.log.warning("Expected to find at least one AMP per Chore\n", .{});
+                        if (forest.tree.cptr(chore.node_id).type != .text)
+                            // We only take text chores into account
                             continue;
-                        }
 
                         if (q.distance(chore)) |distance| {
                             const first_amp = &chore.parts.items[0];
