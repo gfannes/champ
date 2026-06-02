@@ -121,7 +121,7 @@ pub const Plan = struct {
         for (self.all_entries.items, 0..) |entry, ix0| {
             const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
             const prev_prio = if (rubr.slc.last(self.segments.items)) |item| item.prio else null;
-            if (!std.mem.eql(u8, prev_path, entry.path) or Prio.order(entry.prio, prev_prio) == .eq) {
+            if (!std.mem.eql(u8, prev_path, entry.path) or Prio.order(entry.prio, prev_prio) != .eq) {
                 try self.segments.append(self.env.a, Segment{ .path = entry.path, .prio = entry.prio, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
             } else {
                 if (rubr.slc.lastPtr(self.segments.items)) |ptr|
