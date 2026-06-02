@@ -2,6 +2,10 @@
 
 Support planning items on a timeline and finding the next item to work-on.
 
+- [ ] Support working with relative and absolute prio offsets
+	- Set work items within a project relative to eachother
+	- Set project prio itself in an absolute manner. This could be coupled with the very definition of project.
+
 # Export
 - [ ] Create todos.md as well with links to the sections where there are still things todo
 
