@@ -38,10 +38,13 @@ pub fn parse(str: []const u8, options: Options) ?Self {
     if (year < 1970)
         return null;
 
-    _ = strange.popChar('-');
-    _ = strange.popChar('/');
+    const sep_minus = strange.popChar('-');
+    const sep_slash = strange.popChar('/');
+    if (sep_minus and sep_slash)
+        return null;
 
     var days: u47 = 0;
+    var is_fully_specified: bool = false;
 
     if (strange.popChar('w')) {
         // WEEK
@@ -63,6 +66,7 @@ pub fn parse(str: []const u8, options: Options) ?Self {
         }
 
         is_yyyy = false;
+        is_fully_specified = true;
     } else {
         for (1970..year) |y|
             days += std.time.epoch.getDaysInYear(@intCast(y));
@@ -81,6 +85,7 @@ pub fn parse(str: []const u8, options: Options) ?Self {
             }
 
             is_yyyy = false;
+            is_fully_specified = true;
         } else {
             if (strange.popIntMaxCount(u16, 2)) |month| {
                 if (month < 1 or month > 12)
@@ -88,13 +93,18 @@ pub fn parse(str: []const u8, options: Options) ?Self {
                 for (1..month) |m|
                     days += std.time.epoch.getDaysInMonth(@intCast(year), @enumFromInt(m));
 
-                _ = strange.popChar('-');
-                _ = strange.popChar('/');
+                if (sep_minus) {
+                    _ = strange.popChar('-');
+                } else if (sep_slash) {
+                    _ = strange.popChar('/');
+                }
 
                 if (strange.popIntMaxCount(u16, 2)) |day| {
                     if (day < 1)
                         return null;
                     days += (day - 1);
+
+                    is_fully_specified = true;
                 }
 
                 is_yyyy = false;
@@ -102,16 +112,39 @@ pub fn parse(str: []const u8, options: Options) ?Self {
         }
     }
 
-    if (strange.popChar('+')) {
-        // Extra delay to indicate: 'check again later'
-        const count = strange.popInt(u32) orelse return null;
+    // After the date itself, we support a shift into the future (+) or past (-)
+    // &reldate
+    const shift_back = strange.popChar('+');
+    const shift_front = strange.popChar('-');
+    if (shift_back and shift_front)
+        return null;
+    if (shift_back or shift_front) {
+        var count = strange.popInt(u32) orelse return null;
         if (strange.popChar('d')) {
-            // Extra days
-            days += count;
+            // Days
         } else if (strange.popChar('w')) {
-            // Extra weeks
-            days += count * 7;
+            // Weeks
+            count *= 7;
+        } else if (strange.popChar('m')) {
+            // Months
+            count *= 30;
+        } else if (strange.popChar('q')) {
+            // Quarter
+            count *= 3 * 30;
+        } else if (strange.popChar('y')) {
+            // Quarter
+            count *= 365;
         } else return null;
+
+        if (shift_back) {
+            days += count;
+        } else if (shift_front) {
+            if (sep_minus and !is_fully_specified)
+                // Shifting a date into the past (preplanning) is only supported for fully-specified dates or dates that use '/' as separator
+                // Otherwise, there can be confusion wrt the interpretation of '-'
+                return null;
+            days -= count;
+        }
     }
 
     if (options.strict_end and !strange.empty())
