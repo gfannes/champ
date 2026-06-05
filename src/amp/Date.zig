@@ -102,6 +102,18 @@ pub fn parse(str: []const u8, options: Options) ?Self {
         }
     }
 
+    if (strange.popChar('+')) {
+        // Extra delay to indicate: 'check again later'
+        const count = strange.popInt(u32) orelse return null;
+        if (strange.popChar('d')) {
+            // Extra days
+            days += count;
+        } else if (strange.popChar('w')) {
+            // Extra weeks
+            days += count * 7;
+        } else return null;
+    }
+
     if (options.strict_end and !strange.empty())
         return null;
 
@@ -162,6 +174,7 @@ test "amp.Date" {
         .{ .str = "2026-08-25", .exp = "20260825" },
         .{ .str = "2025-1-2", .exp = "20250102" },
         .{ .str = "2025-2", .exp = "20250201" },
+        .{ .str = "2025-01-02+1w", .exp = "20250109" },
         .{ .str = "2025-2 ", .exp = "20250201", .options = .{ .strict_end = false } },
         .{ .str = "2025-01-02rest", .exp = "20250102", .options = .{ .strict_end = false } },
     };

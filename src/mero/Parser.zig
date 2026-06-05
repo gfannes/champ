@@ -895,7 +895,7 @@ fn is_amp_start(maybe_past: ?tkn.Token, t: tkn.Token) bool {
     return t.symbol == .Ampersand;
 }
 fn is_amp_body(t: tkn.Token) bool {
-    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde or t.symbol == .Minus;
+    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde or t.symbol == .Minus or t.symbol == .Plus;
 }
 fn is_whitespace(t: tkn.Token) bool {
     return t.symbol == .Space;
