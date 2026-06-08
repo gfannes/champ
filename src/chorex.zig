@@ -7,6 +7,7 @@ const naft = rubr.naft;
 
 const mero = @import("mero.zig");
 const filex = @import("filex.zig");
+const Wbs = @import("amp/Wbs.zig");
 
 // A Tree node that contains AMP info (both def and non-defs)
 // &cleanup naming conventions
@@ -36,6 +37,8 @@ pub const Chore = struct {
     parts: Parts = .empty,
     // Indicates the number of Parts that are orgs
     org_count: usize = 0,
+
+    prio: ?i32 = null,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
         return Self{ .node_id = node_id, .a = a };
@@ -104,6 +107,8 @@ pub const Chore = struct {
         var n = parent.node("Chore");
         defer n.deinit();
         n.attr("node_id", self.node_id);
+        if (self.prio) |prio|
+            n.attr("prio", prio);
         if (self.path.len > 0)
             n.attr("path", self.path);
         n.attr("str", self.str);
@@ -177,6 +182,42 @@ pub const Chores = struct {
         var offset: usize = 0;
         var ix: usize = 0;
 
+        var max_prios = struct {
+            project: ?i32 = null,
+            area: ?i32 = null,
+            epic: ?i32 = null,
+            story: ?i32 = null,
+            task: ?i32 = null,
+
+            fn update(my: *@This(), maybe_kind: ?Wbs.Kind, maybe_prio: ?i32) void {
+                if (maybe_prio) |pri| {
+                    if (maybe_kind) |kind| {
+                        switch (kind) {
+                            .Project => my.project = @max(pri, my.project orelse pri),
+                            .Area => my.area = @max(pri, my.area orelse pri),
+                            .Epic => my.epic = @max(pri, my.epic orelse pri),
+                            .Story => my.story = @max(pri, my.story orelse pri),
+                            .Task => my.task = @max(pri, my.task orelse pri),
+                        }
+                    }
+                }
+            }
+            fn prio(my: @This()) ?i32 {
+                var sum: ?i32 = null;
+                if (my.project) |v|
+                    sum = (sum orelse 0) + v;
+                if (my.area) |v|
+                    sum = (sum orelse 0) + v;
+                if (my.epic) |v|
+                    sum = (sum orelse 0) + v;
+                if (my.story) |v|
+                    sum = (sum orelse 0) + v;
+                if (my.task) |v|
+                    sum = (sum orelse 0) + v;
+                return sum;
+            }
+        }{};
+
         for (node.org_amps.items) |org| {
             defer ix += 1;
 
@@ -188,6 +229,12 @@ pub const Chores = struct {
 
             const a = org.ix.cptr(defmgr.defs.items);
             try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .pos = org.pos });
+
+            if (a.ap.is_definition) {
+                max_prios.update(a.kind, a.prio);
+            } else if (a.ap.wbs()) |wbs| {
+                max_prios.update(wbs.kind, wbs.prio);
+            }
         }
 
         for (node.agg_amps.items) |agg| {
@@ -201,9 +248,17 @@ pub const Chores = struct {
 
             const a = agg.cptr(defmgr.defs.items);
             try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .pos = .{} });
+
+            if (a.ap.is_definition) {
+                max_prios.update(a.kind, a.prio);
+            } else if (a.ap.wbs()) |wbs| {
+                max_prios.update(wbs.kind, wbs.prio);
+            }
         }
 
-        // Lookup path
+        chore.prio = max_prios.prio();
+
+        // Setup chore.path
         var maybe_id = rubr.opt.value(node_id);
         while (maybe_id) |id| {
             const n = tree.cptr(id);

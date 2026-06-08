@@ -11,160 +11,158 @@ const qry = @import("../qry.zig");
 const Prio = @import("../amp/Prio.zig");
 const Date = @import("../amp/Date.zig");
 
-pub const Plan = struct {
-    const Self = @This();
-    const Entry = struct {
-        path: []const u8,
-        content: []const u8,
-        amps: []const u8,
-        date: ?Date,
-        prio: ?Prio,
-        rows: rubr.idx.Range,
-        cols: rubr.idx.Range,
-    };
-    const Segment = struct {
-        path: []const u8,
-        prio: ?Prio,
-        entries: []const Entry,
-    };
-
-    env: Env,
-    forest: *const mero.Forest,
-
-    segments: std.ArrayList(Segment) = .empty,
-    all_entries: std.ArrayList(Entry) = .empty,
-
-    pub fn deinit(self: *Self) void {
-        self.segments.deinit(self.env.a);
-        self.all_entries.deinit(self.env.a);
-    }
-
-    pub fn call(self: *Self, prio_threshold: ?Prio, query_input: []const []const u8, reverse: bool) !void {
-        const today = try rubr.datex.Date.today(self.env.io);
-
-        var query = qry.Query{ .a = self.env.a };
-        defer query.deinit();
-        try query.setup(query_input);
-
-        // Collect all chores
-        for (self.forest.chores.list.items, 0..) |chore, ix| {
-            _ = ix;
-
-            // Check that this is a Chore that requires attention: todo, wip, go, blocked or question
-            const status_value = chore.value("status", .Org) orelse continue;
-            const status = status_value.status orelse continue;
-            switch (status.kind) {
-                .Todo, .Wip, .Go, .Blocked, .Question => {},
-                else => continue,
-            }
-
-            // Check prio
-            const myprio: ?Prio = if (chore.value("p", .Any)) |value|
-                value.prio
-            else
-                null;
-            if (Prio.order(prio_threshold, myprio) == .lt)
-                continue;
-
-            // Check correspondence with provided query
-            const distance = query.distance(chore) orelse continue;
-            if (distance > 1.0)
-                continue;
-
-            // Check that its start date is before today, if any
-            const date = if (chore.value("s", .Any)) |start_value| ret: {
-                if (start_value.date) |start_date| {
-                    if (start_date.date.epoch_day.day > today.epoch_day.day)
-                        continue;
-                    break :ret start_date;
-                } else {
-                    try self.env.log.warning("Expected a valid date\n", .{});
-                    continue;
-                }
-            } else null;
-
-            const n = self.forest.tree.cptr(chore.node_id);
-
-            const entry = Entry{
-                .path = n.path,
-                .content = n.content,
-                .amps = chore.str,
-                .date = date,
-                .prio = myprio,
-                .rows = n.content_rows,
-                .cols = n.content_cols,
-            };
-
-            try self.all_entries.append(
-                self.env.a,
-                entry,
-            );
-        }
-
-        // Sort according to:
-        // - Prio, if any
-        // - Date: recent chores first
-        const Fn = struct {
-            pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
-                _ = ctx;
-                return order(a, b) == .lt;
-            }
-            fn order(a: Entry, b: Entry) std.math.Order {
-                const ord = Prio.order(a.prio, b.prio);
-                if (ord != .eq)
-                    return ord;
-                return Date.order(b.date, a.date);
-            }
-        };
-        std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
-
-        for (self.all_entries.items, 0..) |entry, ix0| {
-            const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
-            const prev_prio = if (rubr.slc.last(self.segments.items)) |item| item.prio else null;
-            if (!std.mem.eql(u8, prev_path, entry.path) or Prio.order(entry.prio, prev_prio) != .eq) {
-                try self.segments.append(self.env.a, Segment{ .path = entry.path, .prio = entry.prio, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
-            } else {
-                if (rubr.slc.lastPtr(self.segments.items)) |ptr|
-                    ptr.entries.len += 1;
-            }
-        }
-
-        // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
-        if (reverse)
-            std.mem.reverse(Segment, self.segments.items);
-    }
-
-    pub fn show(self: Self, all: bool, details: bool) !void {
-        for (self.segments.items) |segment| {
-            if (segment.prio == null and !all)
-                // We only show tasks without prio when `all` is specified
-                continue;
-
-            const filename_style = rubr.ansi.Style{ .fg = .{ .color = .White, .intense = true }, .underline = true };
-            const reset_style = rubr.ansi.Style{ .reset = true };
-            try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
-
-            for (segment.entries) |entry| {
-                var entry_style = rubr.ansi.Style{ .fg = .{ .color = .White } };
-                if (entry.prio) |prio| {
-                    switch (prio.endof) {
-                        .Hour => entry_style.fg.?.color = .Red,
-                        .Day => entry_style.fg.?.color = .Yellow,
-                        .Week => entry_style.fg.?.color = .Green,
-                        .Month => entry_style.fg.?.color = .Magenta,
-                        .Quarter => entry_style.fg.?.color = .Blue,
-                        .Year => entry_style.fg.?.color = .Cyan,
-                    }
-                    if (prio.index == 0) {
-                        entry_style.fg.?.intense = true;
-                        entry_style.bold = true;
-                    }
-                }
-                try self.env.stdout.print("  {f}{s}{f}", .{ entry_style, entry.content, reset_style });
-                if (details)
-                    try self.env.stdout.print(" ({s})", .{entry.amps});
-                try self.env.stdout.print("\n", .{});
-            }
-        }
-    }
+const Self = @This();
+const Entry = struct {
+    path: []const u8,
+    content: []const u8,
+    amps: []const u8,
+    date: ?Date,
+    prio: ?Prio,
+    rows: rubr.idx.Range,
+    cols: rubr.idx.Range,
 };
+const Segment = struct {
+    path: []const u8,
+    prio: ?Prio,
+    entries: []const Entry,
+};
+
+env: Env,
+forest: *const mero.Forest,
+
+segments: std.ArrayList(Segment) = .empty,
+all_entries: std.ArrayList(Entry) = .empty,
+
+pub fn deinit(self: *Self) void {
+    self.segments.deinit(self.env.a);
+    self.all_entries.deinit(self.env.a);
+}
+
+pub fn call(self: *Self, prio_threshold: ?Prio, query_input: []const []const u8, reverse: bool) !void {
+    const today = try rubr.datex.Date.today(self.env.io);
+
+    var query = qry.Query{ .a = self.env.a };
+    defer query.deinit();
+    try query.setup(query_input);
+
+    // Collect all chores
+    for (self.forest.chores.list.items, 0..) |chore, ix| {
+        _ = ix;
+
+        // Check that this is a Chore that requires attention: todo, wip, go, blocked or question
+        const status_value = chore.value("status", .Org) orelse continue;
+        const status = status_value.status orelse continue;
+        switch (status.kind) {
+            .Todo, .Wip, .Go, .Blocked, .Question => {},
+            else => continue,
+        }
+
+        // Check prio
+        const myprio: ?Prio = if (chore.value("p", .Any)) |value|
+            value.prio
+        else
+            null;
+        if (Prio.order(prio_threshold, myprio) == .lt)
+            continue;
+
+        // Check correspondence with provided query
+        const distance = query.distance(chore) orelse continue;
+        if (distance > 1.0)
+            continue;
+
+        // Check that its start date is before today, if any
+        const date = if (chore.value("s", .Any)) |start_value| ret: {
+            if (start_value.date) |start_date| {
+                if (start_date.date.epoch_day.day > today.epoch_day.day)
+                    continue;
+                break :ret start_date;
+            } else {
+                try self.env.log.warning("Expected a valid date\n", .{});
+                continue;
+            }
+        } else null;
+
+        const n = self.forest.tree.cptr(chore.node_id);
+
+        const entry = Entry{
+            .path = n.path,
+            .content = n.content,
+            .amps = chore.str,
+            .date = date,
+            .prio = myprio,
+            .rows = n.content_rows,
+            .cols = n.content_cols,
+        };
+
+        try self.all_entries.append(
+            self.env.a,
+            entry,
+        );
+    }
+
+    // Sort according to:
+    // - Prio, if any
+    // - Date: recent chores first
+    const Fn = struct {
+        pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
+            _ = ctx;
+            return order(a, b) == .lt;
+        }
+        fn order(a: Entry, b: Entry) std.math.Order {
+            const ord = Prio.order(a.prio, b.prio);
+            if (ord != .eq)
+                return ord;
+            return Date.order(b.date, a.date);
+        }
+    };
+    std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
+
+    for (self.all_entries.items, 0..) |entry, ix0| {
+        const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
+        const prev_prio = if (rubr.slc.last(self.segments.items)) |item| item.prio else null;
+        if (!std.mem.eql(u8, prev_path, entry.path) or Prio.order(entry.prio, prev_prio) != .eq) {
+            try self.segments.append(self.env.a, Segment{ .path = entry.path, .prio = entry.prio, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
+        } else {
+            if (rubr.slc.lastPtr(self.segments.items)) |ptr|
+                ptr.entries.len += 1;
+        }
+    }
+
+    // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
+    if (reverse)
+        std.mem.reverse(Segment, self.segments.items);
+}
+
+pub fn show(self: Self, all: bool, details: bool) !void {
+    for (self.segments.items) |segment| {
+        if (segment.prio == null and !all)
+            // We only show tasks without prio when `all` is specified
+            continue;
+
+        const filename_style = rubr.ansi.Style{ .fg = .{ .color = .White, .intense = true }, .underline = true };
+        const reset_style = rubr.ansi.Style{ .reset = true };
+        try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
+
+        for (segment.entries) |entry| {
+            var entry_style = rubr.ansi.Style{ .fg = .{ .color = .White } };
+            if (entry.prio) |prio| {
+                switch (prio.endof) {
+                    .Hour => entry_style.fg.?.color = .Red,
+                    .Day => entry_style.fg.?.color = .Yellow,
+                    .Week => entry_style.fg.?.color = .Green,
+                    .Month => entry_style.fg.?.color = .Magenta,
+                    .Quarter => entry_style.fg.?.color = .Blue,
+                    .Year => entry_style.fg.?.color = .Cyan,
+                }
+                if (prio.index == 0) {
+                    entry_style.fg.?.intense = true;
+                    entry_style.bold = true;
+                }
+            }
+            try self.env.stdout.print("  {f}{s}{f}", .{ entry_style, entry.content, reset_style });
+            if (details)
+                try self.env.stdout.print(" ({s})", .{entry.amps});
+            try self.env.stdout.print("\n", .{});
+        }
+    }
+}

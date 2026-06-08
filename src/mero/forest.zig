@@ -479,6 +479,16 @@ pub const Forest = struct {
                                                 }
                                             }
                                         }
+
+                                        // If a Node contains both a definition and a Wbs specification, we inject the Wbs data into the definition.
+                                        // The prio for a Chore will be the sum of the max prios per Kind.
+                                        if (path.wbs()) |wbs| {
+                                            if (n.def) |def_ix| {
+                                                var node_def = def_ix.ix.ptr(my.defmgr.defs.items);
+                                                node_def.kind = wbs.kind;
+                                                node_def.prio = wbs.prio;
+                                            }
+                                        }
                                     } else {
                                         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }

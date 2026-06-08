@@ -11,28 +11,26 @@ const Env = rubr.Env;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 
-pub const Test = struct {
-    const Self = @This();
+const Self = @This();
 
-    env: Env,
-    config: *const cfg.file.Config,
+env: Env,
+config: *const cfg.file.Config,
 
-    forest: mero.Forest = undefined,
+forest: mero.Forest = undefined,
 
-    pub fn init(self: *Self) !void {
-        self.forest = .{ .env = self.env };
-        self.forest.init();
-    }
-    pub fn deinit(self: *Self) void {
-        self.forest.deinit();
-    }
+pub fn init(self: *Self) !void {
+    self.forest = .{ .env = self.env };
+    self.forest.init();
+}
+pub fn deinit(self: *Self) void {
+    self.forest.deinit();
+}
 
-    pub fn call(self: *Self) !void {
-        try self.forest.load(self.config);
+pub fn call(self: *Self) !void {
+    try self.forest.load(self.config);
 
-        var root = naft.Node{ .w = self.env.log.writer() };
-        defer root.deinit();
+    var root = naft.Node{ .w = self.env.log.writer() };
+    defer root.deinit();
 
-        self.forest.chores.write(&root);
-    }
-};
+    self.forest.chores.write(&root);
+}

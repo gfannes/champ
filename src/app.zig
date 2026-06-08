@@ -8,12 +8,13 @@ const mero = @import("mero.zig");
 const cfg = @import("cfg.zig");
 
 const Lsp = @import("app/lsp.zig").Lsp;
-const Search = @import("app/search.zig").Search;
-const Export = @import("app/export.zig").Export;
-const Plan = @import("app/plan.zig").Plan;
-const Check = @import("app/check.zig").Check;
-const Perf = @import("app/perf.zig").Perf;
-const Test = @import("app/test.zig").Test;
+const Search = @import("app/search.zig");
+const Export = @import("app/export.zig");
+const Plan = @import("app/plan.zig");
+const Check = @import("app/check.zig");
+const Perf = @import("app/perf.zig");
+const Test = @import("app/test.zig");
+const Wbs = @import("app/wbs.zig");
 const Prio = @import("amp/Prio.zig");
 
 pub const Error = error{
@@ -69,7 +70,7 @@ pub const App = struct {
             self.env.a.free(fba.buffer);
 
         {
-            const duration_ms = @divExact(self.env.duration_ns(), 1_000_000);
+            const duration_ms = @divTrunc(self.env.duration_ns(), 1_000_000);
             self.witf.print("Duration: {}ms\n", .{duration_ms}) catch {};
         }
         self.env_inst.deinit();
@@ -184,6 +185,17 @@ pub const App = struct {
                         .config = &self.config,
                         .cli_args = &self.cli_args,
                     };
+                    try obj.call();
+                },
+                cfg.cli.Mode.Wbs => {
+                    const forest = try self.loadForest();
+                    var obj = Wbs{
+                        .env = self.env,
+                        .config = &self.config,
+                        .forest = forest,
+                    };
+                    try obj.init();
+                    defer obj.deinit();
                     try obj.call();
                 },
                 cfg.cli.Mode.Test => {

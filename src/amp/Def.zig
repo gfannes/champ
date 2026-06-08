@@ -2,6 +2,7 @@ const std = @import("std");
 const rubr = @import("../rubr.zig");
 const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
+const Wbs = @import("Wbs.zig");
 
 const Self = @This();
 
@@ -18,13 +19,18 @@ ap: Path,
 location: ?Location = null,
 template: ?Ix = null,
 
+kind: ?Wbs.Kind = null,
+prio: ?i32 = null,
+
 pub fn deinit(self: *Self) void {
     self.ap.deinit();
 }
 
-pub fn write(self: Self, parent: *rubr.naft.Node) void {
+pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     var n = parent.node("Def");
     defer n.deinit();
+    if (maybe_ix) |ix|
+        n.attr("ix", ix);
     n.attr("ap", self.ap);
     if (self.location) |loc| {
         n.attr("grove_id", loc.grove_id);
@@ -33,9 +39,13 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
         n.attr("cols.begin", loc.pos.cols.begin);
         n.attr("cols.end", loc.pos.cols.end);
     }
+    if (self.kind) |kind|
+        n.attr("kind", kind);
+    if (self.prio) |prio|
+        n.attr("prio", prio);
 }
 pub fn format(self: Self, w: *std.Io.Writer) !void {
     var r = rubr.naft.Node.root(w);
     defer r.deinit();
-    self.write(&r);
+    self.write(&r, null);
 }

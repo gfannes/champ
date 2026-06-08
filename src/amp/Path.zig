@@ -111,6 +111,15 @@ pub fn value_at(self: Self, key: []const []const u8) ?*const Part {
     return &self.parts.items[key.len];
 }
 
+pub fn wbs(self: Self) ?Wbs {
+    for (self.parts.items) |part| {
+        if (part.wbs) |v|
+            return v;
+    }
+    return null;
+}
+
+// Parses the template parts of `ap` according to `self`
 pub fn evaluate(self: Self, ap: *Self) !void {
     if (self.parts.items.len != ap.parts.items.len)
         return Error.ExpectedSameLen;

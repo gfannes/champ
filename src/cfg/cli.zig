@@ -19,6 +19,7 @@ pub const Mode = enum {
     Check,
     Perf,
     Export,
+    Wbs,
     Test,
 };
 
@@ -110,6 +111,8 @@ pub const Args = struct {
                     self.mode = .Check;
                 } else if (arg.is("perf", "perf")) {
                     self.mode = .Perf;
+                } else if (arg.is("wbs", "wbs")) {
+                    self.mode = .Wbs;
                 } else if (arg.is("test", "test")) {
                     self.mode = .Test;
                 } else {
@@ -142,6 +145,7 @@ pub const Args = struct {
             "    pl/plan              Plan\n" ++
             "    ch/check             Check [tree|defs|chores]\n" ++
             "    perf                 Performance tests\n" ++
+            "    wbs                  Work breakdown structure\n" ++
             "    test                 Test\n" ++
             "  Query:\n" ++
             "    .: Chores with any status\n" ++

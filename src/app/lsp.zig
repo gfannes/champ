@@ -10,7 +10,7 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const qry = @import("../qry.zig");
-const Plan = @import("plan.zig").Plan;
+const Plan = @import("plan.zig");
 const Prio = @import("../amp/Prio.zig");
 
 pub const Error = error{
