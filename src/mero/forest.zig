@@ -558,8 +558,7 @@ pub const Forest = struct {
                         if (false) {
                             if (std.mem.endsWith(u8, n.path, ".md")) {
                                 var wiki_ap = amp.Path{ .a = my.env.a };
-                                var s = rubr.strng.Strange{ .content = n.path };
-                                try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part.init(&s));
+                                try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part{ .content = n.path });
                                 _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.path, entry.id, .{});
                             }
                         }

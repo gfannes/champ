@@ -47,6 +47,7 @@ pub const Part = struct {
         status: Status,
     };
 
+    is_exclusive: bool = false,
     content: []const u8,
     meta: ?Meta = null,
 
@@ -54,18 +55,7 @@ pub const Part = struct {
     date: ?Date = null,
     prio: ?Prio = null,
     wbs: ?Wbs = null,
-    is_exclusive: bool = false,
     is_template: bool = false,
-
-    pub fn init(strange: *rubr.strng.Strange) Part {
-        const is_exclusive = strange.popChar('!');
-        const is_template_ = strange.popChar('~');
-        return Part{
-            .content = strange.str(),
-            .is_exclusive = is_exclusive,
-            .is_template = is_template_,
-        };
-    }
 };
 const Parts = std.ArrayList(Part);
 
@@ -184,6 +174,8 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
     errdefer path.deinit();
 
     if (strange.popChar('&')) {
+        var is_exclusive = strange.popChar('^');
+
         if (strange.popChar('$')) {
             try path.parts.append(a, Part{ .content = "_cost", .meta = Part.Meta{ .cost = Cost{ .value = strange.popInt(u32) orelse return error.InvalidCost } } });
 
@@ -193,7 +185,7 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
 
             return path;
         } else if (strange.popChar('@')) {
-            try path.parts.append(a, Part{ .content = "_worker", .meta = Part.Meta{ .worker = Worker{ .name = strange.popAll() orelse return error.InvalidWorker } } });
+            try path.parts.append(a, Part{ .content = "_worker", .is_exclusive = is_exclusive, .meta = Part.Meta{ .worker = Worker{ .name = strange.popAll() orelse return error.InvalidWorker } } });
 
             return path;
         } else if (strange.popChar('?')) {
@@ -211,22 +203,22 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
             while (strange.popCharBack(':')) {}
             path.is_dependency = strange.popCharBack('&');
 
-            while (strange.popTo(':')) |p|
-                if (p.len > 0) {
-                    var s = rubr.strng.Strange{ .content = p };
-                    try path.parts.append(a, Part.init(&s));
-                };
+            while (!strange.empty()) {
+                var maybe_content = strange.popTo(':');
+                if (maybe_content == null)
+                    maybe_content = strange.popAll();
 
-            if (strange.popAll()) |p|
-                if (p.len > 0) {
-                    var s = rubr.strng.Strange{ .content = p };
-                    try path.parts.append(a, Part.init(&s));
-                };
+                if (maybe_content) |content| {
+                    try path.parts.append(a, Part{ .content = content, .is_exclusive = is_exclusive });
+
+                    is_exclusive = strange.popChar('^');
+                }
+            }
 
             return path;
         }
     } else if (strange.popStr("[[") and strange.popStrBack("]]")) {
-        try path.parts.append(a, Part.init(strange));
+        try path.parts.append(a, Part{ .content = strange.str() });
 
         return path;
     } else if (strange.popChar('[')) {
@@ -243,15 +235,16 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
                 '-' => "canceled",
                 else => "unknown",
             };
-            var s = rubr.strng.Strange{ .content = content };
-            try path.parts.append(a, Part.init(&s));
+            if (strange.popChar(']')) {
+                if (Status.fromLower(content)) |status| {
+                    try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
 
-            if (strange.popChar(']'))
-                return path;
+                    return path;
+                }
+            }
         }
     } else if (Status.fromCapital(strange.str())) |status| {
-        var s = rubr.strng.Strange{ .content = status.lower() };
-        try path.parts.append(a, Part.init(&s));
+        try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
 
         return path;
     }
@@ -294,7 +287,7 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
         try io.print("&", .{});
     var prefix: []const u8 = if (self.is_absolute) ":" else "";
     for (self.parts.items) |part| {
-        const exclusive_str = if (part.is_exclusive) "!" else "";
+        const exclusive_str = if (part.is_exclusive) "^" else "";
         const template_str = if (part.is_template) "~" else "";
         try io.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
         if (part.meta) |meta| {
@@ -336,11 +329,20 @@ test "amp.Path" {
         .{ .repr = "&!123", .exp = "&_prio:123" },
         .{ .repr = "&!-123", .exp = "&_prio:-123" },
         .{ .repr = "&@geert", .exp = "&_worker:geert" },
+        .{ .repr = "&^@geert", .exp = "&^_worker:geert" },
         .{ .repr = "&?proj", .exp = "&_what:proj" },
         .{ .repr = "&todo", .exp = "&_status:todo" },
         .{ .repr = "&go", .exp = "&_status:go" },
         .{ .repr = "&wip", .exp = "&_status:wip" },
         .{ .repr = "&done", .exp = "&_status:done" },
+        .{ .repr = "TODO", .exp = "&_status:todo" },
+        .{ .repr = "GO", .exp = "&_status:go" },
+        .{ .repr = "WIP", .exp = "&_status:wip" },
+        .{ .repr = "DONE", .exp = "&_status:done" },
+        .{ .repr = "[ ]", .exp = "&_status:todo" },
+        .{ .repr = "[*]", .exp = "&_status:go" },
+        .{ .repr = "[/]", .exp = "&_status:wip" },
+        .{ .repr = "[x]", .exp = "&_status:done" },
     };
 
     for (scns) |scn| {
