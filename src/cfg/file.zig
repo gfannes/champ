@@ -78,7 +78,7 @@ pub const Loader = struct {
     pub const What = enum { Config, Fui };
 
     env: rubr.Env,
-    cli_args: *const cli.Args,
+    cli_args: ?*const cli.Args = null,
 
     config: ?Config = null,
     config_hash: ?Hash = null,
@@ -105,9 +105,11 @@ pub const Loader = struct {
 
                 try self.normalize();
 
-                if (self.cli_args.groves.items.len > 0)
-                    // cli.Args.groves overrules Config.default
-                    self.config.?.default = self.cli_args.groves.items;
+                if (self.cli_args) |cli_args| {
+                    if (cli_args.groves.items.len > 0)
+                        // cli.Args.groves overrules Config.default
+                        self.config.?.default = cli_args.groves.items;
+                }
             },
             .Fui => {
                 if (self.fui_hash) |hash| {
@@ -187,8 +189,7 @@ test "cfg" {
     env_inst.init();
     defer env_inst.deinit();
 
-    var loader = try Loader.init(env_inst.env());
-    defer loader.deinit();
+    var loader: Loader = .{ .env = env_inst.env() };
 
     _ = try loader.loadFromContent(content, .Config);
 

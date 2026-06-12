@@ -53,12 +53,14 @@ task :ut, %i[filter] do |_task, args|
     filter = (args[:filter] || '').split(':').map { |e| "-Dtest-filter=#{e}" } * ' '
     sh "zig build test #{filter} -freference-trace=10"
 
-    mode = :release
-    # mode = :debug
-    # sh("xmake f -c") # This was needed once to make xmake detect the local toolchains
-    sh("xmake f -m #{mode}")
-    sh('xmake build -v amplib_ut')
-    sh('xmake run amplib_ut')
+    unless :cpp
+        mode = :release
+        # mode = :debug
+        # sh("xmake f -c") # This was needed once to make xmake detect the local toolchains
+        sh("xmake f -m #{mode}")
+        sh('xmake build -v amplib_ut')
+        sh('xmake run amplib_ut')
+    end
 
     unless :rust
         # sh 'cargo test -- --nocapture --test-threads 1 lex'

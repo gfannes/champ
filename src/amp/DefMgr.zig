@@ -153,8 +153,8 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
     var n = parent.node("Chores");
     defer n.deinit();
-    for (self.defs.items) |e| {
-        e.write(&n);
+    for (self.defs.items, 0..) |e, ix0| {
+        e.write(&n, ix0);
     }
 }
 

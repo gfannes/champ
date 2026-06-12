@@ -1000,7 +1000,7 @@ test "mero.Parser.parse()" {
             pub fn call(my: *@This(), entry: dto.Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
-                entry.data.write(&my.naft_root);
+                entry.data.write(&my.naft_root, null);
             }
         }{ .naft_root = rubr.naft.Node.root(null) };
         defer cb.deinit();

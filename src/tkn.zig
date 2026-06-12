@@ -33,8 +33,8 @@ pub const Tokenizer = struct {
         };
 
         try tokens.resize(a, 0);
-        const cb = Cb{ .a = a, .tokens = tokens };
-        try self.each(cb);
+        var cb = Cb{ .a = a, .tokens = tokens };
+        try self.each(&cb);
     }
 
     // 'cb' receives all tokens
@@ -216,7 +216,7 @@ test "Tokenizer.scan()" {
 
     var tokenizer = Tokenizer.init(content);
 
-    var tokens = Tokenizer.Tokens{};
+    var tokens: Tokenizer.Tokens = .empty;
     defer tokens.deinit(ut.allocator);
 
     try tokenizer.scan(ut.allocator, &tokens);
