@@ -15,13 +15,41 @@ pub const Error = error{
     ExpectedPrio,
     ExpectedWbs,
     UnsupportedTemplate,
+    InvalidCost,
+    InvalidPrio,
+    InvalidWorker,
+    InvalidWhat,
 };
 
 const Self = @This();
 
+pub const Cost = struct {
+    value: u32,
+};
+pub const Pri = struct {
+    value: i32,
+};
+pub const Worker = struct {
+    name: []const u8,
+};
+// &todo rename into Wbs
+pub const What = struct {
+    name: []const u8,
+};
+
 // Part is assumed to be POD
 pub const Part = struct {
+    pub const Meta = union(enum) {
+        cost: Cost,
+        prio: Pri,
+        worker: Worker,
+        what: What,
+        status: Status,
+    };
+
     content: []const u8,
+    meta: ?Meta = null,
+
     status: ?Status = null,
     date: ?Date = null,
     prio: ?Prio = null,
@@ -42,9 +70,10 @@ pub const Part = struct {
 const Parts = std.ArrayList(Part);
 
 a: std.mem.Allocator,
-is_definition: bool = false,
-is_absolute: bool = false,
-is_dependency: bool = false,
+
+is_definition: bool = false, // &&name
+is_absolute: bool = false, // &&:name
+is_dependency: bool = false, // &name&
 parts: Parts = .empty,
 
 pub fn init(a: std.mem.Allocator) Self {
@@ -151,39 +180,56 @@ pub fn is_template(self: Self) bool {
 
 // Assumes strange outlives Self
 pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
+    var path = Self.init(a);
+    errdefer path.deinit();
+
     if (strange.popChar('&')) {
-        var path = Self.init(a);
-        errdefer path.deinit();
+        if (strange.popChar('$')) {
+            try path.parts.append(a, Part{ .content = "_cost", .meta = Part.Meta{ .cost = Cost{ .value = strange.popInt(u32) orelse return error.InvalidCost } } });
 
-        path.is_definition = strange.popChar('&');
-        path.is_absolute = strange.popChar(':');
+            return path;
+        } else if (strange.popChar('!')) {
+            try path.parts.append(a, Part{ .content = "_prio", .meta = Part.Meta{ .prio = Pri{ .value = strange.popInt(i32) orelse return error.InvalidPrio } } });
 
-        while (strange.popCharBack(':')) {}
-        path.is_dependency = strange.popCharBack('&');
+            return path;
+        } else if (strange.popChar('@')) {
+            try path.parts.append(a, Part{ .content = "_worker", .meta = Part.Meta{ .worker = Worker{ .name = strange.popAll() orelse return error.InvalidWorker } } });
 
-        while (strange.popTo(':')) |p|
-            if (p.len > 0) {
-                var s = rubr.strng.Strange{ .content = p };
-                try path.parts.append(a, Part.init(&s));
-            };
+            return path;
+        } else if (strange.popChar('?')) {
+            try path.parts.append(a, Part{ .content = "_what", .meta = Part.Meta{ .what = What{ .name = strange.popAll() orelse return error.InvalidWhat } } });
 
-        if (strange.popAll()) |p|
-            if (p.len > 0) {
-                var s = rubr.strng.Strange{ .content = p };
-                try path.parts.append(a, Part.init(&s));
-            };
+            return path;
+        } else if (Status.fromLower(strange.str())) |status| {
+            try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
 
-        return path;
+            return path;
+        } else {
+            path.is_definition = strange.popChar('&');
+            path.is_absolute = strange.popChar(':');
+
+            while (strange.popCharBack(':')) {}
+            path.is_dependency = strange.popCharBack('&');
+
+            while (strange.popTo(':')) |p|
+                if (p.len > 0) {
+                    var s = rubr.strng.Strange{ .content = p };
+                    try path.parts.append(a, Part.init(&s));
+                };
+
+            if (strange.popAll()) |p|
+                if (p.len > 0) {
+                    var s = rubr.strng.Strange{ .content = p };
+                    try path.parts.append(a, Part.init(&s));
+                };
+
+            return path;
+        }
     } else if (strange.popStr("[[") and strange.popStrBack("]]")) {
-        var path = Self.init(a);
-        errdefer path.deinit();
         try path.parts.append(a, Part.init(strange));
 
         return path;
     } else if (strange.popChar('[')) {
-        var path = Self.init(a);
-        errdefer path.deinit();
-
         if (strange.popOne()) |ch| {
             const content: []const u8 = switch (ch) {
                 ' ' => "todo",
@@ -203,18 +249,14 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
             if (strange.popChar(']'))
                 return path;
         }
-
-        path.deinit();
     } else if (Status.fromCapital(strange.str())) |status| {
-        var path = Self.init(a);
-        errdefer path.deinit();
-
         var s = rubr.strng.Strange{ .content = status.lower() };
         try path.parts.append(a, Part.init(&s));
 
         return path;
     }
 
+    path.deinit();
     return null;
 }
 
@@ -255,6 +297,15 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
         const exclusive_str = if (part.is_exclusive) "!" else "";
         const template_str = if (part.is_template) "~" else "";
         try io.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
+        if (part.meta) |meta| {
+            switch (meta) {
+                .cost => |cost| try io.print(":{}", .{cost.value}),
+                .prio => |prio| try io.print(":{}", .{prio.value}),
+                .worker => |worker| try io.print(":{s}", .{worker.name}),
+                .what => |what| try io.print(":{s}", .{what.name}),
+                .status => |status| try io.print(":{s}", .{status.lower()}),
+            }
+        }
         prefix = ":";
     }
     if (self.is_dependency)
@@ -280,9 +331,20 @@ test "amp.Path" {
         .{ .repr = "&&:a:b&:c:", .exp = "&&:a:b&:c" },
         .{ .repr = "&&:status:~status", .exp = "&&:status:~status" },
         .{ .repr = "&abc&", .exp = "&abc&" },
+
+        .{ .repr = "&$123", .exp = "&_cost:123" },
+        .{ .repr = "&!123", .exp = "&_prio:123" },
+        .{ .repr = "&!-123", .exp = "&_prio:-123" },
+        .{ .repr = "&@geert", .exp = "&_worker:geert" },
+        .{ .repr = "&?proj", .exp = "&_what:proj" },
+        .{ .repr = "&todo", .exp = "&_status:todo" },
+        .{ .repr = "&go", .exp = "&_status:go" },
+        .{ .repr = "&wip", .exp = "&_status:wip" },
+        .{ .repr = "&done", .exp = "&_status:done" },
     };
 
     for (scns) |scn| {
+        std.debug.print("{s}\n", .{scn.repr});
         var strange = rubr.strng.Strange{ .content = scn.repr };
         var path = try Self.parse(&strange, ut.allocator) orelse unreachable;
         defer path.deinit();
