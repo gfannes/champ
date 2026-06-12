@@ -379,8 +379,9 @@ fn pop_amp_term(self: *Self) ?Term {
             // Savepoint to rollback to state before adding a '[:.]'. This is used to avoid a trailing '[:.]' in Amp.
             var sp_2: ?tkn.Tokenizer = null;
 
+            var saw_nonhat: bool = false;
             while (self.tokenizer.peek()) |token| {
-                if (is_whitespace(token) or is_newline(token) or is_questionmark(token) or is_exclamation(token))
+                if (is_whitespace(token) or is_newline(token) or (is_questionmark(token) and saw_nonhat) or (is_exclamation(token) and saw_nonhat))
                     // We accept this Amp
                     break;
 
@@ -389,6 +390,9 @@ fn pop_amp_term(self: *Self) ?Term {
                     self.tokenizer = sp_1;
                     return null;
                 }
+
+                if (token.symbol != .Hat)
+                    saw_nonhat = true;
 
                 if (token.symbol == .Colon or token.symbol == .Dot)
                     // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
@@ -895,7 +899,7 @@ fn is_amp_start(maybe_past: ?tkn.Token, t: tkn.Token) bool {
     return t.symbol == .Ampersand;
 }
 fn is_amp_body(t: tkn.Token) bool {
-    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde or t.symbol == .Minus or t.symbol == .Plus or t.symbol == .Equal;
+    return t.symbol == .Word or t.symbol == .Underscore or t.symbol == .Colon or t.symbol == .Ampersand or t.symbol == .Dot or t.symbol == .Tilde or t.symbol == .Minus or t.symbol == .Plus or t.symbol == .Equal or t.symbol == .Dollar or t.symbol == .Hat or t.symbol == .Exclamation or t.symbol == .At or t.symbol == .Questionmark;
 }
 fn is_whitespace(t: tkn.Token) bool {
     return t.symbol == .Space;

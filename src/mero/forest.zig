@@ -264,13 +264,18 @@ pub const Forest = struct {
 
                 const n = entry.data;
 
-                if (rubr.slc.isEmpty(n.org_amps.items))
+                if (rubr.slc.isEmpty(n.org_amps.items)) {
+                    std.debug.print("No orgs for {}\n", .{entry.id});
                     return;
-
-                if (my.parent(entry.id)) |parent_node| {
-                    try my.inject_metadata(parent_node, n);
+                }
+                // Tree-based inheritance between Nodes
+                if (my.parent(entry.id)) |parent_entry| {
+                    std.debug.print("{} inherits from {}\n", .{ entry.id, parent_entry.id });
+                    try my.inject_metadata(parent_entry.data, n);
                 }
 
+                // For orgs that resolve to a named Def, inherit Tags.
+                // The direction of inheritance depends on org.is_dependency.
                 for (n.org_amps.items) |org| {
                     const def = org.ix.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
@@ -284,6 +289,7 @@ pub const Forest = struct {
                     }
                 }
 
+                // Inherite Tags from aggs that resolve to a named Def.
                 for (n.agg_amps.items) |agg| {
                     const def = agg.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
@@ -294,40 +300,59 @@ pub const Forest = struct {
             }
 
             fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
-                // Inject src.orgs into dst.aggs, making sure only the last is inserted for each different template
-                for (src.org_amps.items, 0..) |src_org, ix0| {
-                    var is_last_of_kind: bool = true;
-                    {
-                        // &todo: Move to function, maybe create some helper util to convert between Node.DefIx and amp.Def
-                        // &perf: Maybe keep track of the last amp per template kind?
-                        // Check if there is another amp with the same template. If so, we take that.
+                if (true) {
+                    // Inject src.orgs into dst.aggs
+                    for (src.org_amps.items) |src_org| {
                         const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                        if (src_org_def.template) |src_template| {
-                            if (ix0 + 1 < src.org_amps.items.len) {
-                                for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
-                                    const other_src_org_def = other_src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                                    if (other_src_org_def.template) |other_src_template| {
-                                        if (other_src_template.eql(src_template)) {
-                                            is_last_of_kind = false;
-                                            break;
+                        if (!src_org_def.ap.isMeta() and !my.is_present(dst, src_org.ix)) {
+                            std.debug.print("Injecting org into agg {}\n", .{src_org_def.ap.isMeta()});
+                            try dst.agg_amps.append(my.env.a, src_org.ix);
+                            my.update_count += 1;
+                        }
+                    }
+
+                    // Inject src.aggs into dst.aggs
+                    for (src.agg_amps.items) |src_agg_ix| {
+                        if (!my.is_present(dst, src_agg_ix)) {
+                            try dst.agg_amps.append(my.env.a, src_agg_ix);
+                            my.update_count += 1;
+                        }
+                    }
+                } else { // Inject src.orgs into dst.aggs, making sure only the last is inserted for each different template
+                    for (src.org_amps.items, 0..) |src_org, ix0| {
+                        var is_last_of_kind: bool = true;
+                        {
+                            // &todo: Move to function, maybe create some helper util to convert between Node.DefIx and amp.Def
+                            // &perf: Maybe keep track of the last amp per template kind?
+                            // Check if there is another amp with the same template. If so, we take that.
+                            const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                            if (src_org_def.template) |src_template| {
+                                if (ix0 + 1 < src.org_amps.items.len) {
+                                    for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
+                                        const other_src_org_def = other_src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                                        if (other_src_org_def.template) |other_src_template| {
+                                            if (other_src_template.eql(src_template)) {
+                                                is_last_of_kind = false;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+
+                        if (is_last_of_kind and !my.is_present(dst, src_org.ix)) {
+                            try dst.agg_amps.append(my.env.a, src_org.ix);
+                            my.update_count += 1;
+                        }
                     }
 
-                    if (is_last_of_kind and !my.is_present(dst, src_org.ix)) {
-                        try dst.agg_amps.append(my.env.a, src_org.ix);
-                        my.update_count += 1;
-                    }
-                }
-
-                // Inject src.aggs into dst.aggs
-                for (src.agg_amps.items) |src_agg_ix| {
-                    if (!my.is_present(dst, src_agg_ix)) {
-                        try dst.agg_amps.append(my.env.a, src_agg_ix);
-                        my.update_count += 1;
+                    // Inject src.aggs into dst.aggs
+                    for (src.agg_amps.items) |src_agg_ix| {
+                        if (!my.is_present(dst, src_agg_ix)) {
+                            try dst.agg_amps.append(my.env.a, src_agg_ix);
+                            my.update_count += 1;
+                        }
                     }
                 }
             }
@@ -354,11 +379,11 @@ pub const Forest = struct {
                 return false;
             }
 
-            fn parent(my: My, child_id: usize) ?*const Node {
+            fn parent(my: My, child_id: usize) ?Tree.Entry {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
                     if (!rubr.slc.isEmpty(pentry.data.org_amps.items)) {
-                        return pentry.data;
+                        return pentry;
                     }
                     id = pentry.id;
                 }
@@ -462,35 +487,39 @@ pub const Forest = struct {
                                 };
                                 defer path.deinit();
                                 if (!path.is_definition) {
-                                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                                    if (try my.defmgr.resolve(&path, grove_id)) |defix| {
-                                        const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
-                                        try n.org_amps.append(my.env.a, def);
+                                    if (path.isMeta()) {
+                                        // &todo: Inject metadata into def
+                                    } else {
+                                        const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                                        if (try my.defmgr.resolve(&path, grove_id)) |defix| {
+                                            const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
+                                            try n.org_amps.append(my.env.a, def);
 
-                                        if (my.is_new_file and n.type.isText(.Paragraph)) {
-                                            // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
-                                            if (try my.tree.parent(entry.id)) |file| {
-                                                try file.data.org_amps.append(my.env.a, def);
+                                            if (my.is_new_file and n.type.isText(.Paragraph)) {
+                                                // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
+                                                if (try my.tree.parent(entry.id)) |file| {
+                                                    try file.data.org_amps.append(my.env.a, def);
 
-                                                if (amp.is_folder_metadata_fp(file.data.path)) {
-                                                    if (try my.tree.parent(file.id)) |folder| {
-                                                        try folder.data.org_amps.append(my.env.a, def);
+                                                    if (amp.is_folder_metadata_fp(file.data.path)) {
+                                                        if (try my.tree.parent(file.id)) |folder| {
+                                                            try folder.data.org_amps.append(my.env.a, def);
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
 
-                                        // If a Node contains both a definition and a Wbs specification, we inject the Wbs data into the definition.
-                                        // The prio for a Chore will be the sum of the max prios per Kind.
-                                        if (path.wbs()) |wbs| {
-                                            if (n.def) |def_ix| {
-                                                var node_def = def_ix.ix.ptr(my.defmgr.defs.items);
-                                                node_def.kind = wbs.kind;
-                                                node_def.prio = wbs.prio;
+                                            // If a Node contains both a definition and a Wbs specification, we inject the Wbs data into the definition.
+                                            // The prio for a Chore will be the sum of the max prios per Kind.
+                                            if (path.wbs()) |wbs| {
+                                                if (n.def) |def_ix| {
+                                                    var node_def = def_ix.ix.ptr(my.defmgr.defs.items);
+                                                    node_def.kind = wbs.kind;
+                                                    node_def.prio = wbs.prio;
+                                                }
                                             }
+                                        } else {
+                                            try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                         }
-                                    } else {
-                                        try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                     }
                                 }
                             } else if (term.kind == .Newline) {
@@ -581,6 +610,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
+                var saw_status: bool = false;
                 for (text.terms.slice) |term| {
                     cols.begin = cols.end;
                     cols.end += term.word.len;
@@ -638,11 +668,22 @@ pub const Forest = struct {
                             } else {
                                 try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
                             }
+                        } else if (def_ap.isStatus()) {
+                            saw_status = true;
                         }
+                    } else if (term.kind == .Checkbox or term.kind == .Capital) {
+                        saw_status = true;
                     } else if (term.kind == .Newline) {
                         line += term.word.len;
                         cols = .{};
                     }
+                }
+
+                if (n.def == null and saw_status) {
+                    std.debug.print("Creating an unnamed def\n", .{});
+                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                    const pos = filex.Pos{ .row = n.content_rows.begin };
+                    n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.path, entry.id, pos), .pos = pos };
                 }
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {

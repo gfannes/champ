@@ -169,6 +169,12 @@ pub const Node = struct {
         n.attr("content", self.content);
         if (self.chore_id) |id|
             n.attr("chore_id", id);
+        if (self.def) |def|
+            n.attr("def", def.ix);
+        for (self.org_amps.items) |org|
+            n.attr("org", org.ix);
+        for (self.agg_amps.items) |agg|
+            n.attr("agg", agg);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
         switch (self.type) {

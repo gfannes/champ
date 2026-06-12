@@ -37,6 +37,10 @@ pub const What = struct {
     name: []const u8,
 };
 
+pub const Unnamed = struct {
+    id: usize,
+};
+
 // Part is assumed to be POD
 pub const Part = struct {
     pub const Meta = union(enum) {
@@ -45,6 +49,8 @@ pub const Part = struct {
         worker: Worker,
         what: What,
         status: Status,
+
+        unnamed: Unnamed,
     };
 
     is_exclusive: bool = false,
@@ -81,6 +87,17 @@ pub fn copy(self: Self, a: std.mem.Allocator) !Self {
         // Assumes part is POD
         try res.parts.append(res.a, part);
     return res;
+}
+
+pub fn isMeta(self: Self) bool {
+    if (self.parts.items.len == 0)
+        return false;
+    return self.parts.items[0].meta != null;
+}
+pub fn isStatus(self: Self) bool {
+    if (self.parts.items.len == 0)
+        return false;
+    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .status;
 }
 
 // rhs is the smaller one
@@ -297,6 +314,7 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
                 .worker => |worker| try io.print(":{s}", .{worker.name}),
                 .what => |what| try io.print(":{s}", .{what.name}),
                 .status => |status| try io.print(":{s}", .{status.lower()}),
+                .unnamed => |unnamed| try io.print(":{}", .{unnamed.id}),
             }
         }
         prefix = ":";

@@ -63,6 +63,30 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
     return def_ix;
 }
 
+pub fn appendUnnamedDef(self: *Self, grove_id: usize, path: []const u8, node_id: usize, pos: filex.Pos) !Def.Ix {
+    if (self.env.log.level(1)) |w| {
+        try w.print("appendUnnamedDef()\n", .{});
+    }
+
+    const aa = self.aral.allocator();
+
+    const def_ix = Def.Ix.init(self.defs.items.len);
+    var ap = Path.init(aa);
+    try ap.parts.append(aa, Path.Part{ .content = "_unnamed", .meta = Path.Part.Meta{ .unnamed = .{ .id = def_ix.ix } } });
+
+    try self.defs.append(aa, .{
+        .ap = ap,
+        .location = .{
+            .grove_id = grove_id,
+            .path = path,
+            .node_id = node_id,
+            .pos = pos,
+        },
+    });
+
+    return def_ix;
+}
+
 pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
     // std.debug.print("Resolving {f}\n", .{ap});
 
