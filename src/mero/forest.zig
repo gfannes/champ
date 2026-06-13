@@ -417,7 +417,8 @@ pub const Forest = struct {
             pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
-                entry.data.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
+                const node = entry.data;
+                node.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
             }
         }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(&cb);
@@ -434,9 +435,19 @@ pub const Forest = struct {
             pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
-                _ = my;
-                _ = entry;
-                // &meta &todo: aggregate all metadata into the chores
+                const node = entry.data;
+                if (node.chore_id) |chore_id| {
+                    const chore = &my.chores.list.items[chore_id];
+                    // &meta &todo: aggregate all metadata into the chores
+                    for (node.org_amps.items) |org| {
+                        const org_def = org.ix.cptr(my.defmgr.defs.items);
+                        chore.update(org_def);
+                    }
+                    for (node.agg_amps.items) |agg| {
+                        const agg_def = agg.cptr(my.defmgr.defs.items);
+                        chore.update(agg_def);
+                    }
+                }
             }
         }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(&cb);

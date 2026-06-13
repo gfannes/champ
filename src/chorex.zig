@@ -38,13 +38,20 @@ pub const Chore = struct {
     // Indicates the number of Parts that are orgs
     org_count: usize = 0,
 
-    prio: MaxPrios = .{},
+    prio: i32 = 0,
+    my_cost: u32 = 0,
+    child_costs: u32 = 0,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
         return Self{ .node_id = node_id, .a = a };
     }
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
+    }
+
+    pub fn update(self: *Self, def: *const amp.Def) void {
+        if (def.prio) |prio|
+            self.prio = @max(self.prio, prio.value);
     }
 
     pub fn isDone(self: Self) bool {
@@ -110,7 +117,8 @@ pub const Chore = struct {
         if (self.path.len > 0)
             n.attr("path", self.path);
         n.attr("str", self.str);
-        self.prio.write(&n);
+        n.attr("prio", self.prio);
+        n.attr("my_cost", self.my_cost);
         for (self.parts.items) |e|
             e.write(&n);
     }
@@ -178,9 +186,14 @@ pub const Chores = struct {
         chore.str = try std.mem.concat(aa, u8, self.tmp_concat.items);
         chore.org_count = org_count;
 
+        if (node.def) |def_ref| {
+            const def = def_ref.ix.cptr(defmgr.defs.items);
+            if (def.cost) |cost|
+                chore.my_cost = cost.value;
+        }
+
         var offset: usize = 0;
         var ix: usize = 0;
-
         for (node.org_amps.items) |org| {
             defer ix += 1;
 
@@ -233,57 +246,6 @@ pub const Chores = struct {
         for (self.list.items) |e| {
             e.write(&n);
         }
-    }
-};
-
-const MaxPrios = struct {
-    project: ?i32 = null,
-    area: ?i32 = null,
-    epic: ?i32 = null,
-    story: ?i32 = null,
-    task: ?i32 = null,
-
-    fn update(my: *@This(), maybe_kind: ?Wbs.Kind, maybe_prio: ?i32) void {
-        if (maybe_prio) |pri| {
-            if (maybe_kind) |kind| {
-                switch (kind) {
-                    .Project => my.project = @max(pri, my.project orelse pri),
-                    .Area => my.area = @max(pri, my.area orelse pri),
-                    .Epic => my.epic = @max(pri, my.epic orelse pri),
-                    .Story => my.story = @max(pri, my.story orelse pri),
-                    .Task => my.task = @max(pri, my.task orelse pri),
-                }
-            }
-        }
-    }
-    fn prio(my: @This()) ?i32 {
-        var sum: ?i32 = null;
-        if (my.project) |v|
-            sum = (sum orelse 0) + v;
-        if (my.area) |v|
-            sum = (sum orelse 0) + v;
-        if (my.epic) |v|
-            sum = (sum orelse 0) + v;
-        if (my.story) |v|
-            sum = (sum orelse 0) + v;
-        if (my.task) |v|
-            sum = (sum orelse 0) + v;
-        return sum;
-    }
-
-    pub fn write(self: @This(), parent: *naft.Node) void {
-        var n = parent.node("MaxPrio");
-        defer n.deinit();
-        if (self.project) |project|
-            n.attr("project", project);
-        if (self.area) |area|
-            n.attr("area", area);
-        if (self.epic) |epic|
-            n.attr("epic", epic);
-        if (self.story) |story|
-            n.attr("story", story);
-        if (self.task) |task|
-            n.attr("task", task);
     }
 };
 
