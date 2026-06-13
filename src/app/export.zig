@@ -139,8 +139,10 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                             var section = Section{ .id = entry.id };
                             if (n.chore_id) |chore_id| {
                                 if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
-                                    const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
-                                    section.wbs = wbs.kind;
+                                    _ = wbs_value;
+                                    // &meta &todo
+                                    // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
+                                    // section.wbs = wbs.kind;
                                 }
                             }
                             if (maybe_section) |s| {

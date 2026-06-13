@@ -94,6 +94,8 @@ pub const Forest = struct {
 
         try self.createChores();
 
+        try self.computeChores();
+
         self.valid = true;
     }
 
@@ -421,6 +423,25 @@ pub const Forest = struct {
         try self.tree.dfsAll(&cb);
     }
 
+    fn computeChores(self: *Self) !void {
+        var cb = struct {
+            const My = @This();
+
+            chores: *chorex.Chores,
+            tree: *const Tree,
+            defmgr: *const amp.DefMgr,
+
+            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                if (!before)
+                    return;
+                _ = my;
+                _ = entry;
+                // &meta &todo: aggregate all metadata into the chores
+            }
+        }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
+        try self.tree.dfsAll(&cb);
+    }
+
     // Setup Node.org_amps and amp.DefMgr for data found in Node.line.terms
     fn resolveAmps(self: *Self) !void {
         var cb = struct {
@@ -488,7 +509,10 @@ pub const Forest = struct {
                                 defer path.deinit();
                                 if (!path.is_definition) {
                                     if (path.isMeta()) {
-                                        // &todo: Inject metadata into def
+                                        // Inject all Meta into n.def if present
+                                        if (n.def) |def| {
+                                            try def.ix.ptr(my.defmgr.defs.items).injectMeta(path);
+                                        }
                                     } else {
                                         const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                         if (try my.defmgr.resolve(&path, grove_id)) |defix| {
@@ -505,16 +529,6 @@ pub const Forest = struct {
                                                             try folder.data.org_amps.append(my.env.a, def);
                                                         }
                                                     }
-                                                }
-                                            }
-
-                                            // If a Node contains both a definition and a Wbs specification, we inject the Wbs data into the definition.
-                                            // The prio for a Chore will be the sum of the max prios per Kind.
-                                            if (path.wbs()) |wbs| {
-                                                if (n.def) |def_ix| {
-                                                    var node_def = def_ix.ix.ptr(my.defmgr.defs.items);
-                                                    node_def.kind = wbs.kind;
-                                                    node_def.prio = wbs.prio;
                                                 }
                                             }
                                         } else {
@@ -610,7 +624,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
-                var saw_status: bool = false;
+                var needs_def: bool = false;
                 for (text.terms.slice) |term| {
                     cols.begin = cols.end;
                     cols.end += term.word.len;
@@ -669,21 +683,25 @@ pub const Forest = struct {
                                 try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
                             }
                         } else if (def_ap.isStatus()) {
-                            saw_status = true;
+                            needs_def = true;
+                        } else if (def_ap.is_dependency) {
+                            needs_def = true;
                         }
                     } else if (term.kind == .Checkbox or term.kind == .Capital) {
-                        saw_status = true;
+                        needs_def = true;
                     } else if (term.kind == .Newline) {
                         line += term.word.len;
                         cols = .{};
                     }
                 }
 
-                if (n.def == null and saw_status) {
+                if (n.def == null and needs_def) {
                     std.debug.print("Creating an unnamed def\n", .{});
                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                     const pos = filex.Pos{ .row = n.content_rows.begin };
                     n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.path, entry.id, pos), .pos = pos };
+                    // We add this Def to the org_amps as well to ensure aggregation picks it up
+                    try n.org_amps.append(my.env.a, n.def.?);
                 }
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {

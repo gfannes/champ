@@ -33,23 +33,25 @@ pub fn call(self: *Self) !void {
         std.debug.print("Found {}\n", .{count});
     }
     {
-        var count: usize = 0;
+        // var count: usize = 0;
         std.debug.print("WBS markers\n", .{});
         for (self.forest.chores.list.items) |chore| {
             const part_count = if (self.details) chore.parts.items.len else chore.org_count;
             for (chore.parts.items[0..part_count]) |chp| {
-                var is_wbs: bool = false;
+                // var is_wbs: bool = false;
                 for (chp.ap.parts.items) |app| {
-                    if (app.wbs) |wbs| {
-                        std.debug.print("WBS {s} {} in {s} {}\n", .{ chore.str, wbs, chore.path, chp.pos });
-                        count += 1;
-                        is_wbs = true;
-                    }
+                    _ = app;
+                    // &meta &todo
+                    // if (app.wbs) |wbs| {
+                    //     std.debug.print("WBS {s} {} in {s} {}\n", .{ chore.str, wbs, chore.path, chp.pos });
+                    //     count += 1;
+                    //     is_wbs = true;
+                    // }
                 }
-                if (!is_wbs)
-                    std.debug.print("nop {s} {s} {}\n", .{ chore.str, chore.path, chp.pos });
+                // if (!is_wbs)
+                //     std.debug.print("nop {s} {s} {}\n", .{ chore.str, chore.path, chp.pos });
             }
         }
-        std.debug.print("Found {}\n", .{count});
+        // std.debug.print("Found {}\n", .{count});
     }
 }

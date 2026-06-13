@@ -10,13 +10,23 @@ pub const Kind = enum { Project, Area, Epic, Story, Task };
 kind: Kind,
 prio: ?i32 = null,
 
+pub fn lower(self: Self) []const u8 {
+    switch (self.kind) {
+        .Project => return "project",
+        .Area => return "area",
+        .Epic => return "epic",
+        .Story => return "story",
+        .Task => return "task",
+    }
+}
+
 pub fn parse(str: []const u8, options: Options) ?Self {
     _ = options;
 
     var res: ?Self = null;
 
     var strange = rubr.strng.Strange{ .content = str };
-    if (strange.popStr("project")) {
+    if (strange.popStr("project") or strange.popStr("proj")) {
         res = .{ .kind = .Project };
     } else if (strange.popStr("area")) {
         res = .{ .kind = .Area };

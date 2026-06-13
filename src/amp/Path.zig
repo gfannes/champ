@@ -18,7 +18,7 @@ pub const Error = error{
     InvalidCost,
     InvalidPrio,
     InvalidWorker,
-    InvalidWhat,
+    InvalidWbs,
 };
 
 const Self = @This();
@@ -32,10 +32,6 @@ pub const Pri = struct {
 pub const Worker = struct {
     name: []const u8,
 };
-// &todo rename into Wbs
-pub const What = struct {
-    name: []const u8,
-};
 
 pub const Unnamed = struct {
     id: usize,
@@ -47,7 +43,7 @@ pub const Part = struct {
         cost: Cost,
         prio: Pri,
         worker: Worker,
-        what: What,
+        wbs: Wbs,
         status: Status,
 
         unnamed: Unnamed,
@@ -60,7 +56,6 @@ pub const Part = struct {
     status: ?Status = null,
     date: ?Date = null,
     prio: ?Prio = null,
-    wbs: ?Wbs = null,
     is_template: bool = false,
 };
 const Parts = std.ArrayList(Part);
@@ -147,14 +142,6 @@ pub fn value_at(self: Self, key: []const []const u8) ?*const Part {
     return &self.parts.items[key.len];
 }
 
-pub fn wbs(self: Self) ?Wbs {
-    for (self.parts.items) |part| {
-        if (part.wbs) |v|
-            return v;
-    }
-    return null;
-}
-
 // Parses the template parts of `ap` according to `self`
 pub fn evaluate(self: Self, ap: *Self) !void {
     if (self.parts.items.len != ap.parts.items.len)
@@ -169,8 +156,6 @@ pub fn evaluate(self: Self, ap: *Self) !void {
             dst.date = Date.parse(dst.content, .{}) orelse return Error.ExpectedDate;
         } else if (std.mem.eql(u8, src.content, "prio")) {
             dst.prio = Prio.parse(dst.content, .{}) orelse return Error.ExpectedPrio;
-        } else if (std.mem.eql(u8, src.content, "wbs")) {
-            dst.wbs = Wbs.parse(dst.content, .{}) orelse return Error.ExpectedWbs;
         } else {
             std.debug.print("Unsupported template '{s}'\n", .{src.content});
             return Error.UnsupportedTemplate;
@@ -206,7 +191,7 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
 
             return path;
         } else if (strange.popChar('?')) {
-            try path.parts.append(a, Part{ .content = "_what", .meta = Part.Meta{ .what = What{ .name = strange.popAll() orelse return error.InvalidWhat } } });
+            try path.parts.append(a, Part{ .content = "_wbs", .meta = Part.Meta{ .wbs = Wbs.parse(strange.str(), .{}) orelse return error.InvalidWbs } });
 
             return path;
         } else if (Status.fromLower(strange.str())) |status| {
@@ -312,7 +297,7 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
                 .cost => |cost| try io.print(":{}", .{cost.value}),
                 .prio => |prio| try io.print(":{}", .{prio.value}),
                 .worker => |worker| try io.print(":{s}", .{worker.name}),
-                .what => |what| try io.print(":{s}", .{what.name}),
+                .wbs => |wbs| try io.print(":{s}", .{wbs.lower()}),
                 .status => |status| try io.print(":{s}", .{status.lower()}),
                 .unnamed => |unnamed| try io.print(":{}", .{unnamed.id}),
             }
