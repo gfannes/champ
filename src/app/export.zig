@@ -53,6 +53,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
         env: rubr.Env,
         tree: *mero.Tree,
+        defmgr: *const amp.DefMgr,
         chores: *const chorex.Chores,
         output_dir: *std.Io.Dir,
         output: *std.Io.Writer,
@@ -137,12 +138,15 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         if (before) {
                             my.section_level += 1;
                             var section = Section{ .id = entry.id };
-                            if (n.chore_id) |chore_id| {
-                                if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
-                                    _ = wbs_value;
-                                    // &meta &todo
-                                    // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
-                                    // section.wbs = wbs.kind;
+                            if (n.def) |def_ref| {
+                                const def = def_ref.ix.cptr(my.defmgr.defs.items);
+                                if (def.chore_id) |chore_id| {
+                                    if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
+                                        _ = wbs_value;
+                                        // &meta &todo
+                                        // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
+                                        // section.wbs = wbs.kind;
+                                    }
                                 }
                             }
                             if (maybe_section) |s| {
@@ -163,31 +167,34 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         return;
 
                     var status_str: ?[]const u8 = null;
-                    if (n.chore_id) |chore_id| {
-                        const chore = my.chores.list.items[chore_id];
-                        if (chore.value("status", .Org)) |status_value| {
-                            if (status_value.status) |status| {
-                                status_str = switch (status.kind) {
-                                    .Todo, .Go, .Question => "_TODO_ ",
-                                    .Wip => "_IN PROGRESS_ ",
-                                    .Blocked => "**BLOCKED** ",
-                                    .Done => "_DONE_ ",
-                                    else => null,
-                                };
-                                switch (status.kind) {
-                                    .Todo, .Wip, .Go, .Blocked, .Question => {
-                                        const section = maybe_section orelse {
-                                            try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
-                                            return error.ExpectedSection;
-                                        };
+                    if (n.def) |def_ref| {
+                        const def = def_ref.ix.cptr(my.defmgr.defs.items);
+                        if (def.chore_id) |chore_id| {
+                            const chore = my.chores.list.items[chore_id];
+                            if (chore.value("status", .Org)) |status_value| {
+                                if (status_value.status) |status| {
+                                    status_str = switch (status.kind) {
+                                        .Todo, .Go, .Question => "_TODO_ ",
+                                        .Wip => "_IN PROGRESS_ ",
+                                        .Blocked => "**BLOCKED** ",
+                                        .Done => "_DONE_ ",
+                                        else => null,
+                                    };
+                                    switch (status.kind) {
+                                        .Todo, .Wip, .Go, .Blocked, .Question => {
+                                            const section = maybe_section orelse {
+                                                try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
+                                                return error.ExpectedSection;
+                                            };
 
-                                        // Keep track of the chores per section
-                                        const res = try my.section_chores.getOrPut(my.env.a, section.id);
-                                        if (!res.found_existing)
-                                            res.value_ptr.* = .empty;
-                                        try res.value_ptr.append(my.env.a, chore_id);
-                                    },
-                                    else => {},
+                                            // Keep track of the chores per section
+                                            const res = try my.section_chores.getOrPut(my.env.a, section.id);
+                                            if (!res.found_existing)
+                                                res.value_ptr.* = .empty;
+                                            try res.value_ptr.append(my.env.a, chore_id);
+                                        },
+                                        else => {},
+                                    }
                                 }
                             }
                         }
@@ -262,6 +269,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
     var cb = Cb{
         .env = self.env,
         .tree = &self.forest.tree,
+        .defmgr = &self.forest.defmgr,
         .chores = &self.forest.chores,
         .output_dir = &output_dir,
         .output = &output_w.interface,

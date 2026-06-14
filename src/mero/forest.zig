@@ -418,7 +418,12 @@ pub const Forest = struct {
                 if (!before)
                     return;
                 const node = entry.data;
-                node.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
+                if (std.meta.activeTag(node.type) == .file)
+                    return;
+                if (node.def) |def_ref| {
+                    const def = def_ref.ix.ptr(my.defmgr.defs.items);
+                    def.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
+                }
             }
         }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
         try self.tree.dfsAll(&cb);
@@ -436,16 +441,18 @@ pub const Forest = struct {
                 if (!before)
                     return;
                 const node = entry.data;
-                if (node.chore_id) |chore_id| {
-                    const chore = &my.chores.list.items[chore_id];
-                    // &meta &todo: aggregate all metadata into the chores
-                    for (node.org_amps.items) |org| {
-                        const org_def = org.ix.cptr(my.defmgr.defs.items);
-                        chore.update(org_def);
-                    }
-                    for (node.agg_amps.items) |agg| {
-                        const agg_def = agg.cptr(my.defmgr.defs.items);
-                        chore.update(agg_def);
+                if (node.def) |def_ref| {
+                    const def = def_ref.ix.cptr(my.defmgr.defs.items);
+                    if (def.chore_id) |chore_id| {
+                        // &meta &todo: aggregate all metadata into the chores
+                        for (node.org_amps.items) |org| {
+                            const org_def = org.ix.cptr(my.defmgr.defs.items);
+                            my.chores.update(chore_id, org_def);
+                        }
+                        for (node.agg_amps.items) |agg| {
+                            const agg_def = agg.cptr(my.defmgr.defs.items);
+                            my.chores.update(chore_id, agg_def);
+                        }
                     }
                 }
             }

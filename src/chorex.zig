@@ -49,11 +49,6 @@ pub const Chore = struct {
         self.parts.deinit();
     }
 
-    pub fn update(self: *Self, def: *const amp.Def) void {
-        if (def.prio) |prio|
-            self.prio = @max(self.prio, prio.value);
-    }
-
     pub fn isDone(self: Self) bool {
         var strange = rubr.strng.Strange{ .content = "&status:done" };
         var done_ap = (amp.Path.parse(&strange, self.a) catch null) orelse unreachable;
@@ -119,6 +114,7 @@ pub const Chore = struct {
         n.attr("str", self.str);
         n.attr("prio", self.prio);
         n.attr("my_cost", self.my_cost);
+        n.attr("child_costs", self.child_costs);
         for (self.parts.items) |e|
             e.write(&n);
     }
@@ -238,6 +234,22 @@ pub const Chores = struct {
         try self.list.append(aa, chore);
 
         return chore_ix;
+    }
+
+    pub fn update(self: *Self, chore_id: usize, def: *const amp.Def) void {
+        const chore = &self.list.items[chore_id];
+
+        // Aggregate metadata from def into chore
+        if (def.prio) |prio|
+            chore.prio = @max(chore.prio, prio.value);
+
+        // Aggregate metadata from chore into def
+        if (def.chore_id) |other_chore_id| {
+            if (chore_id != other_chore_id) {
+                const other_chore = &self.list.items[other_chore_id];
+                other_chore.child_costs += chore.my_cost;
+            }
+        }
     }
 
     pub fn write(self: Self, parent: *naft.Node) void {

@@ -144,7 +144,6 @@ pub const Node = struct {
     content_cols: idx.Range = .{},
 
     grove_id: ?usize = null,
-    chore_id: ?usize = null,
 
     pub fn deinit(self: *Self) void {
         self.org_amps.deinit(self.a);
@@ -167,8 +166,6 @@ pub const Node = struct {
             n.attr("id", id);
         n.attr("type", self.type);
         n.attr("content", self.content);
-        if (self.chore_id) |id|
-            n.attr("chore_id", id);
         if (self.def) |def|
             n.attr("def", def.ix);
         for (self.org_amps.items) |org|

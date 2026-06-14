@@ -23,6 +23,7 @@ ap: Path,
 
 location: ?Location = null,
 template: ?Ix = null,
+chore_id: ?usize = null,
 
 cost: ?Path.Cost = null,
 prio: ?Path.Pri = null,
@@ -51,6 +52,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     if (maybe_ix) |ix|
         n.attr("ix", ix);
     n.attr("ap", self.ap);
+    if (self.chore_id) |chore_id|
+        n.attr("chore_id", chore_id);
     if (self.cost) |cost|
         n.attr("cost", cost.value);
     if (self.prio) |prio|
