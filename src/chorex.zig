@@ -105,9 +105,11 @@ pub const Chore = struct {
         return res;
     }
 
-    pub fn write(self: Self, parent: *naft.Node) void {
+    pub fn write(self: Self, parent: *naft.Node, maybe_ix: ?usize) void {
         var n = parent.node("Chore");
         defer n.deinit();
+        if (maybe_ix) |ix|
+            n.attr("ix", ix);
         n.attr("node_id", self.node_id);
         if (self.path.len > 0)
             n.attr("path", self.path);
@@ -240,9 +242,12 @@ pub const Chores = struct {
         const chore = &self.list.items[chore_id];
 
         // Aggregate metadata from def into chore
-        if (def.prio) |prio|
-            chore.prio = @max(chore.prio, prio.value);
-
+        if (def.prio) |prio| {
+            chore.prio = if (prio.relative)
+                chore.prio + prio.value
+            else
+                @max(chore.prio, prio.value);
+        }
         // Aggregate metadata from chore into def
         if (def.chore_id) |other_chore_id| {
             if (chore_id != other_chore_id) {
@@ -255,8 +260,8 @@ pub const Chores = struct {
     pub fn write(self: Self, parent: *naft.Node) void {
         var n = parent.node("Chores");
         defer n.deinit();
-        for (self.list.items) |e| {
-            e.write(&n);
+        for (self.list.items, 0..) |e, ix0| {
+            e.write(&n, ix0);
         }
     }
 };

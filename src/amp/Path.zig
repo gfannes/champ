@@ -28,6 +28,7 @@ pub const Cost = struct {
 };
 pub const Pri = struct {
     value: i32,
+    relative: bool,
 };
 pub const Worker = struct {
     name: []const u8,
@@ -183,7 +184,8 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
 
             return path;
         } else if (strange.popChar('!')) {
-            try path.parts.append(a, Part{ .content = "_prio", .meta = Part.Meta{ .prio = Pri{ .value = strange.popInt(i32) orelse return error.InvalidPrio } } });
+            const relative = if (strange.front()) |ch| ch == '+' or ch == '-' else false;
+            try path.parts.append(a, Part{ .content = "_prio", .meta = Part.Meta{ .prio = Pri{ .value = strange.popInt(i32) orelse return error.InvalidPrio, .relative = relative } } });
 
             return path;
         } else if (strange.popChar('@')) {

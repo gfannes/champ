@@ -444,7 +444,6 @@ pub const Forest = struct {
                 if (node.def) |def_ref| {
                     const def = def_ref.ix.cptr(my.defmgr.defs.items);
                     if (def.chore_id) |chore_id| {
-                        // &meta &todo: aggregate all metadata into the chores
                         for (node.org_amps.items) |org| {
                             const org_def = org.ix.cptr(my.defmgr.defs.items);
                             my.chores.update(chore_id, org_def);
