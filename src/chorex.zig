@@ -38,7 +38,8 @@ pub const Chore = struct {
     // Indicates the number of Parts that are orgs
     org_count: usize = 0,
 
-    prio: i32 = 0,
+    prio_sum: i32 = 0,
+    prio_max: i32 = 0,
     my_cost: u32 = 0,
     child_costs: u32 = 0,
 
@@ -47,6 +48,10 @@ pub const Chore = struct {
     }
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
+    }
+
+    pub fn prio(self: Self) i32 {
+        return self.prio_sum + self.prio_max;
     }
 
     pub fn isDone(self: Self) bool {
@@ -114,7 +119,8 @@ pub const Chore = struct {
         if (self.path.len > 0)
             n.attr("path", self.path);
         n.attr("str", self.str);
-        n.attr("prio", self.prio);
+        n.attr("prio_sum", self.prio_sum);
+        n.attr("prio_max", self.prio_max);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
         for (self.parts.items) |e|
@@ -243,10 +249,11 @@ pub const Chores = struct {
 
         // Aggregate metadata from def into chore
         if (def.prio) |prio| {
-            chore.prio = if (prio.relative)
-                chore.prio + prio.value
-            else
-                @max(chore.prio, prio.value);
+            if (prio.relative) {
+                chore.prio_sum += prio.value;
+            } else {
+                chore.prio_max = @max(chore.prio_max, prio.value);
+            }
         }
         // Aggregate metadata from chore into def
         if (def.chore_id) |other_chore_id| {
