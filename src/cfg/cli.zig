@@ -9,7 +9,7 @@ const Error = error{
     UnknownMode,
     ModeDoesNotSupportExtra,
     ExpectedNumber,
-    ExpectedPrio,
+    ExpectedOrder,
 };
 
 pub const Mode = enum {
@@ -37,7 +37,7 @@ pub const Args = struct {
     do_parse: bool = false,
     verbose: usize = 0,
     mode: ?Mode = null,
-    prio: i32 = 0,
+    max_order: i32 = std.math.maxInt(i32),
     reverse: bool = false,
     details: u8 = 0,
     all: bool = false,
@@ -81,9 +81,9 @@ pub const Args = struct {
                 self.do_scan = true;
             } else if (arg.is("-P", "--parse")) {
                 self.do_parse = true;
-            } else if (arg.is("-p", "--prio")) {
-                const prio = self.args.pop() orelse return error.ExpectedPrio;
-                self.prio = try prio.as(i32);
+            } else if (arg.is("-O", "--max-order")) {
+                const order = self.args.pop() orelse return error.ExpectedOrder;
+                self.max_order = try order.as(i32);
             } else if (arg.is("-r", "--reverse")) {
                 self.reverse = true;
             } else if (arg.is("-a", "--all")) {
@@ -134,7 +134,7 @@ pub const Args = struct {
             "    -l  --log     FILE   Log to FILE\n" ++
             "    -s  --scan           Scan\n" ++
             "    -P  --parse          Parse\n" ++
-            "    -p  --prio           Priority\n" ++
+            "    -O  --max-order      Maximum order to show\n" ++
             "    -r  --reverse        Reverse\n" ++
             "    -a  --all        Show all\n" ++
             "    -d  --details        Details, more than one can be specified\n" ++

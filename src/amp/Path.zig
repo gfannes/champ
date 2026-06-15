@@ -2,7 +2,6 @@ const std = @import("std");
 
 const rubr = @import("../rubr.zig");
 const Status = @import("Status.zig");
-const Prio = @import("Prio.zig");
 const Date = @import("Date.zig");
 const Wbs = @import("Wbs.zig");
 
@@ -14,7 +13,6 @@ pub const Error = error{
     ExpectedDate,
     ExpectedPrio,
     ExpectedWbs,
-    UnsupportedTemplate,
     InvalidCost,
     InvalidPrio,
     InvalidWorker,
@@ -26,7 +24,7 @@ const Self = @This();
 pub const Cost = struct {
     value: u32,
 };
-pub const Pri = struct {
+pub const Order = struct {
     value: i32,
     relative: bool,
 };
@@ -42,7 +40,7 @@ pub const Unnamed = struct {
 pub const Part = struct {
     pub const Meta = union(enum) {
         cost: Cost,
-        prio: Pri,
+        order: Order,
         worker: Worker,
         wbs: Wbs,
         status: Status,
@@ -56,8 +54,7 @@ pub const Part = struct {
 
     status: ?Status = null,
     date: ?Date = null,
-    prio: ?Prio = null,
-    is_template: bool = false,
+    order: ?Order = null,
 };
 const Parts = std.ArrayList(Part);
 
@@ -95,10 +92,10 @@ pub fn isStatus(self: Self) bool {
         return false;
     return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .status;
 }
-pub fn isPrio(self: Self) bool {
+pub fn isOrder(self: Self) bool {
     if (self.parts.items.len == 0)
         return false;
-    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .prio;
+    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .order;
 }
 
 // rhs is the smaller one
@@ -107,73 +104,14 @@ pub fn isFit(self: Self, rhs: Self) bool {
     var self_rit = std.mem.reverseIterator(self.parts.items);
     while (rhs_rit.nextPtr()) |rhs_part| {
         const self_part: *const Part = self_rit.nextPtr() orelse return false;
-        if (self_part.is_template) {
-            if (std.mem.eql(u8, self_part.content, "status")) {
-                if (Status.fromLower(rhs_part.content) == null)
-                    return false;
-            } else if (std.mem.eql(u8, self_part.content, "date")) {
-                if (Date.parse(rhs_part.content, .{}) == null)
-                    return false;
-            } else if (std.mem.eql(u8, self_part.content, "prio")) {
-                if (Prio.parse(rhs_part.content, .{}) == null)
-                    return false;
-            } else if (std.mem.eql(u8, self_part.content, "wbs")) {
-                if (Wbs.parse(rhs_part.content, .{}) == null)
-                    return false;
-            } else {
-                // std.debug.print("Unsupported template '{s}'\n", .{self_part.content});
-                return false;
-            }
-        } else {
-            if (!std.mem.eql(u8, rhs_part.content, self_part.content))
-                return false;
-        }
+        if (!std.mem.eql(u8, rhs_part.content, self_part.content))
+            return false;
     }
 
     if (rhs.is_absolute and self_rit.nextPtr() != null)
         return false;
 
     return true;
-}
-
-pub fn value_at(self: Self, key: []const []const u8) ?*const Part {
-    if (self.parts.items.len != key.len + 1)
-        return null;
-
-    for (self.parts.items[0..key.len], key) |part, k| {
-        if (!std.mem.eql(u8, part.content, k))
-            return null;
-    }
-
-    return &self.parts.items[key.len];
-}
-
-// Parses the template parts of `ap` according to `self`
-pub fn evaluate(self: Self, ap: *Self) !void {
-    if (self.parts.items.len != ap.parts.items.len)
-        return Error.ExpectedSameLen;
-
-    for (self.parts.items, ap.parts.items) |src, *dst| {
-        if (!src.is_template)
-            continue;
-        if (std.mem.eql(u8, src.content, "status")) {
-            dst.status = Status.fromLower(dst.content) orelse return Error.ExpectedStatus;
-        } else if (std.mem.eql(u8, src.content, "date")) {
-            dst.date = Date.parse(dst.content, .{}) orelse return Error.ExpectedDate;
-        } else if (std.mem.eql(u8, src.content, "prio")) {
-            dst.prio = Prio.parse(dst.content, .{}) orelse return Error.ExpectedPrio;
-        } else {
-            std.debug.print("Unsupported template '{s}'\n", .{src.content});
-            return Error.UnsupportedTemplate;
-        }
-    }
-}
-
-pub fn is_template(self: Self) bool {
-    for (self.parts.items) |part|
-        if (part.is_template)
-            return true;
-    return false;
 }
 
 // Assumes strange outlives Self
@@ -188,9 +126,9 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
             try path.parts.append(a, Part{ .content = "_cost", .meta = Part.Meta{ .cost = Cost{ .value = strange.popInt(u32) orelse return error.InvalidCost } } });
 
             return path;
-        } else if (strange.popChar('!')) {
+        } else if (strange.popChar('#')) {
             const relative = if (strange.front()) |ch| ch == '+' or ch == '-' else false;
-            try path.parts.append(a, Part{ .content = "_prio", .meta = Part.Meta{ .prio = Pri{ .value = strange.popInt(i32) orelse return error.InvalidPrio, .relative = relative } } });
+            try path.parts.append(a, Part{ .content = "_order", .meta = Part.Meta{ .order = Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative } } });
 
             return path;
         } else if (strange.popChar('@')) {
@@ -297,12 +235,11 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
     var prefix: []const u8 = if (self.is_absolute) ":" else "";
     for (self.parts.items) |part| {
         const exclusive_str = if (part.is_exclusive) "^" else "";
-        const template_str = if (part.is_template) "~" else "";
-        try io.print("{s}{s}{s}{s}", .{ prefix, exclusive_str, template_str, part.content });
+        try io.print("{s}{s}{s}", .{ prefix, exclusive_str, part.content });
         if (part.meta) |meta| {
             switch (meta) {
                 .cost => |cost| try io.print(":{}", .{cost.value}),
-                .prio => |prio| try io.print(":{}", .{prio.value}),
+                .order => |order| try io.print(":{}", .{order.value}),
                 .worker => |worker| try io.print(":{s}", .{worker.name}),
                 .wbs => |wbs| try io.print(":{s}", .{wbs.lower()}),
                 .status => |status| try io.print(":{s}", .{status.lower()}),
@@ -336,8 +273,8 @@ test "amp.Path" {
         .{ .repr = "&abc&", .exp = "&abc&" },
 
         .{ .repr = "&$123", .exp = "&_cost:123" },
-        .{ .repr = "&!123", .exp = "&_prio:123" },
-        .{ .repr = "&!-123", .exp = "&_prio:-123" },
+        .{ .repr = "&#123", .exp = "&_order:123" },
+        .{ .repr = "&#-123", .exp = "&_order:-123" },
         .{ .repr = "&@geert", .exp = "&_worker:geert" },
         .{ .repr = "&^@geert", .exp = "&^_worker:geert" },
         .{ .repr = "&?proj", .exp = "&_what:proj" },

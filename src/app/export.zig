@@ -141,12 +141,13 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                             if (n.def) |def_ref| {
                                 const def = def_ref.ix.cptr(my.defmgr.defs.items);
                                 if (def.chore_id) |chore_id| {
-                                    if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
-                                        _ = wbs_value;
-                                        // &meta &todo
-                                        // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
-                                        // section.wbs = wbs.kind;
-                                    }
+                                    _ = chore_id;
+                                    // if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
+                                    //     _ = wbs_value;
+                                    // &meta &todo
+                                    // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
+                                    // section.wbs = wbs.kind;
+                                    // }
                                 }
                             }
                             if (maybe_section) |s| {
@@ -171,30 +172,28 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         const def = def_ref.ix.cptr(my.defmgr.defs.items);
                         if (def.chore_id) |chore_id| {
                             const chore = my.chores.list.items[chore_id];
-                            if (chore.value("status", .Org)) |status_value| {
-                                if (status_value.status) |status| {
-                                    status_str = switch (status.kind) {
-                                        .Todo, .Go, .Question => "_TODO_ ",
-                                        .Wip => "_IN PROGRESS_ ",
-                                        .Blocked => "**BLOCKED** ",
-                                        .Done => "_DONE_ ",
-                                        else => null,
-                                    };
-                                    switch (status.kind) {
-                                        .Todo, .Wip, .Go, .Blocked, .Question => {
-                                            const section = maybe_section orelse {
-                                                try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
-                                                return error.ExpectedSection;
-                                            };
+                            if (chore.status) |status| {
+                                status_str = switch (status.kind) {
+                                    .Todo, .Go, .Question => "_TODO_ ",
+                                    .Wip => "_IN PROGRESS_ ",
+                                    .Blocked => "**BLOCKED** ",
+                                    .Done => "_DONE_ ",
+                                    else => null,
+                                };
+                                switch (status.kind) {
+                                    .Todo, .Wip, .Go, .Blocked, .Question => {
+                                        const section = maybe_section orelse {
+                                            try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
+                                            return error.ExpectedSection;
+                                        };
 
-                                            // Keep track of the chores per section
-                                            const res = try my.section_chores.getOrPut(my.env.a, section.id);
-                                            if (!res.found_existing)
-                                                res.value_ptr.* = .empty;
-                                            try res.value_ptr.append(my.env.a, chore_id);
-                                        },
-                                        else => {},
-                                    }
+                                        // Keep track of the chores per section
+                                        const res = try my.section_chores.getOrPut(my.env.a, section.id);
+                                        if (!res.found_existing)
+                                            res.value_ptr.* = .empty;
+                                        try res.value_ptr.append(my.env.a, chore_id);
+                                    },
+                                    else => {},
                                 }
                             }
                         }
@@ -302,10 +301,9 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
             {
                 const chore_ids = e.value_ptr.items;
                 for (chore_ids) |chore_id| {
-                    const ch = &self.forest.chores.list.items[chore_id];
+                    const chore = &self.forest.chores.list.items[chore_id];
 
-                    const status_value = ch.value("status", .Org) orelse continue;
-                    var status = (status_value.status orelse continue).kind;
+                    var status = (chore.status orelse continue).kind;
                     switch (status) {
                         .Blocked, .Todo, .Wip, .Done => {},
                         .Go, .Question => status = .Todo,

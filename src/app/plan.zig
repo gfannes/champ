@@ -8,26 +8,25 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
-const Prio = @import("../amp/Prio.zig");
 const Date = @import("../amp/Date.zig");
 
 const Self = @This();
-const PrioRange = struct {
-    min: i32,
-    max: i32,
-    fn update(self: *@This(), prio: i32) void {
-        self.min = @min(self.min, prio);
-        self.max = @max(self.max, prio);
+const OrderRange = struct {
+    first: i32,
+    last: i32,
+    fn update(self: *@This(), order: i32) void {
+        self.first = @min(self.first, order);
+        self.last = @max(self.last, order);
     }
 
-    fn color(self: @This(), prio: i32) rubr.ansi.Style.Ground.Color {
-        const colors: []const rubr.ansi.Style.Ground.Color = &.{ .White, .Cyan, .Blue, .Magenta, .Green, .Yellow, .Red };
+    fn color(self: @This(), order: i32) rubr.ansi.Style.Ground.Color {
+        const colors: []const rubr.ansi.Style.Ground.Color = &.{ .Red, .Yellow, .Green, .Magenta, .Blue, .Cyan, .White };
 
-        if (self.min == self.max)
-            return colors[colors.len - 1];
+        if (self.first == self.last)
+            return colors[0];
 
-        const range: usize = @intCast(self.max - self.min);
-        const offset: usize = @intCast(prio - self.min);
+        const range: usize = @intCast(self.last - self.first);
+        const offset: usize = @intCast(order - self.first);
 
         var ix = offset * colors.len / range;
         if (ix >= colors.len)
@@ -41,20 +40,20 @@ const Entry = struct {
     content: []const u8,
     amps: []const u8,
     date: ?Date,
-    prio: i32,
+    order: i32,
     rows: rubr.idx.Range,
     cols: rubr.idx.Range,
 };
 const Segment = struct {
     path: []const u8,
-    prio: i32,
+    order: i32,
     entries: []const Entry,
 };
 
 env: Env,
 forest: *const mero.Forest,
 
-prio_range: ?PrioRange = null,
+order_range: ?OrderRange = null,
 segments: std.ArrayList(Segment) = .empty,
 all_entries: std.ArrayList(Entry) = .empty,
 
@@ -63,7 +62,7 @@ pub fn deinit(self: *Self) void {
     self.all_entries.deinit(self.env.a);
 }
 
-pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, reverse: bool) !void {
+pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, reverse: bool) !void {
     const today = try rubr.datex.Date.today(self.env.io);
 
     var query = qry.Query{ .a = self.env.a };
@@ -83,9 +82,9 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
 
         chore.write(&root, ix0);
 
-        const myprio = chore.prio();
-        if (myprio < prio_threshold) {
-            try self.env.stdout.print("Prio {} is too low\n", .{myprio});
+        const myorder = chore.order();
+        if (myorder >= max_order) {
+            try self.env.stdout.print("Order {} is too high\n", .{myorder});
             continue;
         }
 
@@ -97,21 +96,23 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
         }
 
         // Check that its start date is before today, if any
-        const date = if (chore.value("s", .Any)) |start_value| ret: {
-            if (start_value.date) |start_date| {
-                if (start_date.date.epoch_day.day > today.epoch_day.day)
-                    continue;
-                break :ret start_date;
-            } else {
-                try self.env.log.warning("Expected a valid date\n", .{});
-                continue;
-            }
-        } else null;
+        // &todo &meta Add date to chore and re-enable this check
+        _ = today;
+        // const date = if (chore.value("s", .Any)) |start_value| ret: {
+        //     if (start_value.date) |start_date| {
+        //         if (start_date.date.epoch_day.day > today.epoch_day.day)
+        //             continue;
+        //         break :ret start_date;
+        //     } else {
+        //         try self.env.log.warning("Expected a valid date\n", .{});
+        //         continue;
+        //     }
+        // } else null;
 
-        if (self.prio_range) |*prio_range|
-            prio_range.update(myprio)
+        if (self.order_range) |*order_range|
+            order_range.update(myorder)
         else
-            self.prio_range = .{ .min = myprio, .max = myprio };
+            self.order_range = .{ .first = myorder, .last = myorder };
 
         const n = self.forest.tree.cptr(chore.node_id);
 
@@ -119,8 +120,8 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
             .path = n.path,
             .content = n.content,
             .amps = chore.str,
-            .date = date,
-            .prio = myprio,
+            .date = null,
+            .order = myorder,
             .rows = n.content_rows,
             .cols = n.content_cols,
         };
@@ -132,7 +133,7 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
     }
 
     // Sort according to:
-    // - Prio, if any
+    // - Order, if any
     // - Date: recent chores first
     const Fn = struct {
         pub fn call(ctx: @This(), a: Entry, b: Entry) bool {
@@ -140,7 +141,7 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
             return order(a, b) == .lt;
         }
         fn order(a: Entry, b: Entry) std.math.Order {
-            const ord = std.math.order(a.prio, b.prio);
+            const ord = std.math.order(b.order, a.order);
             if (ord != .eq)
                 return ord;
             return Date.order(b.date, a.date);
@@ -151,7 +152,7 @@ pub fn call(self: *Self, prio_threshold: i32, query_input: []const []const u8, r
     for (self.all_entries.items, 0..) |entry, ix0| {
         const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
         if (!std.mem.eql(u8, prev_path, entry.path)) {
-            try self.segments.append(self.env.a, Segment{ .path = entry.path, .prio = entry.prio, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
+            try self.segments.append(self.env.a, Segment{ .path = entry.path, .order = entry.order, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
         } else {
             if (rubr.slc.lastPtr(self.segments.items)) |ptr|
                 ptr.entries.len += 1;
@@ -175,8 +176,8 @@ pub fn show(self: Self, all: bool, details: bool) !void {
         try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
 
         for (segment.entries) |entry| {
-            const entry_style = rubr.ansi.Style{ .fg = .{ .color = self.prio_range.?.color(entry.prio) } };
-            try self.env.stdout.print("  {f}{s}{f} (&!{})", .{ entry_style, entry.content, reset_style, entry.prio });
+            const entry_style = rubr.ansi.Style{ .fg = .{ .color = self.order_range.?.color(entry.order) } };
+            try self.env.stdout.print("  {f}{s}{f} (&#{})", .{ entry_style, entry.content, reset_style, entry.order });
             try self.env.stdout.print("\n", .{});
         }
     }

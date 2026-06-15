@@ -15,7 +15,6 @@ const Check = @import("app/check.zig");
 const Perf = @import("app/perf.zig");
 const Test = @import("app/test.zig");
 const Wbs = @import("app/wbs.zig");
-const Prio = @import("amp/Prio.zig");
 
 pub const Error = error{
     UnknownFileType,
@@ -159,7 +158,7 @@ pub const App = struct {
                     };
                     defer obj.deinit();
 
-                    try obj.call(self.cli_args.prio, self.cli_args.extra.items, !self.cli_args.reverse);
+                    try obj.call(self.cli_args.max_order, self.cli_args.extra.items, !self.cli_args.reverse);
                     try obj.show(self.cli_args.all, self.cli_args.details > 0);
                 },
                 cfg.cli.Mode.Check => {

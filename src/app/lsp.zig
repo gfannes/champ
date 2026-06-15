@@ -11,7 +11,6 @@ const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const qry = @import("../qry.zig");
 const Plan = @import("plan.zig");
-const Prio = @import("../amp/Prio.zig");
 
 pub const Error = error{
     ExpectedParams,
@@ -181,8 +180,6 @@ pub const Lsp = struct {
                         .forest = forest,
                     };
                     defer plan.deinit();
-                    const prio = Prio.max(.Week);
-                    _ = prio;
 
                     var loader = cfg.file.Loader{ .env = self.env, .cli_args = self.cli_args };
 

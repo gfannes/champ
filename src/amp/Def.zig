@@ -23,12 +23,11 @@ pub const Location = struct {
 ap: Path,
 
 location: ?Location = null,
-template: ?Ix = null,
 chore_id: ?usize = null,
 
 status: ?Status = null,
 cost: ?Path.Cost = null,
-prio: ?Path.Pri = null,
+order: ?Path.Order = null,
 worker: ?Path.Worker = null,
 wbs: ?Wbs = null,
 
@@ -42,7 +41,7 @@ pub fn injectMeta(self: *Self, ap: Path) !void {
     switch (ap.parts.items[0].meta.?) {
         .status => |status| self.status = status,
         .cost => |cost| self.cost = cost,
-        .prio => |prio| self.prio = prio,
+        .order => |order| self.order = order,
         .worker => |worker| self.worker = worker,
         .wbs => |wbs| self.wbs = wbs,
         else => {},
@@ -61,8 +60,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
         n.attr("status", status.lower());
     if (self.cost) |cost|
         n.attr("cost", cost.value);
-    if (self.prio) |prio|
-        n.attr("prio", prio.value);
+    if (self.order) |order|
+        n.attr("order", order.value);
     if (self.worker) |worker|
         n.attr("worker", worker.name);
     if (self.wbs) |wbs|

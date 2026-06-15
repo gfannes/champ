@@ -17,21 +17,6 @@ pub fn init(_: *Self) !void {}
 pub fn deinit(_: *Self) void {}
 
 pub fn call(self: *Self) !void {
-    if (false) {
-        var count: usize = 0;
-        std.debug.print("Prios\n", .{});
-        for (self.forest.chores.list.items) |chore| {
-            for (chore.parts.items[0..chore.org_count]) |chp| {
-                for (chp.ap.parts.items) |app| {
-                    if (app.prio) |prio| {
-                        std.debug.print("Found {} in {s}\n", .{ prio, chore.path });
-                        count += 1;
-                    }
-                }
-            }
-        }
-        std.debug.print("Found {}\n", .{count});
-    }
     {
         // var count: usize = 0;
         std.debug.print("WBS markers\n", .{});

@@ -25,7 +25,6 @@ pub const Error = error{
     ExpectedGroveId,
     TooManyIterations,
     ExpectedConfigDefault,
-    DefinitionCannotBePrio,
 };
 
 pub const Forest = struct {
@@ -302,77 +301,29 @@ pub const Forest = struct {
             }
 
             fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
-                if (true) {
-                    // Inject src.orgs into dst.aggs
-                    for (src.org_amps.items) |src_org| {
-                        const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                        if (!src_org_def.ap.isMeta() and !my.is_present(dst, src_org.ix)) {
-                            std.debug.print("Injecting org into agg {}\n", .{src_org_def.ap.isMeta()});
-                            try dst.agg_amps.append(my.env.a, src_org.ix);
-                            my.update_count += 1;
-                        }
+                // Inject src.orgs into dst.aggs
+                for (src.org_amps.items) |src_org| {
+                    const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
+                    if (!src_org_def.ap.isMeta() and !is_present(dst, src_org.ix)) {
+                        std.debug.print("Injecting org into agg {}\n", .{src_org_def.ap.isMeta()});
+                        try dst.agg_amps.append(my.env.a, src_org.ix);
+                        my.update_count += 1;
                     }
+                }
 
-                    // Inject src.aggs into dst.aggs
-                    for (src.agg_amps.items) |src_agg_ix| {
-                        if (!my.is_present(dst, src_agg_ix)) {
-                            try dst.agg_amps.append(my.env.a, src_agg_ix);
-                            my.update_count += 1;
-                        }
-                    }
-                } else { // Inject src.orgs into dst.aggs, making sure only the last is inserted for each different template
-                    for (src.org_amps.items, 0..) |src_org, ix0| {
-                        var is_last_of_kind: bool = true;
-                        {
-                            // &todo: Move to function, maybe create some helper util to convert between Node.DefIx and amp.Def
-                            // &perf: Maybe keep track of the last amp per template kind?
-                            // Check if there is another amp with the same template. If so, we take that.
-                            const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                            if (src_org_def.template) |src_template| {
-                                if (ix0 + 1 < src.org_amps.items.len) {
-                                    for (src.org_amps.items[ix0 + 1 ..]) |other_src_org| {
-                                        const other_src_org_def = other_src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                                        if (other_src_org_def.template) |other_src_template| {
-                                            if (other_src_template.eql(src_template)) {
-                                                is_last_of_kind = false;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (is_last_of_kind and !my.is_present(dst, src_org.ix)) {
-                            try dst.agg_amps.append(my.env.a, src_org.ix);
-                            my.update_count += 1;
-                        }
-                    }
-
-                    // Inject src.aggs into dst.aggs
-                    for (src.agg_amps.items) |src_agg_ix| {
-                        if (!my.is_present(dst, src_agg_ix)) {
-                            try dst.agg_amps.append(my.env.a, src_agg_ix);
-                            my.update_count += 1;
-                        }
+                // Inject src.aggs into dst.aggs
+                for (src.agg_amps.items) |src_agg_ix| {
+                    if (!is_present(dst, src_agg_ix)) {
+                        try dst.agg_amps.append(my.env.a, src_agg_ix);
+                        my.update_count += 1;
                     }
                 }
             }
 
-            fn is_present(my: My, node: *const Node, needle: Node.DefIx) bool {
+            fn is_present(node: *const Node, needle: Node.DefIx) bool {
                 for (node.org_amps.items) |org| {
                     if (org.ix.ix == needle.ix)
                         return true;
-                    // Orgs block all template data with the same key
-                    const needle_def = needle.cget(my.defmgr.defs.items) orelse return false;
-                    const org_def = org.ix.cget(my.defmgr.defs.items) orelse return false;
-                    if (needle_def.template) |needle_template| {
-                        if (org_def.template) |org_template| {
-                            if (needle_template.eql(org_template)) {
-                                return true;
-                            }
-                        }
-                    }
                 }
                 for (node.agg_amps.items) |agg| {
                     if (agg.ix == needle.ix)
@@ -698,13 +649,6 @@ pub const Forest = struct {
                                 return error.OnlyOneDefAllowed;
                             }
 
-                            if (rubr.slc.last(def_ap.parts.items)) |part| {
-                                if (amp.Prio.parse(part.content, .{})) |_| {
-                                    try my.env.log.err("Definition '{s}' from '{s}' matches with Prio\n", .{ part.content, my.path });
-                                    return error.DefinitionCannotBePrio;
-                                }
-                            }
-
                             // Make the def amp absolute, if necessary
                             if (!def_ap.is_absolute) {
                                 var child_id = entry.id;
@@ -742,7 +686,7 @@ pub const Forest = struct {
                             }
                         } else if (def_ap.isStatus()) {
                             needs_def = true;
-                        } else if (def_ap.isPrio()) {
+                        } else if (def_ap.isOrder()) {
                             needs_def = true;
                         } else if (def_ap.is_dependency) {
                             needs_def = true;

@@ -39,8 +39,8 @@ pub const Chore = struct {
     org_count: usize = 0,
 
     status: ?amp.Status = null,
-    prio_sum: i32 = 0,
-    prio_max: i32 = 0,
+    order_offset: i32 = 0,
+    order_min: i32 = std.math.maxInt(i32),
     my_cost: u32 = 0,
     child_costs: u32 = 0,
 
@@ -51,8 +51,8 @@ pub const Chore = struct {
         self.parts.deinit();
     }
 
-    pub fn prio(self: Self) i32 {
-        return self.prio_sum + self.prio_max;
+    pub fn order(self: Self) i32 {
+        return self.order_offset + self.order_min;
     }
 
     pub fn isDone(self: Self) bool {
@@ -66,51 +66,6 @@ pub const Chore = struct {
         return false;
     }
 
-    pub const Where = enum { Org, Any };
-    pub fn value(self: Self, key: []const u8, where: Where) ?*const amp.Path.Part {
-        var res: ?*const amp.Path.Part = null;
-
-        const count = switch (where) {
-            .Org => self.org_count,
-            .Any => self.parts.items.len,
-        };
-
-        var res_where: Where = .Org;
-        for (self.parts.items[0..count], 0..) |part, ix0| {
-            if (part.ap.value_at(&[_][]const u8{key})) |p| {
-                const current_where: Where = if (ix0 < self.org_count) .Org else .Any;
-
-                if (res) |r| {
-                    switch (current_where) {
-                        .Org => {
-                            res = p;
-                            res_where = current_where;
-                        },
-                        .Any => {
-                            if (res_where == current_where) {
-                                // For ~status, we keep the first occurence
-
-                                if (amp.Prio.order(p.prio, r.prio) == .lt) {
-                                    res = p;
-                                    res_where = current_where;
-                                }
-                                if (amp.Date.order(p.date, r.date) == .lt) {
-                                    res = p;
-                                    res_where = current_where;
-                                }
-                            }
-                        },
-                    }
-                } else {
-                    res = p;
-                    res_where = current_where;
-                }
-            }
-        }
-
-        return res;
-    }
-
     pub fn write(self: Self, parent: *naft.Node, maybe_ix: ?usize) void {
         var n = parent.node("Chore");
         defer n.deinit();
@@ -119,8 +74,8 @@ pub const Chore = struct {
         n.attr("node_id", self.node_id);
         if (self.status) |status|
             n.attr("status", status.lower());
-        n.attr("prio_sum", self.prio_sum);
-        n.attr("prio_max", self.prio_max);
+        n.attr("order_offset", self.order_offset);
+        n.attr("order_min", self.order_min);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
         if (self.path.len > 0)
@@ -288,11 +243,11 @@ pub const Chores = struct {
         const chore = &self.list.items[chore_id];
 
         // Aggregate metadata from def into chore
-        if (def.prio) |prio| {
-            if (prio.relative) {
-                chore.prio_sum += prio.value;
+        if (def.order) |order| {
+            if (order.relative) {
+                chore.order_offset += order.value;
             } else {
-                chore.prio_max = @max(chore.prio_max, prio.value);
+                chore.order_min = @min(chore.order_min, order.value);
             }
         }
 

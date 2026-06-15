@@ -138,25 +138,7 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
             ap.is_definition = false;
         }
 
-        if (def.ap.is_template()) {
-            // std.debug.print("{f} matches with template {f}\n", .{ ap, def.ap });
-            try def.ap.evaluate(ap);
-
-            for (self.defs.items, 0..) |d, ix0| {
-                if ((d.template orelse continue).eql(match.ix)) {
-                    if (d.ap.isFit(ap.*))
-                        // We found a def that refers to the same template and with the same path: we return this iso adding a new phony def
-                        return Def.Ix.init(ix0);
-                }
-            }
-
-            // Add a phony def for this new template instantiation
-            const def_ix = Def.Ix.init(self.defs.items.len);
-            try self.defs.append(aa, .{ .ap = try ap.copy(aa), .template = match.ix });
-            return def_ix;
-        } else {
-            return match.ix;
-        }
+        return match.ix;
     } else {
         // No match found, add a phony def
         try ap.prependString(self.phony_prefix);
