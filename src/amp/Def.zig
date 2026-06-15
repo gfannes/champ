@@ -3,6 +3,7 @@ const rubr = @import("../rubr.zig");
 const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
 const Wbs = @import("Wbs.zig");
+const Status = @import("Status.zig");
 
 const Error = error{
     ExpectedMetaPath,
@@ -25,6 +26,7 @@ location: ?Location = null,
 template: ?Ix = null,
 chore_id: ?usize = null,
 
+status: ?Status = null,
 cost: ?Path.Cost = null,
 prio: ?Path.Pri = null,
 worker: ?Path.Worker = null,
@@ -38,6 +40,7 @@ pub fn injectMeta(self: *Self, ap: Path) !void {
     if (!ap.isMeta())
         return error.ExpectedMetaPath;
     switch (ap.parts.items[0].meta.?) {
+        .status => |status| self.status = status,
         .cost => |cost| self.cost = cost,
         .prio => |prio| self.prio = prio,
         .worker => |worker| self.worker = worker,
@@ -54,6 +57,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     n.attr("ap", self.ap);
     if (self.chore_id) |chore_id|
         n.attr("chore_id", chore_id);
+    if (self.status) |status|
+        n.attr("status", status.lower());
     if (self.cost) |cost|
         n.attr("cost", cost.value);
     if (self.prio) |prio|

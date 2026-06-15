@@ -14,7 +14,7 @@ task :install, :variant do |_task, args|
 
     # mode = :safe
     mode = :fast
-    mode = :debug
+    # mode = :debug
 
     case variant
     when :zig

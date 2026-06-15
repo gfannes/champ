@@ -159,11 +159,7 @@ pub const App = struct {
                     };
                     defer obj.deinit();
 
-                    const prio_threshold = if (self.cli_args.prio) |prio_str|
-                        Prio.parse(prio_str, .{ .index = .Inf })
-                    else
-                        null;
-                    try obj.call(prio_threshold, self.cli_args.extra.items, !self.cli_args.reverse);
+                    try obj.call(self.cli_args.prio, self.cli_args.extra.items, !self.cli_args.reverse);
                     try obj.show(self.cli_args.all, self.cli_args.details > 0);
                 },
                 cfg.cli.Mode.Check => {

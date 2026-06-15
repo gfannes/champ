@@ -37,7 +37,7 @@ pub const Args = struct {
     do_parse: bool = false,
     verbose: usize = 0,
     mode: ?Mode = null,
-    prio: ?[]const u8 = null,
+    prio: i32 = 0,
     reverse: bool = false,
     details: u8 = 0,
     all: bool = false,
@@ -83,7 +83,7 @@ pub const Args = struct {
                 self.do_parse = true;
             } else if (arg.is("-p", "--prio")) {
                 const prio = self.args.pop() orelse return error.ExpectedPrio;
-                self.prio = prio.arg;
+                self.prio = try prio.as(i32);
             } else if (arg.is("-r", "--reverse")) {
                 self.reverse = true;
             } else if (arg.is("-a", "--all")) {
@@ -134,7 +134,7 @@ pub const Args = struct {
             "    -l  --log     FILE   Log to FILE\n" ++
             "    -s  --scan           Scan\n" ++
             "    -P  --parse          Parse\n" ++
-            "    -p  --prio           Prio (top: a0)\n" ++
+            "    -p  --prio           Priority\n" ++
             "    -r  --reverse        Reverse\n" ++
             "    -a  --all        Show all\n" ++
             "    -d  --details        Details, more than one can be specified\n" ++

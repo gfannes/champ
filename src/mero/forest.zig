@@ -267,12 +267,12 @@ pub const Forest = struct {
                 const n = entry.data;
 
                 if (rubr.slc.isEmpty(n.org_amps.items)) {
-                    std.debug.print("No orgs for {}\n", .{entry.id});
+                    // std.debug.print("No orgs for {}\n", .{entry.id});
                     return;
                 }
                 // Tree-based inheritance between Nodes
                 if (my.parent(entry.id)) |parent_entry| {
-                    std.debug.print("{} inherits from {}\n", .{ entry.id, parent_entry.id });
+                    // std.debug.print("{} inherits from {}\n", .{ entry.id, parent_entry.id });
                     try my.inject_metadata(parent_entry.data, n);
                 }
 
@@ -407,56 +407,84 @@ pub const Forest = struct {
     }
 
     fn createChores(self: *Self) !void {
-        var cb = struct {
-            const My = @This();
-
-            chores: *chorex.Chores,
-            tree: *const Tree,
-            defmgr: *const amp.DefMgr,
-
-            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
-                if (!before)
-                    return;
-                const node = entry.data;
-                if (std.meta.activeTag(node.type) == .file)
-                    return;
-                if (node.def) |def_ref| {
-                    const def = def_ref.ix.ptr(my.defmgr.defs.items);
-                    def.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
-                }
+        for (self.defmgr.defs.items) |*def| {
+            if (def.location) |location| {
+                def.chore_id = try self.chores.create(def, location.node_id, &self.tree);
             }
-        }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
-        try self.tree.dfsAll(&cb);
+        }
+
+        if (false) {
+            var cb = struct {
+                const My = @This();
+
+                chores: *chorex.Chores,
+                tree: *const Tree,
+                defmgr: *const amp.DefMgr,
+
+                pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                    if (!before)
+                        return;
+                    const node = entry.data;
+                    if (std.meta.activeTag(node.type) == .file)
+                        return;
+                    if (node.def) |def_ref| {
+                        const def = def_ref.ix.ptr(my.defmgr.defs.items);
+                        def.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
+                    }
+                }
+            }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
+            try self.tree.dfsAll(&cb);
+        }
     }
 
     fn computeChores(self: *Self) !void {
-        var cb = struct {
-            const My = @This();
-
-            chores: *chorex.Chores,
-            tree: *const Tree,
-            defmgr: *const amp.DefMgr,
-
-            pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
-                if (!before)
-                    return;
-                const node = entry.data;
-                if (node.def) |def_ref| {
-                    const def = def_ref.ix.cptr(my.defmgr.defs.items);
-                    if (def.chore_id) |chore_id| {
-                        for (node.org_amps.items) |org| {
-                            const org_def = org.ix.cptr(my.defmgr.defs.items);
-                            my.chores.update(chore_id, org_def);
-                        }
-                        for (node.agg_amps.items) |agg| {
-                            const agg_def = agg.cptr(my.defmgr.defs.items);
-                            my.chores.update(chore_id, agg_def);
-                        }
+        for (self.defmgr.defs.items) |def| {
+            if (def.location) |location| {
+                const node = self.tree.cptr(location.node_id);
+                if (def.chore_id) |chore_id| {
+                    for (node.org_amps.items) |org| {
+                        const org_def = org.ix.cptr(self.defmgr.defs.items);
+                        self.chores.update(chore_id, org_def);
+                    }
+                    for (node.agg_amps.items) |agg| {
+                        const agg_def = agg.cptr(self.defmgr.defs.items);
+                        self.chores.update(chore_id, agg_def);
                     }
                 }
             }
-        }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
-        try self.tree.dfsAll(&cb);
+        }
+
+        if (false) {
+            var cb = struct {
+                const My = @This();
+
+                chores: *chorex.Chores,
+                tree: *const Tree,
+                defmgr: *const amp.DefMgr,
+
+                pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+                    if (!before)
+                        return;
+                    const node = entry.data;
+                    if (std.meta.activeTag(node.type) != .text)
+                        return;
+                    if (node.def) |def_ref| {
+                        const def = def_ref.ix.cptr(my.defmgr.defs.items);
+                        if (def.chore_id) |chore_id| {
+                            for (node.org_amps.items) |org| {
+                                const org_def = org.ix.cptr(my.defmgr.defs.items);
+                                my.chores.update(chore_id, org_def);
+                            }
+                            for (node.agg_amps.items) |agg| {
+                                const agg_def = agg.cptr(my.defmgr.defs.items);
+                                my.chores.update(chore_id, agg_def);
+                            }
+                        }
+                    }
+                }
+            }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
+            try self.tree.dfsAll(&cb);
+        }
     }
 
     // Setup Node.org_amps and amp.DefMgr for data found in Node.line.terms
@@ -519,9 +547,9 @@ pub const Forest = struct {
                                 var strange = rubr.strng.Strange{ .content = term.word };
                                 var path = try amp.Path.parse(&strange, my.env.a) orelse {
                                     if (my.env.log.level(1)) |w| {
-                                        try w.print("Term: '{s}'\n", .{term.word});
+                                        try w.print("Could not parse amp in '{s}':{}: '{s}'\n", .{ my.path, line, term.word });
                                     }
-                                    return error.CouldNotParseAmp;
+                                    continue;
                                 };
                                 defer path.deinit();
                                 if (!path.is_definition) {
@@ -649,8 +677,21 @@ pub const Forest = struct {
                     if (term.kind == .Amp) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var def_ap = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
+                        var def_ap = block: {
+                            if (amp.Path.parse(&strange, my.env.a)) |maybe_ap| {
+                                if (maybe_ap) |ap| {
+                                    break :block ap;
+                                } else {
+                                    try my.env.log.err("Could not parse amp in {s}:{}\n", .{ my.path, line });
+                                    return error.CouldNotParseAmp;
+                                }
+                            } else |err| {
+                                try my.env.log.err("Could not parse amp in {s}:{} {}\n", .{ my.path, line, err });
+                                return err;
+                            }
+                        };
                         defer def_ap.deinit();
+
                         if (def_ap.is_definition) {
                             if (n.def != null) {
                                 try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, def_ap });
@@ -701,6 +742,8 @@ pub const Forest = struct {
                             }
                         } else if (def_ap.isStatus()) {
                             needs_def = true;
+                        } else if (def_ap.isPrio()) {
+                            needs_def = true;
                         } else if (def_ap.is_dependency) {
                             needs_def = true;
                         }
@@ -713,7 +756,6 @@ pub const Forest = struct {
                 }
 
                 if (n.def == null and needs_def) {
-                    std.debug.print("Creating an unnamed def\n", .{});
                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                     const pos = filex.Pos{ .row = n.content_rows.begin };
                     n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.path, entry.id, pos), .pos = pos };

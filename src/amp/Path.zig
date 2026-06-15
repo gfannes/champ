@@ -95,6 +95,11 @@ pub fn isStatus(self: Self) bool {
         return false;
     return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .status;
 }
+pub fn isPrio(self: Self) bool {
+    if (self.parts.items.len == 0)
+        return false;
+    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .prio;
+}
 
 // rhs is the smaller one
 pub fn isFit(self: Self, rhs: Self) bool {

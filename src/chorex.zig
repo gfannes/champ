@@ -38,6 +38,7 @@ pub const Chore = struct {
     // Indicates the number of Parts that are orgs
     org_count: usize = 0,
 
+    status: ?amp.Status = null,
     prio_sum: i32 = 0,
     prio_max: i32 = 0,
     my_cost: u32 = 0,
@@ -116,13 +117,15 @@ pub const Chore = struct {
         if (maybe_ix) |ix|
             n.attr("ix", ix);
         n.attr("node_id", self.node_id);
-        if (self.path.len > 0)
-            n.attr("path", self.path);
-        n.attr("str", self.str);
+        if (self.status) |status|
+            n.attr("status", status.lower());
         n.attr("prio_sum", self.prio_sum);
         n.attr("prio_max", self.prio_max);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
+        if (self.path.len > 0)
+            n.attr("path", self.path);
+        n.attr("str", self.str);
         for (self.parts.items) |e|
             e.write(&n);
     }
@@ -194,6 +197,8 @@ pub const Chores = struct {
             const def = def_ref.ix.cptr(defmgr.defs.items);
             if (def.cost) |cost|
                 chore.my_cost = cost.value;
+            if (def.status) |status|
+                chore.status = status;
         }
 
         var offset: usize = 0;
@@ -244,6 +249,41 @@ pub const Chores = struct {
         return chore_ix;
     }
 
+    pub fn create(self: *Self, def: *const amp.Def, node_id: usize, tree: *const mero.Tree) !?usize {
+        const status = def.status orelse return null;
+        switch (status.kind) {
+            .Done, .Canceled, .Info, .Forward => return null,
+            .Todo, .Go, .Wip, .Question, .Blocked => {},
+        }
+
+        const aa = self.aral.allocator();
+        var chore = Chore.init(node_id, aa);
+
+        if (def.cost) |cost|
+            chore.my_cost = cost.value;
+        if (def.status) |status_|
+            chore.status = status_;
+
+        // Setup chore.path
+        var maybe_id = rubr.opt.value(node_id);
+        while (maybe_id) |id| {
+            const n = tree.cptr(id);
+            switch (n.type) {
+                .grove, .folder, .file => chore.path = n.path,
+                else => {},
+            }
+            maybe_id = if (try tree.parent(id)) |p| p.id else null;
+            if (chore.path.len > 0)
+                // We found a path: stop search
+                maybe_id = null;
+        }
+
+        const chore_ix = self.list.items.len;
+        try self.list.append(aa, chore);
+
+        return chore_ix;
+    }
+
     pub fn update(self: *Self, chore_id: usize, def: *const amp.Def) void {
         const chore = &self.list.items[chore_id];
 
@@ -255,6 +295,7 @@ pub const Chores = struct {
                 chore.prio_max = @max(chore.prio_max, prio.value);
             }
         }
+
         // Aggregate metadata from chore into def
         if (def.chore_id) |other_chore_id| {
             if (chore_id != other_chore_id) {

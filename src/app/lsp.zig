@@ -202,7 +202,7 @@ pub const Lsp = struct {
                     else
                         &.{};
 
-                    try plan.call(null, query_input, false);
+                    try plan.call(0, query_input, false);
 
                     var locations = std.ArrayList(dto.Location).empty;
                     for (plan.segments.items) |segment| {
