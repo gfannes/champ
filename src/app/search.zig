@@ -8,6 +8,7 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
+const amp = @import("../amp.zig");
 
 const Self = @This();
 const Entry = struct {
@@ -53,7 +54,14 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
     try query.setup(query_input);
 
     for (self.forest.chores.list.items) |chore| {
-        if (query.distance(chore)) |distance| {
+        try query.prepare(chore);
+        const node = self.forest.tree.cptr(chore.node_id);
+        for (node.org_amps.items) |ref| {
+            const def = ref.ix.cptr(self.forest.defmgr.defs.items);
+            try query.add(&def.ap);
+        }
+
+        if (query.distance()) |distance| {
             const n = try self.forest.tree.cget(chore.node_id);
             if (n.type == .file)
                 continue;

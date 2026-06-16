@@ -8,7 +8,7 @@ const strings = rubr.strings;
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
-const Date = @import("../amp/Date.zig");
+const amp = @import("../amp.zig");
 
 const Self = @This();
 const OrderRange = struct {
@@ -39,7 +39,7 @@ const Entry = struct {
     path: []const u8,
     content: []const u8,
     amps: []const u8,
-    date: ?Date,
+    date: ?amp.Date,
     order: i32,
     rows: rubr.idx.Range,
     cols: rubr.idx.Range,
@@ -81,8 +81,19 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         if (myorder > max_order)
             continue;
 
+        try query.prepare(chore);
+        const node = self.forest.tree.cptr(chore.node_id);
+        for (node.org_amps.items) |ref| {
+            const def = ref.ix.cptr(self.forest.defmgr.defs.items);
+            try query.add(&def.ap);
+        }
+        for (node.agg_amps.items) |ref| {
+            const def = ref.cptr(self.forest.defmgr.defs.items);
+            try query.add(&def.ap);
+        }
+
         // Check correspondence with provided query
-        const distance = query.distance(chore) orelse continue;
+        const distance = query.distance() orelse continue;
         if (distance > 1.0)
             continue;
 
@@ -129,7 +140,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             const ord = std.math.order(a.order, b.order);
             if (ord != .eq)
                 return ord;
-            return Date.order(b.date, a.date);
+            return amp.Date.order(b.date, a.date);
         }
     };
     std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);

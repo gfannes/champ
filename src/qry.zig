@@ -3,6 +3,7 @@ const std = @import("std");
 const rubr = @import("rubr.zig");
 
 const Chore = @import("chorex.zig").Chore;
+const amp = @import("amp.zig");
 
 pub const Query = struct {
     const Self = @This();
@@ -39,11 +40,13 @@ pub const Query = struct {
     only_def: bool = false,
     only_org: bool = false,
     parts: Parts = .empty,
+    aps: std.ArrayList(*const amp.Path) = .empty,
 
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|
             self.a.free(part);
         self.parts.deinit(self.a);
+        self.aps.deinit(self.a);
     }
 
     pub fn setup(self: *Self, parts: []const []const u8) !void {
@@ -95,7 +98,38 @@ pub const Query = struct {
         }
     }
 
-    pub fn distance(self: Self, chore: Chore) ?f64 {
+    pub fn prepare(self: *Self, chore: Chore) !void {
+        try self.aps.resize(self.a, 0);
+        _ = chore;
+    }
+
+    pub fn add(self: *Self, ap: *const amp.Path) !void {
+        try self.aps.append(self.a, ap);
+    }
+
+    pub fn distance(self: Self) ?f64 {
+        var sum_distance: f64 = 0;
+        for (self.parts.items) |q_part| {
+            // std.debug.print("Matching '{s}'\n", .{q_part});
+            var maybe_min_distance: ?f64 = null;
+            for (self.aps.items) |ap| {
+                for (ap.parts.items) |a_part| {
+                    var skip_count: usize = undefined;
+                    const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
+                    // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
+                    if (skip_count > 0)
+                        continue;
+                    maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
+                }
+            }
+
+            sum_distance += maybe_min_distance orelse return null;
+        }
+
+        return sum_distance;
+    }
+
+    pub fn distance_(self: Self, chore: Chore, aps: []*const amp.Path) ?f64 {
         var has_def: bool = false;
         var status_is_match: ?bool = null;
 
@@ -131,37 +165,41 @@ pub const Query = struct {
         if (self.only_status and status_is_match == null)
             return null;
 
-        var sum_score: f64 = 0;
+        var sum_distance: f64 = 0;
         for (self.parts.items) |q_part| {
             // std.debug.print("Matching '{s}'\n", .{q_part});
-            var maybe_min_score: ?f64 = null;
-            for (chore_parts) |c_part| {
-                if (self.only_def and !c_part.ap.is_definition)
-                    continue;
-
-                // std.debug.print("\t{}\n", .{c_part});
-                for (c_part.ap.parts.items) |a_part| {
-                    var skip_count: usize = undefined;
-                    const score = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
-                    // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
-                    if (skip_count > 0)
+            var maybe_min_distance: ?f64 = null;
+            if (true) {
+                for (aps) |ap| {
+                    for (ap.parts.items) |a_part| {
+                        var skip_count: usize = undefined;
+                        const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
+                        // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
+                        if (skip_count > 0)
+                            continue;
+                        maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
+                    }
+                }
+            } else {
+                for (chore_parts) |c_part| {
+                    if (self.only_def and !c_part.ap.is_definition)
                         continue;
-                    if (maybe_min_score) |*min_score| {
-                        min_score.* = @min(min_score.*, score);
-                    } else {
-                        maybe_min_score = score;
+
+                    // std.debug.print("\t{}\n", .{c_part});
+                    for (c_part.ap.parts.items) |a_part| {
+                        var skip_count: usize = undefined;
+                        const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
+                        // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
+                        if (skip_count > 0)
+                            continue;
+                        maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
                     }
                 }
             }
 
-            if (maybe_min_score) |min_score| {
-                sum_score += min_score;
-            } else {
-                // std.debug.print("Could not match '{s}'\n", .{q_part});
-                return null;
-            }
+            sum_distance += maybe_min_distance orelse return null;
         }
 
-        return sum_score;
+        return sum_distance;
     }
 };

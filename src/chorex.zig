@@ -206,19 +206,18 @@ pub const Chores = struct {
     }
 
     pub fn create(self: *Self, def: *const amp.Def, node_id: usize, tree: *const mero.Tree) !?usize {
-        const status = def.status orelse return null;
-        switch (status.kind) {
-            .Done, .Canceled, .Info, .Forward, .Assigned, .Planned => return null,
-            .Todo, .Go, .Wip, .Question, .Blocked => {},
-        }
-
         const aa = self.aral.allocator();
         var chore = Chore.init(node_id, aa);
 
         if (def.cost) |cost|
             chore.my_cost = cost.value;
-        if (def.status) |status_|
-            chore.status = status_;
+        if (def.status) |status| {
+            // switch (status.kind) {
+            //     .Done, .Canceled, .Info, .Forward, .Assigned, .Planned => return null,
+            //     .Todo, .Go, .Wip, .Question, .Blocked => {},
+            // }
+            chore.status = status;
+        }
         if (def.date) |date|
             chore.date = date;
 

@@ -378,7 +378,14 @@ pub const Lsp = struct {
                             // We only take text chores into account
                             continue;
 
-                        if (q.distance(chore)) |distance| {
+                        try q.prepare(chore);
+                        const node = forest.tree.cptr(chore.node_id);
+                        for (node.org_amps.items) |ref| {
+                            const def = ref.ix.cptr(forest.defmgr.defs.items);
+                            try q.add(&def.ap);
+                        }
+
+                        if (q.distance()) |distance| {
                             const first_amp = &chore.parts.items[0];
                             const last_amp = &chore.parts.items[chore.org_count - 1];
                             const range = dto.Range{
