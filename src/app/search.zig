@@ -70,13 +70,13 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
                 Entry{
                     .path = n.path,
                     .content = n.content,
-                    .amps = chore.str,
+                    .amps = node.content,
                     .score = distance,
                     .rows = n.content_rows,
                     .cols = n.content_cols,
                 },
             );
-            self.max.update(chore.str.len, chore.path.len);
+            self.max.update(node.content.len, chore.path.len);
         }
     }
 

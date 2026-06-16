@@ -13,31 +13,11 @@ const Wbs = @import("amp/Wbs.zig");
 // &cleanup naming conventions
 pub const Chore = struct {
     const Self = @This();
-    const Part = struct {
-        ap: amp.Path,
-        str: []const u8,
-        pos: filex.Pos,
-        pub fn write(self: Part, parent: *naft.Node) void {
-            var n = parent.node("Chore.Part");
-            defer n.deinit();
-            n.attr("str", self.str);
-            n.attr("row", self.pos.row);
-            n.attr("cols.begin", self.pos.cols.begin);
-            n.attr("cols.end", self.pos.cols.end);
-        }
-    };
-    const Parts = std.ArrayList(Part);
 
     a: std.mem.Allocator,
     node_id: usize, // Id for forest.tree
+
     path: []const u8 = &.{},
-    // String repr of Node.org_amps + Node.agg_amps
-    str: []const u8 = &.{},
-
-    parts: Parts = .empty,
-    // Indicates the number of Parts that are orgs
-    org_count: usize = 0,
-
     status: ?amp.Status = null,
     order_offset: i32 = 0,
     order_min: i32 = std.math.maxInt(i32),
@@ -57,14 +37,8 @@ pub const Chore = struct {
     }
 
     pub fn isDone(self: Self) bool {
-        var strange = rubr.strng.Strange{ .content = "&status:done" };
-        var done_ap = amp.Path.parse(&strange, self.a) catch unreachable;
-        defer done_ap.deinit();
-        for (self.parts.items) |part| {
-            if (part.ap.isFit(done_ap))
-                return true;
-        }
-        return false;
+        const status = self.status orelse return false;
+        return status.kind == .Done;
     }
 
     pub fn write(self: Self, parent: *naft.Node, maybe_ix: ?usize) void {
@@ -81,9 +55,6 @@ pub const Chore = struct {
         n.attr("child_costs", self.child_costs);
         if (self.path.len > 0)
             n.attr("path", self.path);
-        n.attr("str", self.str);
-        for (self.parts.items) |e|
-            e.write(&n);
     }
 
     pub fn format(self: Self, w: *std.Io.Writer) !void {
@@ -114,95 +85,6 @@ pub const Chores = struct {
     }
     pub fn deinit(self: *Self) void {
         self.aral.deinit();
-    }
-
-    // Returns true if tree[node_id] is an actual Chore and was thus added
-    // defmgr is needed to lookup the amp.Path
-    pub fn add(self: *Self, node_id: usize, tree: *const mero.Tree, defmgr: amp.DefMgr) !?usize {
-        const node = tree.cptr(node_id);
-
-        if (rubr.slc.isEmpty(node.org_amps.items))
-            // This is not a Chore
-            return null;
-        if (node.type == .file)
-            // Skip Files
-            return null;
-
-        const aa = self.aral.allocator();
-
-        try self.tmp_concat.resize(aa, 0);
-        var org_count: usize = 0;
-        var sep: []const u8 = "";
-        for (node.org_amps.items) |org| {
-            const a = org.ix.cptr(defmgr.defs.items);
-            try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
-            org_count += 1;
-            sep = " ";
-        }
-        for (node.agg_amps.items) |agg| {
-            const a = agg.cptr(defmgr.defs.items);
-            try self.tmp_concat.append(aa, try std.fmt.allocPrint(aa, "{s}{f}", .{ sep, a.ap }));
-            sep = " ";
-        }
-
-        var chore = Chore.init(node_id, aa);
-        chore.str = try std.mem.concat(aa, u8, self.tmp_concat.items);
-        chore.org_count = org_count;
-
-        if (node.def) |def_ref| {
-            const def = def_ref.ix.cptr(defmgr.defs.items);
-            if (def.cost) |cost|
-                chore.my_cost = cost.value;
-            if (def.status) |status|
-                chore.status = status;
-        }
-
-        var offset: usize = 0;
-        var ix: usize = 0;
-        for (node.org_amps.items) |org| {
-            defer ix += 1;
-
-            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
-            offset += str.len;
-            if (ix > 0)
-                // Drop the sep
-                str.ptr += 1;
-
-            const org_def = org.ix.cptr(defmgr.defs.items);
-            try chore.parts.append(aa, Chore.Part{ .ap = org_def.ap, .str = str, .pos = org.pos });
-        }
-
-        for (node.agg_amps.items) |agg| {
-            defer ix += 1;
-
-            var str = chore.str[offset .. offset + self.tmp_concat.items[ix].len];
-            offset += str.len;
-            if (ix > 0)
-                // Drop the sep
-                str.ptr += 1;
-
-            const a = agg.cptr(defmgr.defs.items);
-            try chore.parts.append(aa, Chore.Part{ .ap = a.ap, .str = str, .pos = .{} });
-        }
-
-        // Setup chore.path
-        var maybe_id = rubr.opt.value(node_id);
-        while (maybe_id) |id| {
-            const n = tree.cptr(id);
-            switch (n.type) {
-                .grove, .folder, .file => chore.path = n.path,
-                else => {},
-            }
-            maybe_id = if (try tree.parent(id)) |p| p.id else null;
-            if (chore.path.len > 0)
-                // We found a path: stop search
-                maybe_id = null;
-        }
-
-        const chore_ix = self.list.items.len;
-        try self.list.append(aa, chore);
-
-        return chore_ix;
     }
 
     pub fn create(self: *Self, def: *const amp.Def, node_id: usize, tree: *const mero.Tree) !?usize {
@@ -295,8 +177,4 @@ test "chore" {
 
     const ch2 = try tree.addChild(null);
     ch2.data.* = mero.Node{ .a = env.a };
-
-    _ = try chores.add(0, &tree, defmgr);
-    _ = try chores.add(1, &tree, defmgr);
-    _ = try chores.add(2, &tree, defmgr);
 }

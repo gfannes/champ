@@ -121,54 +121,20 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        std.debug.print("Found chore in correct file '{s}'\n", .{chore.path});
-
-                        if (true) {
-                            const node = forest.tree.cptr(chore.node_id);
-                            for (node.org_amps.items) |org_ref| {
-                                const pos = org_ref.pos;
-                                std.debug.print("org pos {}\n", .{pos});
-                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                    std.debug.print("Found matching position\n", .{});
-                                    const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
-                                    maybe_ap = org_def.ap;
-                                    if (org_def.location) |location| {
-                                        std.debug.print("Def has location\n", .{});
-                                        dst_filename = location.path;
-                                        const def_pos = location.pos;
-                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
-                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                        try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, org_def.ap });
-                                    } else {
-                                        std.debug.print("Could not find location for def\n", .{});
-                                    }
+                        const node = forest.tree.cptr(chore.node_id);
+                        for (node.org_amps.items) |org_ref| {
+                            const pos = org_ref.pos;
+                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
+                                maybe_ap = org_def.ap;
+                                if (org_def.location) |location| {
+                                    dst_filename = location.path;
+                                    const def_pos = location.pos;
+                                    range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
+                                    range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
+                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, org_def.ap });
                                 }
                             }
-                        } else {
-                            for (chore.parts.items[0..chore.org_count]) |part| {
-                                const pos = part.pos;
-                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, part.ap });
-                                    maybe_ap = part.ap;
-                                }
-                            }
-                        }
-                    }
-
-                    if (false) { // Find filename and location of definition, if any
-                        if (maybe_ap) |e| {
-                            for (forest.defmgr.defs.items) |def| {
-                                if (def.ap.isFit(e)) {
-                                    if (def.location) |location| {
-                                        dst_filename = location.path;
-                                        const pos = location.pos;
-                                        range.start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) };
-                                        range.end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) };
-                                    }
-                                }
-                            }
-                        } else {
-                            std.debug.print("Could not find AMP at {s} {}\n", .{ src_filename, position });
                         }
                     }
 
@@ -268,12 +234,14 @@ pub const Lsp = struct {
                             continue;
 
                         // We only check the org parts for references, not all inherited agg parts
-                        for (chore.parts.items[0..chore.org_count]) |part| {
-                            const pos = part.pos;
+                        const node = forest.tree.cptr(chore.node_id);
+                        for (node.org_amps.items) |ref| {
+                            const pos = ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 if (maybe_ap) |ap|
-                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}' part count {}\n", .{ ap, src_filename, chore.path, chore.org_count });
-                                maybe_ap = part.ap;
+                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}'\n", .{ ap, src_filename, chore.path });
+                                const def = ref.ix.cptr(forest.defmgr.defs.items);
+                                maybe_ap = def.ap;
                             }
                         }
                     }
@@ -282,10 +250,12 @@ pub const Lsp = struct {
                     if (maybe_ap) |ap| {
                         var locations = std.ArrayList(dto.Location).empty;
                         for (forest.chores.list.items) |chore| {
-                            for (chore.parts.items[0..chore.org_count]) |part| {
-                                if (ap.isFit(part.ap)) {
+                            const node = forest.tree.cptr(chore.node_id);
+                            for (node.org_amps.items) |ref| {
+                                const def = ref.ix.cptr(forest.defmgr.defs.items);
+                                if (ap.isFit(def.ap)) {
                                     const uri = try pathToUri_(chore.path, aaa);
-                                    const pos = part.pos;
+                                    const pos = ref.pos;
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
                                         .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
@@ -316,7 +286,9 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.path))
                             continue;
 
-                        if (rubr.slc.isEmpty(chore.parts.items[0..chore.org_count])) {
+                        const node = forest.tree.cptr(chore.node_id);
+
+                        if (rubr.slc.isEmpty(node.org_amps.items)) {
                             try self.env.log.warning("Expected to find at least one AMP for Chore\n", .{});
                             continue;
                         }
@@ -324,14 +296,14 @@ pub const Lsp = struct {
                         if (chore.isDone())
                             continue;
 
-                        const first_amp = &chore.parts.items[0];
-                        const last_amp = &chore.parts.items[chore.org_count - 1];
+                        const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
+                        const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
                         const range = dto.Range{
                             .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
                             .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
                         };
                         try document_symbols.append(aaa, dto.DocumentSymbol{
-                            .name = chore.str,
+                            .name = node.content,
                             .range = range,
                             .selectionRange = range,
                         });
@@ -369,7 +341,7 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
-                    var q = qry.Query{ .a = self.env.a, .only_def = true, .only_org = true };
+                    var q = qry.Query{ .a = self.env.a };
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
@@ -382,18 +354,19 @@ pub const Lsp = struct {
                         const node = forest.tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const def = ref.ix.cptr(forest.defmgr.defs.items);
-                            try q.add(&def.ap);
+                            if (def.ap.is_definition)
+                                try q.add(&def.ap);
                         }
 
                         if (q.distance()) |distance| {
-                            const first_amp = &chore.parts.items[0];
-                            const last_amp = &chore.parts.items[chore.org_count - 1];
+                            const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
+                            const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
                             };
                             try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
-                                .name = chore.str,
+                                .name = node.content,
                                 .location = dto.Location{
                                     .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
                                     .range = range,

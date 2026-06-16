@@ -38,7 +38,6 @@ const OrderRange = struct {
 const Entry = struct {
     path: []const u8,
     content: []const u8,
-    amps: []const u8,
     date: ?amp.Date,
     order: i32,
     rows: rubr.idx.Range,
@@ -115,7 +114,6 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         const entry = Entry{
             .path = n.path,
             .content = n.content,
-            .amps = chore.str,
             .date = date,
             .order = myorder,
             .rows = n.content_rows,

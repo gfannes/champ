@@ -37,10 +37,9 @@ pub const Query = struct {
     a: std.mem.Allocator,
     include: Include = .{},
     only_status: bool = false,
-    only_def: bool = false,
-    only_org: bool = false,
     parts: Parts = .empty,
     aps: std.ArrayList(*const amp.Path) = .empty,
+    chore: ?Chore = null,
 
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|
@@ -98,16 +97,46 @@ pub const Query = struct {
         }
     }
 
+    // Call this to reset this Query instance to start the computation of a match with a new Chore
     pub fn prepare(self: *Self, chore: Chore) !void {
         try self.aps.resize(self.a, 0);
-        _ = chore;
+        self.chore = chore;
     }
 
+    // Add all relevant amp.Paths that you want to consider for matching
     pub fn add(self: *Self, ap: *const amp.Path) !void {
         try self.aps.append(self.a, ap);
     }
 
+    // Compute the match itself
     pub fn distance(self: Self) ?f64 {
+        const chore = self.chore orelse return null;
+
+        var status_is_match: ?bool = null;
+        if (chore.status) |status| {
+            if (status.kind == .Done and self.include.done)
+                status_is_match = true;
+            if (status.kind == .Todo and self.include.todo)
+                status_is_match = true;
+            if (status.kind == .Wip and self.include.wip)
+                status_is_match = true;
+            if (status.kind == .Go and self.include.go)
+                status_is_match = true;
+            if (status.kind == .Info and self.include.info)
+                status_is_match = true;
+            if (status.kind == .Blocked and self.include.blocked)
+                status_is_match = true;
+            if (status.kind == .Question and self.include.question)
+                status_is_match = true;
+            if (status.kind == .Forward and self.include.forward)
+                status_is_match = true;
+            if (status.kind == .Canceled and self.include.canceled)
+                status_is_match = true;
+        }
+
+        if (self.only_status and status_is_match == null)
+            return null;
+
         var sum_distance: f64 = 0;
         for (self.parts.items) |q_part| {
             // std.debug.print("Matching '{s}'\n", .{q_part});
@@ -120,80 +149,6 @@ pub const Query = struct {
                     if (skip_count > 0)
                         continue;
                     maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
-                }
-            }
-
-            sum_distance += maybe_min_distance orelse return null;
-        }
-
-        return sum_distance;
-    }
-
-    pub fn distance_(self: Self, chore: Chore, aps: []*const amp.Path) ?f64 {
-        var has_def: bool = false;
-        var status_is_match: ?bool = null;
-
-        const chore_parts = if (self.only_org) chore.parts.items[0..chore.org_count] else chore.parts.items;
-
-        for (chore_parts) |part| {
-            if (part.ap.is_definition)
-                has_def = true;
-
-            const last = rubr.slc.lastPtrUnsafe(part.ap.parts.items).content;
-            if (std.mem.eql(u8, last, "done") and self.include.done)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "todo") and self.include.todo)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "wip") and self.include.wip)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "go") and self.include.go)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "info") and self.include.info)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "blocked") and self.include.blocked)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "question") and self.include.question)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "forward") and self.include.forward)
-                status_is_match = true;
-            if (std.mem.eql(u8, last, "canceled") and self.include.canceled)
-                status_is_match = true;
-        }
-
-        if (self.only_def and !has_def)
-            return null;
-        if (self.only_status and status_is_match == null)
-            return null;
-
-        var sum_distance: f64 = 0;
-        for (self.parts.items) |q_part| {
-            // std.debug.print("Matching '{s}'\n", .{q_part});
-            var maybe_min_distance: ?f64 = null;
-            if (true) {
-                for (aps) |ap| {
-                    for (ap.parts.items) |a_part| {
-                        var skip_count: usize = undefined;
-                        const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
-                        // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
-                        if (skip_count > 0)
-                            continue;
-                        maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
-                    }
-                }
-            } else {
-                for (chore_parts) |c_part| {
-                    if (self.only_def and !c_part.ap.is_definition)
-                        continue;
-
-                    // std.debug.print("\t{}\n", .{c_part});
-                    for (c_part.ap.parts.items) |a_part| {
-                        var skip_count: usize = undefined;
-                        const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
-                        // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
-                        if (skip_count > 0)
-                            continue;
-                        maybe_min_distance = @min(dist, maybe_min_distance orelse dist);
-                    }
                 }
             }
 
