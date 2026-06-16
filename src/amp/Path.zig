@@ -13,6 +13,7 @@ pub const Error = error{
     ExpectedDate,
     ExpectedPrio,
     ExpectedWbs,
+    ExpectedAmp,
     InvalidCost,
     InvalidPrio,
     InvalidWorker,
@@ -44,6 +45,7 @@ pub const Part = struct {
         worker: Worker,
         wbs: Wbs,
         status: Status,
+        date: Date,
 
         unnamed: Unnamed,
     };
@@ -115,7 +117,7 @@ pub fn isFit(self: Self, rhs: Self) bool {
 }
 
 // Assumes strange outlives Self
-pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
+pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !Self {
     var path = Self.init(a);
     errdefer path.deinit();
 
@@ -137,6 +139,10 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
             return path;
         } else if (strange.popChar('?')) {
             try path.parts.append(a, Part{ .content = "_wbs", .meta = Part.Meta{ .wbs = Wbs.parse(strange.str(), .{}) orelse return error.InvalidWbs } });
+
+            return path;
+        } else if (Date.parse(strange.str(), .{})) |date| {
+            try path.parts.append(a, Part{ .content = "_date", .meta = Part.Meta{ .date = date } });
 
             return path;
         } else if (Status.fromLower(strange.str())) |status| {
@@ -179,7 +185,9 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
                 'i' => "info",
                 '!' => "blocked",
                 '>' => "forward",
+                '<' => "planned",
                 '-' => "canceled",
+                '~' => "assigned",
                 else => "unknown",
             };
             if (strange.popChar(']')) {
@@ -196,8 +204,7 @@ pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !?Self {
         return path;
     }
 
-    path.deinit();
-    return null;
+    return error.ExpectedAmp;
 }
 
 pub fn prepend(self: *Self, prefix: Self) !void {
@@ -243,6 +250,7 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
                 .worker => |worker| try io.print(":{s}", .{worker.name}),
                 .wbs => |wbs| try io.print(":{s}", .{wbs.lower()}),
                 .status => |status| try io.print(":{s}", .{status.lower()}),
+                .date => |date| try io.print(":{}", .{date.date.epoch_day.day}),
                 .unnamed => |unnamed| try io.print(":{}", .{unnamed.id}),
             }
         }
@@ -277,7 +285,7 @@ test "amp.Path" {
         .{ .repr = "&#-123", .exp = "&_order:-123" },
         .{ .repr = "&@geert", .exp = "&_worker:geert" },
         .{ .repr = "&^@geert", .exp = "&^_worker:geert" },
-        .{ .repr = "&?proj", .exp = "&_what:proj" },
+        .{ .repr = "&?proj", .exp = "&_wbs:project" },
         .{ .repr = "&todo", .exp = "&_status:todo" },
         .{ .repr = "&go", .exp = "&_status:go" },
         .{ .repr = "&wip", .exp = "&_status:wip" },
@@ -290,12 +298,14 @@ test "amp.Path" {
         .{ .repr = "[*]", .exp = "&_status:go" },
         .{ .repr = "[/]", .exp = "&_status:wip" },
         .{ .repr = "[x]", .exp = "&_status:done" },
+        .{ .repr = "[~]", .exp = "&_status:assigned" },
+        .{ .repr = "&2027", .exp = "&_date:20819" },
     };
 
     for (scns) |scn| {
         std.debug.print("{s}\n", .{scn.repr});
         var strange = rubr.strng.Strange{ .content = scn.repr };
-        var path = try Self.parse(&strange, ut.allocator) orelse unreachable;
+        var path = try Self.parse(&strange, ut.allocator);
         defer path.deinit();
         const act = try std.fmt.allocPrint(ut.allocator, "{f}", .{path});
         try ut.expectEqualSlices(u8, scn.exp, act);

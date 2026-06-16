@@ -69,45 +69,30 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
     defer query.deinit();
     try query.setup(query_input);
 
-    var root = rubr.naft.Node.root(self.env.stdout);
-    defer root.deinit();
-
     // Collect all chores
-    for (self.forest.chores.list.items, 0..) |chore, ix0| {
+    for (self.forest.chores.list.items) |chore| {
         const status = chore.status orelse continue;
         switch (status.kind) {
             .Todo, .Wip, .Go, .Blocked, .Question => {},
             else => continue,
         }
 
-        chore.write(&root, ix0);
-
         const myorder = chore.order();
-        if (myorder >= max_order) {
-            try self.env.stdout.print("Order {} is too high\n", .{myorder});
+        if (myorder > max_order)
             continue;
-        }
 
         // Check correspondence with provided query
         const distance = query.distance(chore) orelse continue;
-        if (distance > 1.0) {
-            try self.env.stdout.print("Distance {} is too high\n", .{distance});
+        if (distance > 1.0)
             continue;
-        }
 
         // Check that its start date is before today, if any
         // &todo &meta Add date to chore and re-enable this check
-        _ = today;
-        // const date = if (chore.value("s", .Any)) |start_value| ret: {
-        //     if (start_value.date) |start_date| {
-        //         if (start_date.date.epoch_day.day > today.epoch_day.day)
-        //             continue;
-        //         break :ret start_date;
-        //     } else {
-        //         try self.env.log.warning("Expected a valid date\n", .{});
-        //         continue;
-        //     }
-        // } else null;
+        const date = if (chore.date) |date| ret: {
+            if (date.date.epoch_day.day > today.epoch_day.day)
+                continue;
+            break :ret date;
+        } else null;
 
         if (self.order_range) |*order_range|
             order_range.update(myorder)
@@ -120,7 +105,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             .path = n.path,
             .content = n.content,
             .amps = chore.str,
-            .date = null,
+            .date = date,
             .order = myorder,
             .rows = n.content_rows,
             .cols = n.content_cols,

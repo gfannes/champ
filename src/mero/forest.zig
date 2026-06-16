@@ -305,7 +305,6 @@ pub const Forest = struct {
                 for (src.org_amps.items) |src_org| {
                     const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
                     if (!src_org_def.ap.isMeta() and !is_present(dst, src_org.ix)) {
-                        std.debug.print("Injecting org into agg {}\n", .{src_org_def.ap.isMeta()});
                         try dst.agg_amps.append(my.env.a, src_org.ix);
                         my.update_count += 1;
                     }
@@ -363,29 +362,6 @@ pub const Forest = struct {
                 def.chore_id = try self.chores.create(def, location.node_id, &self.tree);
             }
         }
-
-        if (false) {
-            var cb = struct {
-                const My = @This();
-
-                chores: *chorex.Chores,
-                tree: *const Tree,
-                defmgr: *const amp.DefMgr,
-
-                pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
-                    if (!before)
-                        return;
-                    const node = entry.data;
-                    if (std.meta.activeTag(node.type) == .file)
-                        return;
-                    if (node.def) |def_ref| {
-                        const def = def_ref.ix.ptr(my.defmgr.defs.items);
-                        def.chore_id = try my.chores.add(entry.id, my.tree, my.defmgr.*);
-                    }
-                }
-            }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
-            try self.tree.dfsAll(&cb);
-        }
     }
 
     fn computeChores(self: *Self) !void {
@@ -403,38 +379,6 @@ pub const Forest = struct {
                     }
                 }
             }
-        }
-
-        if (false) {
-            var cb = struct {
-                const My = @This();
-
-                chores: *chorex.Chores,
-                tree: *const Tree,
-                defmgr: *const amp.DefMgr,
-
-                pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
-                    if (!before)
-                        return;
-                    const node = entry.data;
-                    if (std.meta.activeTag(node.type) != .text)
-                        return;
-                    if (node.def) |def_ref| {
-                        const def = def_ref.ix.cptr(my.defmgr.defs.items);
-                        if (def.chore_id) |chore_id| {
-                            for (node.org_amps.items) |org| {
-                                const org_def = org.ix.cptr(my.defmgr.defs.items);
-                                my.chores.update(chore_id, org_def);
-                            }
-                            for (node.agg_amps.items) |agg| {
-                                const agg_def = agg.cptr(my.defmgr.defs.items);
-                                my.chores.update(chore_id, agg_def);
-                            }
-                        }
-                    }
-                }
-            }{ .chores = &self.chores, .tree = &self.tree, .defmgr = &self.defmgr };
-            try self.tree.dfsAll(&cb);
         }
     }
 
@@ -475,7 +419,10 @@ pub const Forest = struct {
                             try w.writer.print("&:s:{f}", .{date});
                             const content = try w.toOwnedSlice();
                             var strange = rubr.strng.Strange{ .content = content };
-                            var path = try amp.Path.parse(&strange, my.env.a) orelse return error.CouldNotParseAmp;
+                            var path = amp.Path.parse(&strange, my.env.a) catch |err| {
+                                try my.env.log.err("Could not parse amp from filepath '{s}' {}\n", .{ my.path, err });
+                                return err;
+                            };
                             defer path.deinit();
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             if (try my.defmgr.resolve(&path, grove_id)) |amp_ix| {
@@ -496,10 +443,8 @@ pub const Forest = struct {
 
                             if (term.kind == .Amp or term.kind == .Wikilink or term.kind == .Checkbox or term.kind == .Capital) {
                                 var strange = rubr.strng.Strange{ .content = term.word };
-                                var path = try amp.Path.parse(&strange, my.env.a) orelse {
-                                    if (my.env.log.level(1)) |w| {
-                                        try w.print("Could not parse amp in '{s}':{}: '{s}'\n", .{ my.path, line, term.word });
-                                    }
+                                var path = amp.Path.parse(&strange, my.env.a) catch |err| {
+                                    try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
                                     continue;
                                 };
                                 defer path.deinit();
@@ -628,18 +573,9 @@ pub const Forest = struct {
                     if (term.kind == .Amp) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var def_ap = block: {
-                            if (amp.Path.parse(&strange, my.env.a)) |maybe_ap| {
-                                if (maybe_ap) |ap| {
-                                    break :block ap;
-                                } else {
-                                    try my.env.log.err("Could not parse amp in {s}:{}\n", .{ my.path, line });
-                                    return error.CouldNotParseAmp;
-                                }
-                            } else |err| {
-                                try my.env.log.err("Could not parse amp in {s}:{} {}\n", .{ my.path, line, err });
-                                return err;
-                            }
+                        var def_ap = amp.Path.parse(&strange, my.env.a) catch |err| {
+                            try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
+                            continue;
                         };
                         defer def_ap.deinit();
 

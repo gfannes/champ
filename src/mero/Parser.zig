@@ -684,8 +684,12 @@ fn pop_md_checkbox_term(self: *Self) ?Term {
                 checkbox.word.len += middle_tkn.word.len;
                 if (self.tokenizer.next()) |last_tkn| {
                     if (last_tkn.symbol == .CloseSquare and last_tkn.word.len == 1) {
-                        checkbox.word.len += last_tkn.word.len;
-                        return checkbox;
+                        if (self.tokenizer.peek()) |peek_tkn| {
+                            if (peek_tkn.symbol == .Space) {
+                                checkbox.word.len += last_tkn.word.len;
+                                return checkbox;
+                            }
+                        }
                     }
                 }
             }

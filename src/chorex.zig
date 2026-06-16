@@ -43,6 +43,7 @@ pub const Chore = struct {
     order_min: i32 = std.math.maxInt(i32),
     my_cost: u32 = 0,
     child_costs: u32 = 0,
+    date: ?amp.Date = null,
 
     pub fn init(node_id: usize, a: std.mem.Allocator) Self {
         return Self{ .node_id = node_id, .a = a };
@@ -57,7 +58,7 @@ pub const Chore = struct {
 
     pub fn isDone(self: Self) bool {
         var strange = rubr.strng.Strange{ .content = "&status:done" };
-        var done_ap = (amp.Path.parse(&strange, self.a) catch null) orelse unreachable;
+        var done_ap = amp.Path.parse(&strange, self.a) catch unreachable;
         defer done_ap.deinit();
         for (self.parts.items) |part| {
             if (part.ap.isFit(done_ap))
@@ -207,7 +208,7 @@ pub const Chores = struct {
     pub fn create(self: *Self, def: *const amp.Def, node_id: usize, tree: *const mero.Tree) !?usize {
         const status = def.status orelse return null;
         switch (status.kind) {
-            .Done, .Canceled, .Info, .Forward => return null,
+            .Done, .Canceled, .Info, .Forward, .Assigned, .Planned => return null,
             .Todo, .Go, .Wip, .Question, .Blocked => {},
         }
 
@@ -218,6 +219,8 @@ pub const Chores = struct {
             chore.my_cost = cost.value;
         if (def.status) |status_|
             chore.status = status_;
+        if (def.date) |date|
+            chore.date = date;
 
         // Setup chore.path
         var maybe_id = rubr.opt.value(node_id);

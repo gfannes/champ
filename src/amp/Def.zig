@@ -4,6 +4,7 @@ const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
 const Wbs = @import("Wbs.zig");
 const Status = @import("Status.zig");
+const Date = @import("Date.zig");
 
 const Error = error{
     ExpectedMetaPath,
@@ -30,6 +31,7 @@ cost: ?Path.Cost = null,
 order: ?Path.Order = null,
 worker: ?Path.Worker = null,
 wbs: ?Wbs = null,
+date: ?Date = null,
 
 pub fn deinit(self: *Self) void {
     self.ap.deinit();
@@ -44,6 +46,7 @@ pub fn injectMeta(self: *Self, ap: Path) !void {
         .order => |order| self.order = order,
         .worker => |worker| self.worker = worker,
         .wbs => |wbs| self.wbs = wbs,
+        .date => |date| self.date = date,
         else => {},
     }
 }
@@ -58,6 +61,9 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
         n.attr("chore_id", chore_id);
     if (self.status) |status|
         n.attr("status", status.lower());
+    // &todo &meta print date
+    // if (self.date) |date|
+    //     n.attr("date", date.lower());
     if (self.cost) |cost|
         n.attr("cost", cost.value);
     if (self.order) |order|
