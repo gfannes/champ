@@ -6,7 +6,7 @@
 
 ## Improve Markdown parser
 - [x] Detect `&nbsp;`
-- [ ] Detect normal Markdown links &b3
+- [ ] Detect normal Markdown links &#13
 
 ## DONE Update tree.Tree to represent
 - AMP
