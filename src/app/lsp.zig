@@ -115,35 +115,61 @@ pub const Lsp = struct {
 
                     // Find Amp corresponding to this src_filename and position
                     var maybe_ap: ?amp.Path = null;
+                    var dst_filename: ?[]const u8 = null;
+                    var range = dto.Range{};
                     for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.path))
                             continue;
 
-                        for (chore.parts.items[0..chore.org_count]) |part| {
-                            const pos = part.pos;
-                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, part.ap });
-                                maybe_ap = part.ap;
+                        std.debug.print("Found chore in correct file '{s}'\n", .{chore.path});
+
+                        if (true) {
+                            const node = forest.tree.cptr(chore.node_id);
+                            for (node.org_amps.items) |org_ref| {
+                                const pos = org_ref.pos;
+                                std.debug.print("org pos {}\n", .{pos});
+                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                    std.debug.print("Found matching position\n", .{});
+                                    const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
+                                    maybe_ap = org_def.ap;
+                                    if (org_def.location) |location| {
+                                        std.debug.print("Def has location\n", .{});
+                                        dst_filename = location.path;
+                                        const def_pos = location.pos;
+                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
+                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
+                                        try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, org_def.ap });
+                                    } else {
+                                        std.debug.print("Could not find location for def\n", .{});
+                                    }
+                                }
+                            }
+                        } else {
+                            for (chore.parts.items[0..chore.org_count]) |part| {
+                                const pos = part.pos;
+                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, part.ap });
+                                    maybe_ap = part.ap;
+                                }
                             }
                         }
                     }
 
-                    // Find filename and location of definition, if any
-                    var dst_filename: ?[]const u8 = null;
-                    var range = dto.Range{};
-                    if (maybe_ap) |e| {
-                        for (forest.defmgr.defs.items) |def| {
-                            if (def.ap.isFit(e)) {
-                                if (def.location) |location| {
-                                    dst_filename = location.path;
-                                    const pos = location.pos;
-                                    range.start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) };
-                                    range.end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) };
+                    if (false) { // Find filename and location of definition, if any
+                        if (maybe_ap) |e| {
+                            for (forest.defmgr.defs.items) |def| {
+                                if (def.ap.isFit(e)) {
+                                    if (def.location) |location| {
+                                        dst_filename = location.path;
+                                        const pos = location.pos;
+                                        range.start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) };
+                                        range.end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) };
+                                    }
                                 }
                             }
+                        } else {
+                            std.debug.print("Could not find AMP at {s} {}\n", .{ src_filename, position });
                         }
-                    } else {
-                        std.debug.print("Could not find AMP at {s} {}\n", .{ src_filename, position });
                     }
 
                     if (dst_filename) |filename| {

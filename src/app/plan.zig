@@ -126,7 +126,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             return order(a, b) == .lt;
         }
         fn order(a: Entry, b: Entry) std.math.Order {
-            const ord = std.math.order(b.order, a.order);
+            const ord = std.math.order(a.order, b.order);
             if (ord != .eq)
                 return ord;
             return Date.order(b.date, a.date);
@@ -145,9 +145,8 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
     }
 
     // // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
-    // if (reverse)
-    //     std.mem.reverse(Segment, self.segments.items);
-    _ = reverse;
+    if (reverse)
+        std.mem.reverse(Segment, self.segments.items);
 }
 
 pub fn show(self: Self, all: bool, details: bool) !void {
