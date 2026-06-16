@@ -11,30 +11,6 @@ const qry = @import("../qry.zig");
 const amp = @import("../amp.zig");
 
 const Self = @This();
-const OrderRange = struct {
-    first: i32,
-    last: i32,
-    fn update(self: *@This(), order: i32) void {
-        self.first = @min(self.first, order);
-        self.last = @max(self.last, order);
-    }
-
-    fn color(self: @This(), order: i32) rubr.ansi.Style.Ground.Color {
-        const colors: []const rubr.ansi.Style.Ground.Color = &.{ .Red, .Yellow, .Green, .Magenta, .Blue, .Cyan, .White };
-
-        if (self.first == self.last)
-            return colors[0];
-
-        const range: usize = @intCast(self.last - self.first);
-        const offset: usize = @intCast(order - self.first);
-
-        var ix = offset * colors.len / range;
-        if (ix >= colors.len)
-            ix = colors.len - 1;
-
-        return colors[ix];
-    }
-};
 const Entry = struct {
     path: []const u8,
     content: []const u8,
@@ -52,7 +28,6 @@ const Segment = struct {
 env: Env,
 forest: *const mero.Forest,
 
-order_range: ?OrderRange = null,
 segments: std.ArrayList(Segment) = .empty,
 all_entries: std.ArrayList(Entry) = .empty,
 
@@ -104,11 +79,6 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             break :ret date;
         } else null;
 
-        if (self.order_range) |*order_range|
-            order_range.update(myorder)
-        else
-            self.order_range = .{ .first = myorder, .last = myorder };
-
         const n = self.forest.tree.cptr(chore.node_id);
 
         const entry = Entry{
@@ -158,6 +128,21 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         std.mem.reverse(Segment, self.segments.items);
 }
 
+fn color(order: i32) rubr.ansi.Style.Ground.Color {
+    const colors: []const rubr.ansi.Style.Ground.Color = &.{ .Red, .Yellow, .Green, .Magenta, .Blue, .Cyan, .White };
+
+    if (order < 0)
+        return colors[0];
+
+    const uorder: usize = @intCast(order);
+
+    var ix: usize = uorder / 10;
+    if (ix >= colors.len)
+        ix = colors.len - 1;
+
+    return colors[ix];
+}
+
 pub fn show(self: Self, all: bool, details: bool) !void {
     // &todo Use `all` to show all tasks
     _ = all;
@@ -169,7 +154,7 @@ pub fn show(self: Self, all: bool, details: bool) !void {
         try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
 
         for (segment.entries) |entry| {
-            const entry_style = rubr.ansi.Style{ .fg = .{ .color = self.order_range.?.color(entry.order) } };
+            const entry_style = rubr.ansi.Style{ .fg = .{ .color = color(entry.order) } };
             try self.env.stdout.print("  {f}{s}{f} (&#{})", .{ entry_style, entry.content, reset_style, entry.order });
             try self.env.stdout.print("\n", .{});
         }
