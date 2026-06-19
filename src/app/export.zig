@@ -172,7 +172,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         const def = def_ref.ix.cptr(my.defmgr.defs.items);
                         if (def.chore_id) |chore_id| {
                             const chore = my.chores.list.items[chore_id];
-                            if (chore.status) |status| {
+                            if (chore.meta.status) |status| {
                                 status_str = switch (status.kind) {
                                     .Todo, .Go, .Question => "_TODO_ ",
                                     .Wip => "_IN PROGRESS_ ",
@@ -303,7 +303,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                 for (chore_ids) |chore_id| {
                     const chore = &self.forest.chores.list.items[chore_id];
 
-                    var status = (chore.status orelse continue).kind;
+                    var status = (chore.meta.status orelse continue).kind;
                     switch (status) {
                         .Blocked, .Todo, .Wip, .Done => {},
                         .Go, .Question => status = .Todo,

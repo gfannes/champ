@@ -10,7 +10,9 @@ const Defs = std.ArrayList(Def);
 const TmpConcat = std.ArrayList([]const u8);
 
 env: rubr.Env,
+// &todo: use a normal allocator
 aral: std.heap.ArenaAllocator,
+// &todo: is this still necessary? remove if possible
 phony_prefix: []const u8,
 
 defs: Defs = .empty,
@@ -52,6 +54,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
     const def_ix = Def.Ix.init(self.defs.items.len);
     try self.defs.append(aa, .{
         .ap = try def_ap.copy(aa),
+        .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
             .path = path,
@@ -68,10 +71,12 @@ pub fn appendUnnamedDef(self: *Self, grove_id: usize, path: []const u8, node_id:
 
     const def_ix = Def.Ix.init(self.defs.items.len);
     var ap = Path.init(aa);
-    try ap.parts.append(aa, Path.Part{ .content = "_unnamed", .meta = Path.Part.Meta{ .unnamed = .{ .id = def_ix.ix } } });
+    try ap.parts.append(aa, Path.Part{ .content = "_unnamed" });
+    try ap.parts.append(aa, Path.Part{ .content = try std.fmt.allocPrint(aa, "{}", .{self.defs.items.len}) });
 
     try self.defs.append(aa, .{
         .ap = ap,
+        .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
             .path = path,
@@ -146,7 +151,7 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
         ap.is_definition = false;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
-        try self.defs.append(aa, .{ .ap = try ap.copy(aa) });
+        try self.defs.append(aa, .{ .ap = try ap.copy(aa), .meta = .{ .a = aa } });
 
         return def_ix;
     }

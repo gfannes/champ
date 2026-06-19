@@ -1,6 +1,6 @@
 &&process
 
-# Init
+# &&init
 
 Goal: create a plan for the day
 

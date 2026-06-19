@@ -37,9 +37,12 @@ pub const Query = struct {
     a: std.mem.Allocator,
     include: Include = .{},
     only_status: bool = false,
+    worker: ?[]const u8 = null,
     parts: Parts = .empty,
     aps: std.ArrayList(*const amp.Path) = .empty,
     chore: ?Chore = null,
+
+    do_log: bool = false,
 
     pub fn deinit(self: *Self) void {
         for (self.parts.items) |part|
@@ -50,39 +53,43 @@ pub const Query = struct {
 
     pub fn setup(self: *Self, parts: []const []const u8) !void {
         for (parts) |part| {
+            if (self.do_log)
+                std.debug.print("part: '{s}'\n", .{part});
             var strange = rubr.strng.Strange{ .content = part };
 
             while (!strange.empty()) {
                 if (strange.popChar('.')) {
                     self.include.set_all(true);
                     self.only_status = true;
-                } else if (strange.popChar(' ') or strange.popChar(',')) {
+                } else if (strange.popStr("[ ]") or strange.popChar(' ') or strange.popChar(',')) {
                     self.include.todo = true;
                     self.only_status = true;
-                } else if (strange.popChar('x')) {
+                } else if (strange.popStr("[x]")) {
                     self.include.done = true;
                     self.only_status = true;
-                } else if (strange.popChar('/')) {
+                } else if (strange.popStr("[/]") or strange.popChar('/')) {
                     self.include.wip = true;
                     self.only_status = true;
-                } else if (strange.popChar('*')) {
+                } else if (strange.popStr("[*]") or strange.popChar('*')) {
                     self.include.go = true;
                     self.only_status = true;
-                } else if (strange.popChar('-')) {
+                } else if (strange.popStr("[-]") or strange.popChar('-')) {
                     self.include.canceled = true;
                     self.only_status = true;
-                } else if (strange.popChar('i')) {
+                } else if (strange.popStr("[i]")) {
                     self.include.info = true;
                     self.only_status = true;
-                } else if (strange.popChar('!')) {
+                } else if (strange.popStr("[!]") or strange.popChar('!')) {
                     self.include.blocked = true;
                     self.only_status = true;
-                } else if (strange.popChar('?')) {
+                } else if (strange.popStr("[?]") or strange.popChar('?')) {
                     self.include.question = true;
                     self.only_status = true;
-                } else if (strange.popChar('>')) {
+                } else if (strange.popStr("[>]") or strange.popChar('>')) {
                     self.include.forward = true;
                     self.only_status = true;
+                } else if (strange.popChar('@')) {
+                    self.worker = strange.popAll();
                 }
 
                 const str: []const u8 = if (strange.popTo(' ')) |str| str else if (strange.popAll()) |str| str else &.{};
@@ -113,7 +120,7 @@ pub const Query = struct {
         const chore = self.chore orelse return null;
 
         var status_is_match: ?bool = null;
-        if (chore.status) |status| {
+        if (chore.meta.status) |status| {
             if (status.kind == .Done and self.include.done)
                 status_is_match = true;
             if (status.kind == .Todo and self.include.todo)
@@ -134,18 +141,36 @@ pub const Query = struct {
                 status_is_match = true;
         }
 
+        if (self.do_log)
+            std.debug.print("{} {?} worker {?s}\n", .{ self.only_status, status_is_match, self.worker });
         if (self.only_status and status_is_match == null)
             return null;
 
+        var worker_matches: bool = false;
+        if (self.worker) |worker| {
+            for (chore.meta.workers.items) |w| {
+                if (std.mem.eql(u8, w.name, worker))
+                    worker_matches = true;
+            }
+        } else {
+            worker_matches = rubr.slc.isEmpty(chore.meta.workers.items);
+        }
+        if (!worker_matches)
+            return null;
+
         var sum_distance: f64 = 0;
+        if (self.do_log)
+            std.debug.print("{}\n", .{self.parts.items.len});
         for (self.parts.items) |q_part| {
-            // std.debug.print("Matching '{s}'\n", .{q_part});
+            if (self.do_log)
+                std.debug.print("Matching '{s}'\n", .{q_part});
             var maybe_min_distance: ?f64 = null;
             for (self.aps.items) |ap| {
                 for (ap.parts.items) |a_part| {
                     var skip_count: usize = undefined;
                     const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
-                    // std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, score, skip_count });
+                    if (self.do_log)
+                        std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, dist, skip_count });
                     if (skip_count > 0)
                         continue;
                     maybe_min_distance = @min(dist, maybe_min_distance orelse dist);

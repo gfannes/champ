@@ -85,7 +85,7 @@ pub const Forest = struct {
 
         // &todo: Measure/print performance
 
-        try self.collectDefs();
+        try self.createDefs();
 
         try self.resolveAmps();
 
@@ -271,8 +271,7 @@ pub const Forest = struct {
                 }
                 // Tree-based inheritance between Nodes
                 if (my.parent(entry.id)) |parent_entry| {
-                    // std.debug.print("{} inherits from {}\n", .{ entry.id, parent_entry.id });
-                    try my.inject_metadata(parent_entry.data, n);
+                    try my.injectAmps(parent_entry.data, n);
                 }
 
                 // For orgs that resolve to a named Def, inherit Tags.
@@ -282,10 +281,10 @@ pub const Forest = struct {
                     if (def.location) |location| {
                         if (org.is_dependency) {
                             const def_node = my.tree.get(location.node_id) catch continue;
-                            try my.inject_metadata(n, def_node);
+                            try my.injectAmps(n, def_node);
                         } else {
                             const def_node = my.tree.cget(location.node_id) catch continue;
-                            try my.inject_metadata(def_node, n);
+                            try my.injectAmps(def_node, n);
                         }
                     }
                 }
@@ -295,16 +294,15 @@ pub const Forest = struct {
                     const def = agg.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
                         const def_node = my.tree.cget(location.node_id) catch continue;
-                        try my.inject_metadata(def_node, n);
+                        try my.injectAmps(def_node, n);
                     }
                 }
             }
 
-            fn inject_metadata(my: *My, src: *const Node, dst: *Node) !void {
+            fn injectAmps(my: *My, src: *const Node, dst: *Node) !void {
                 // Inject src.orgs into dst.aggs
                 for (src.org_amps.items) |src_org| {
-                    const src_org_def = src_org.ix.cget(my.defmgr.defs.items) orelse continue;
-                    if (!src_org_def.ap.isMeta() and !is_present(dst, src_org.ix)) {
+                    if (!is_present(dst, src_org.ix)) {
                         try dst.agg_amps.append(my.env.a, src_org.ix);
                         my.update_count += 1;
                     }
@@ -343,6 +341,7 @@ pub const Forest = struct {
             }
         }{ .env = self.env, .tree = &self.tree, .defmgr = &self.defmgr };
 
+        // We aggregate data several times to allow non-tree-based dependencies to reach all reachable nodes
         const n = 10;
         for (0..n) |ix| {
             cb.update_count = 0;
@@ -371,11 +370,11 @@ pub const Forest = struct {
                 if (def.chore_id) |chore_id| {
                     for (node.org_amps.items) |org| {
                         const org_def = org.ix.cptr(self.defmgr.defs.items);
-                        self.chores.update(chore_id, org_def);
+                        try self.chores.update(chore_id, org_def);
                     }
                     for (node.agg_amps.items) |agg| {
                         const agg_def = agg.cptr(self.defmgr.defs.items);
-                        self.chores.update(chore_id, agg_def);
+                        try self.chores.update(chore_id, agg_def);
                     }
                 }
             }
@@ -413,69 +412,74 @@ pub const Forest = struct {
                         my.grove_id = n.grove_id;
                         my.is_new_file = true;
 
-                        if (amp.Date.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
-                            var w = std.Io.Writer.Allocating.init(my.aa);
-                            defer w.deinit();
-                            try w.writer.print("&:s:{f}", .{date});
-                            const content = try w.toOwnedSlice();
-                            var strange = rubr.strng.Strange{ .content = content };
-                            var path = amp.Path.parse(&strange, my.env.a) catch |err| {
-                                try my.env.log.err("Could not parse amp from filepath '{s}' {}\n", .{ my.path, err });
-                                return err;
-                            };
-                            defer path.deinit();
-                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                            if (try my.defmgr.resolve(&path, grove_id)) |amp_ix| {
-                                try n.org_amps.append(my.env.a, .{ .ix = amp_ix, .pos = .{} });
-                            } else {
-                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
-                            }
-                        }
+                        // &meta Move this to createDefs()
+                        // Create a Def for a filepath that contains a date (or other metadata)
+                        // if (amp.Date.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
+                        //     var w = std.Io.Writer.Allocating.init(my.aa);
+                        //     defer w.deinit();
+                        //     try w.writer.print("&:s:{f}", .{date});
+                        //     const content = try w.toOwnedSlice();
+                        //     var strange = rubr.strng.Strange{ .content = content };
+                        //     // &meta Create a phony Def and add the date to it
+                        //     var meta = amp.Meta{ .a = my.env.a };
+                        //     var path = amp.Path.parse(&strange, &meta) catch |err| {
+                        //         try my.env.log.err("Could not parse amp from filepath '{s}' {}\n", .{ my.path, err });
+                        //         return err;
+                        //     };
+                        //     defer path.deinit();
+                        //     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                        //     if (try my.defmgr.resolve(&path, grove_id)) |amp_ix| {
+                        //         try n.org_amps.append(my.env.a, .{ .ix = amp_ix, .pos = .{} });
+                        //     } else {
+                        //         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
+                        //     }
+                        // }
                     },
                     .text => |text| {
                         defer my.is_new_file = false;
 
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
+
+                        var meta = amp.Meta{ .a = my.env.a };
+                        defer meta.deinit();
                         for (text.terms.slice) |term| {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
 
                             if (term.kind == .Amp or term.kind == .Wikilink or term.kind == .Checkbox or term.kind == .Capital) {
                                 var strange = rubr.strng.Strange{ .content = term.word };
-                                var path = amp.Path.parse(&strange, my.env.a) catch |err| {
-                                    try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
-                                    continue;
-                                };
-                                defer path.deinit();
-                                if (!path.is_definition) {
-                                    if (path.isMeta()) {
-                                        // Inject all Meta into n.def if present
-                                        if (n.def) |def| {
-                                            try def.ix.ptr(my.defmgr.defs.items).injectMeta(path);
-                                        }
-                                    } else {
-                                        const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                                        if (try my.defmgr.resolve(&path, grove_id)) |defix| {
-                                            const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
-                                            try n.org_amps.append(my.env.a, def);
+                                // &meta Parse term for amp.Path and amp.Meta
+                                if (amp.parse(&strange, &meta)) |maybe_ap_| {
+                                    var maybe_ap = maybe_ap_;
+                                    if (maybe_ap) |*ap| {
+                                        defer ap.deinit();
+                                        if (!ap.is_definition) {
+                                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                                            if (try my.defmgr.resolve(ap, grove_id)) |defix| {
+                                                const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
+                                                try n.org_amps.append(my.env.a, def);
 
-                                            if (my.is_new_file and n.type.isText(.Paragraph)) {
-                                                // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
-                                                if (try my.tree.parent(entry.id)) |file| {
-                                                    try file.data.org_amps.append(my.env.a, def);
+                                                if (my.is_new_file and n.type.isText(.Paragraph)) {
+                                                    // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
+                                                    if (try my.tree.parent(entry.id)) |file| {
+                                                        try file.data.org_amps.append(my.env.a, def);
 
-                                                    if (amp.is_folder_metadata_fp(file.data.path)) {
-                                                        if (try my.tree.parent(file.id)) |folder| {
-                                                            try folder.data.org_amps.append(my.env.a, def);
+                                                        if (amp.is_folder_metadata_fp(file.data.path)) {
+                                                            if (try my.tree.parent(file.id)) |folder| {
+                                                                try folder.data.org_amps.append(my.env.a, def);
+                                                            }
                                                         }
                                                     }
                                                 }
+                                            } else {
+                                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ ap, my.path });
                                             }
-                                        } else {
-                                            try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
                                         }
                                     }
+                                } else |err| {
+                                    try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
+                                    continue;
                                 }
                             } else if (term.kind == .Newline) {
                                 line += term.word.len;
@@ -494,7 +498,7 @@ pub const Forest = struct {
         try self.tree.dfsAll(&cb);
     }
 
-    fn collectDefs(self: *Self) !void {
+    fn createDefs(self: *Self) !void {
         // Expects Node.org_amps to still be empty
         var cb = struct {
             const My = @This();
@@ -566,74 +570,80 @@ pub const Forest = struct {
                 var cols: rubr.idx.Range = .{};
 
                 var needs_def: bool = false;
+                var meta = amp.Meta{ .a = my.env.a };
+                defer meta.deinit();
                 for (text.terms.slice) |term| {
                     cols.begin = cols.end;
                     cols.end += term.word.len;
 
-                    if (term.kind == .Amp) {
+                    if (term.kind == .Amp or term.kind == .Checkbox or term.kind == .Capital) {
                         var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var def_ap = amp.Path.parse(&strange, my.env.a) catch |err| {
+                        // &meta Parse both amp.Path and amp.Meta
+                        // Also check other terms: captials, checkbox, ...
+                        if (amp.parse(&strange, &meta)) |maybe_ap_| {
+                            var maybe_ap = maybe_ap_;
+                            if (maybe_ap) |*ap| {
+                                defer ap.deinit();
+                                if (ap.is_definition) {
+                                    if (n.def != null) {
+                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, ap });
+                                        return error.OnlyOneDefAllowed;
+                                    }
+
+                                    // Make the def amp absolute, if necessary
+                                    if (!ap.is_absolute) {
+                                        var child_id = entry.id;
+                                        // Try to find parent def
+                                        const maybe_parent_def: ?amp.Path = block: while (true) {
+                                            if (try my.tree.parent(child_id)) |parent| {
+                                                if (parent.data.def) |d| {
+                                                    const pdef = d.ix.cptr(my.defmgr.defs.items);
+                                                    break :block pdef.ap;
+                                                } else {
+                                                    child_id = parent.id;
+                                                }
+                                            } else {
+                                                break :block null;
+                                            }
+                                        };
+
+                                        if (maybe_parent_def) |parent_def| {
+                                            try ap.prepend(parent_def);
+                                            ap.is_definition = true;
+                                        } else {
+                                            try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ ap, my.path });
+                                            ap.is_absolute = true;
+                                        }
+                                    }
+
+                                    // Collect all defs in a separate struct
+                                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                                    const pos = filex.Pos{ .row = line, .cols = cols };
+                                    if (try my.defmgr.appendDef(ap.*, grove_id, my.path, entry.id, pos)) |amp_ix| {
+                                        n.def = .{ .ix = amp_ix, .pos = pos };
+                                        try n.org_amps.append(my.env.a, n.def.?);
+                                    } else {
+                                        try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
+                                    }
+                                } else if (ap.is_dependency) {
+                                    needs_def = true;
+                                }
+                            } else {
+                                // std.debug.print("Found metadata\n", .{});
+                            }
+                        } else |err| {
                             try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
                             continue;
-                        };
-                        defer def_ap.deinit();
-
-                        if (def_ap.is_definition) {
-                            if (n.def != null) {
-                                try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, def_ap });
-                                return error.OnlyOneDefAllowed;
-                            }
-
-                            // Make the def amp absolute, if necessary
-                            if (!def_ap.is_absolute) {
-                                var child_id = entry.id;
-                                // Try to find parent def
-                                const maybe_parent_def: ?amp.Path = block: while (true) {
-                                    if (try my.tree.parent(child_id)) |parent| {
-                                        if (parent.data.def) |d| {
-                                            const pdef = d.ix.cptr(my.defmgr.defs.items);
-                                            break :block pdef.ap;
-                                        } else {
-                                            child_id = parent.id;
-                                        }
-                                    } else {
-                                        break :block null;
-                                    }
-                                };
-
-                                if (maybe_parent_def) |parent_def| {
-                                    try def_ap.prepend(parent_def);
-                                    def_ap.is_definition = true;
-                                } else {
-                                    try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ def_ap, my.path });
-                                    def_ap.is_absolute = true;
-                                }
-                            }
-
-                            // Collect all defs in a separate struct
-                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                            const pos = filex.Pos{ .row = line, .cols = cols };
-                            if (try my.defmgr.appendDef(def_ap, grove_id, my.path, entry.id, pos)) |amp_ix| {
-                                n.def = .{ .ix = amp_ix, .pos = pos };
-                                try n.org_amps.append(my.env.a, n.def.?);
-                            } else {
-                                try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
-                            }
-                        } else if (def_ap.isStatus()) {
-                            needs_def = true;
-                        } else if (def_ap.isOrder()) {
-                            needs_def = true;
-                        } else if (def_ap.is_dependency) {
-                            needs_def = true;
                         }
-                    } else if (term.kind == .Checkbox or term.kind == .Capital) {
-                        needs_def = true;
                     } else if (term.kind == .Newline) {
                         line += term.word.len;
                         cols = .{};
                     }
                 }
+
+                if (meta.hasData())
+                    needs_def = true;
 
                 if (n.def == null and needs_def) {
                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
@@ -641,6 +651,11 @@ pub const Forest = struct {
                     n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.path, entry.id, pos), .pos = pos };
                     // We add this Def to the org_amps as well to ensure aggregation picks it up
                     try n.org_amps.append(my.env.a, n.def.?);
+                }
+
+                if (n.def) |ref| {
+                    var def = ref.ix.ptr(my.defmgr.defs.items);
+                    try def.meta.update(meta);
                 }
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {

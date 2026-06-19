@@ -16,20 +16,18 @@ pub const Chore = struct {
 
     a: std.mem.Allocator,
     node_id: usize, // Id for forest.tree
+    meta: amp.Meta,
 
     path: []const u8 = &.{},
-    status: ?amp.Status = null,
+
     order_offset: i32 = 0,
     order_min: i32 = std.math.maxInt(i32),
     my_cost: u32 = 0,
     child_costs: u32 = 0,
-    date: ?amp.Date = null,
 
-    pub fn init(node_id: usize, a: std.mem.Allocator) Self {
-        return Self{ .node_id = node_id, .a = a };
-    }
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
+        self.meta.deinit();
     }
 
     pub fn order(self: Self) i32 {
@@ -37,7 +35,7 @@ pub const Chore = struct {
     }
 
     pub fn isDone(self: Self) bool {
-        const status = self.status orelse return false;
+        const status = self.meta.status orelse return false;
         return status.kind == .Done;
     }
 
@@ -47,20 +45,19 @@ pub const Chore = struct {
         if (maybe_ix) |ix|
             n.attr("ix", ix);
         n.attr("node_id", self.node_id);
-        if (self.status) |status|
-            n.attr("status", status.lower());
         n.attr("order_offset", self.order_offset);
         n.attr("order_min", self.order_min);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
         if (self.path.len > 0)
             n.attr("path", self.path);
+        self.meta.write(&n);
     }
 
     pub fn format(self: Self, w: *std.Io.Writer) !void {
-        var root = naft.Node{ .w = w };
+        var root = naft.Node.root(w);
         defer root.deinit();
-        self.write(&root);
+        self.write(&root, null);
     }
 };
 
@@ -89,19 +86,15 @@ pub const Chores = struct {
 
     pub fn create(self: *Self, def: *const amp.Def, node_id: usize, tree: *const mero.Tree) !?usize {
         const aa = self.aral.allocator();
-        var chore = Chore.init(node_id, aa);
+        var chore = Chore{
+            .a = aa,
+            .node_id = node_id,
+            .meta = .{ .a = aa },
+        };
+        try chore.meta.update(def.meta);
 
-        if (def.cost) |cost|
+        if (def.meta.cost) |cost|
             chore.my_cost = cost.value;
-        if (def.status) |status| {
-            // switch (status.kind) {
-            //     .Done, .Canceled, .Info, .Forward, .Assigned, .Planned => return null,
-            //     .Todo, .Go, .Wip, .Question, .Blocked => {},
-            // }
-            chore.status = status;
-        }
-        if (def.date) |date|
-            chore.date = date;
 
         // Setup chore.path
         var maybe_id = rubr.opt.value(node_id);
@@ -123,16 +116,19 @@ pub const Chores = struct {
         return chore_ix;
     }
 
-    pub fn update(self: *Self, chore_id: usize, def: *const amp.Def) void {
+    pub fn update(self: *Self, chore_id: usize, def: *const amp.Def) !void {
         const chore = &self.list.items[chore_id];
 
         // Aggregate metadata from def into chore
-        if (def.order) |order| {
+        if (def.meta.order) |order| {
             if (order.relative) {
                 chore.order_offset += order.value;
             } else {
                 chore.order_min = @min(chore.order_min, order.value);
             }
+        }
+        for (def.meta.workers.items) |worker| {
+            try chore.meta.appendWorker(worker);
         }
 
         // Aggregate metadata from chore into def

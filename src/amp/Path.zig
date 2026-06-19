@@ -14,49 +14,14 @@ pub const Error = error{
     ExpectedPrio,
     ExpectedWbs,
     ExpectedAmp,
-    InvalidCost,
-    InvalidPrio,
-    InvalidWorker,
-    InvalidWbs,
 };
 
 const Self = @This();
 
-pub const Cost = struct {
-    value: u32,
-};
-pub const Order = struct {
-    value: i32,
-    relative: bool,
-};
-pub const Worker = struct {
-    name: []const u8,
-};
-
-pub const Unnamed = struct {
-    id: usize,
-};
-
 // Part is assumed to be POD
 pub const Part = struct {
-    pub const Meta = union(enum) {
-        cost: Cost,
-        order: Order,
-        worker: Worker,
-        wbs: Wbs,
-        status: Status,
-        date: Date,
-
-        unnamed: Unnamed,
-    };
-
     is_exclusive: bool = false,
     content: []const u8,
-    meta: ?Meta = null,
-
-    status: ?Status = null,
-    date: ?Date = null,
-    order: ?Order = null,
 };
 const Parts = std.ArrayList(Part);
 
@@ -84,22 +49,6 @@ pub fn copy(self: Self, a: std.mem.Allocator) !Self {
     return res;
 }
 
-pub fn isMeta(self: Self) bool {
-    if (self.parts.items.len == 0)
-        return false;
-    return self.parts.items[0].meta != null;
-}
-pub fn isStatus(self: Self) bool {
-    if (self.parts.items.len == 0)
-        return false;
-    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .status;
-}
-pub fn isOrder(self: Self) bool {
-    if (self.parts.items.len == 0)
-        return false;
-    return std.meta.activeTag(self.parts.items[0].meta orelse return false) == .order;
-}
-
 // rhs is the smaller one
 pub fn isFit(self: Self, rhs: Self) bool {
     var rhs_rit = std.mem.reverseIterator(rhs.parts.items);
@@ -117,95 +66,6 @@ pub fn isFit(self: Self, rhs: Self) bool {
 }
 
 // Assumes strange outlives Self
-pub fn parse(strange: *rubr.strng.Strange, a: std.mem.Allocator) !Self {
-    var path = Self.init(a);
-    errdefer path.deinit();
-
-    if (strange.popChar('&')) {
-        var is_exclusive = strange.popChar('^');
-
-        if (strange.popChar('$')) {
-            try path.parts.append(a, Part{ .content = "_cost", .meta = Part.Meta{ .cost = Cost{ .value = strange.popInt(u32) orelse return error.InvalidCost } } });
-
-            return path;
-        } else if (strange.popChar('#')) {
-            const relative = if (strange.front()) |ch| ch == '+' or ch == '-' else false;
-            try path.parts.append(a, Part{ .content = "_order", .meta = Part.Meta{ .order = Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative } } });
-
-            return path;
-        } else if (strange.popChar('@')) {
-            try path.parts.append(a, Part{ .content = "_worker", .is_exclusive = is_exclusive, .meta = Part.Meta{ .worker = Worker{ .name = strange.popAll() orelse return error.InvalidWorker } } });
-
-            return path;
-        } else if (strange.popChar('?')) {
-            try path.parts.append(a, Part{ .content = "_wbs", .meta = Part.Meta{ .wbs = Wbs.parse(strange.str(), .{}) orelse return error.InvalidWbs } });
-
-            return path;
-        } else if (Date.parse(strange.str(), .{})) |date| {
-            try path.parts.append(a, Part{ .content = "_date", .meta = Part.Meta{ .date = date } });
-
-            return path;
-        } else if (Status.fromLower(strange.str())) |status| {
-            try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
-
-            return path;
-        } else {
-            path.is_definition = strange.popChar('&');
-            path.is_absolute = strange.popChar(':');
-
-            while (strange.popCharBack(':')) {}
-            path.is_dependency = strange.popCharBack('&');
-
-            while (!strange.empty()) {
-                var maybe_content = strange.popTo(':');
-                if (maybe_content == null)
-                    maybe_content = strange.popAll();
-
-                if (maybe_content) |content| {
-                    try path.parts.append(a, Part{ .content = content, .is_exclusive = is_exclusive });
-
-                    is_exclusive = strange.popChar('^');
-                }
-            }
-
-            return path;
-        }
-    } else if (strange.popStr("[[") and strange.popStrBack("]]")) {
-        try path.parts.append(a, Part{ .content = strange.str() });
-
-        return path;
-    } else if (strange.popChar('[')) {
-        if (strange.popOne()) |ch| {
-            const content: []const u8 = switch (ch) {
-                ' ' => "todo",
-                '*' => "go",
-                '/' => "wip",
-                'x' => "done",
-                '?' => "question",
-                'i' => "info",
-                '!' => "blocked",
-                '>' => "forward",
-                '<' => "planned",
-                '-' => "canceled",
-                '~' => "assigned",
-                else => "unknown",
-            };
-            if (strange.popChar(']')) {
-                if (Status.fromLower(content)) |status| {
-                    try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
-
-                    return path;
-                }
-            }
-        }
-    } else if (Status.fromCapital(strange.str())) |status| {
-        try path.parts.append(a, Part{ .content = "_status", .meta = Part.Meta{ .status = status } });
-
-        return path;
-    }
-
-    return error.ExpectedAmp;
-}
 
 pub fn prepend(self: *Self, prefix: Self) !void {
     self.is_definition = prefix.is_definition;
@@ -243,17 +103,6 @@ pub fn format(self: Self, io: *std.Io.Writer) !void {
     for (self.parts.items) |part| {
         const exclusive_str = if (part.is_exclusive) "^" else "";
         try io.print("{s}{s}{s}", .{ prefix, exclusive_str, part.content });
-        if (part.meta) |meta| {
-            switch (meta) {
-                .cost => |cost| try io.print(":{}", .{cost.value}),
-                .order => |order| try io.print(":{}", .{order.value}),
-                .worker => |worker| try io.print(":{s}", .{worker.name}),
-                .wbs => |wbs| try io.print(":{s}", .{wbs.lower()}),
-                .status => |status| try io.print(":{s}", .{status.lower()}),
-                .date => |date| try io.print(":{}", .{date.date.epoch_day.day}),
-                .unnamed => |unnamed| try io.print(":{}", .{unnamed.id}),
-            }
-        }
         prefix = ":";
     }
     if (self.is_dependency)

@@ -1,7 +1,8 @@
 const std = @import("std");
 const rubr = @import("../rubr.zig");
-const Path = @import("Path.zig");
 const filex = @import("../filex.zig");
+const Path = @import("Path.zig");
+const Meta = @import("Meta.zig");
 const Wbs = @import("Wbs.zig");
 const Status = @import("Status.zig");
 const Date = @import("Date.zig");
@@ -22,19 +23,14 @@ pub const Location = struct {
 };
 
 ap: Path,
+meta: Meta,
 
 location: ?Location = null,
 chore_id: ?usize = null,
 
-status: ?Status = null,
-cost: ?Path.Cost = null,
-order: ?Path.Order = null,
-worker: ?Path.Worker = null,
-wbs: ?Wbs = null,
-date: ?Date = null,
-
 pub fn deinit(self: *Self) void {
     self.ap.deinit();
+    self.meta.deinit();
 }
 
 pub fn injectMeta(self: *Self, ap: Path) !void {
@@ -59,19 +55,6 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     n.attr("ap", self.ap);
     if (self.chore_id) |chore_id|
         n.attr("chore_id", chore_id);
-    if (self.status) |status|
-        n.attr("status", status.lower());
-    // &todo &meta print date
-    // if (self.date) |date|
-    //     n.attr("date", date.lower());
-    if (self.cost) |cost|
-        n.attr("cost", cost.value);
-    if (self.order) |order|
-        n.attr("order", order.value);
-    if (self.worker) |worker|
-        n.attr("worker", worker.name);
-    if (self.wbs) |wbs|
-        n.attr("wbs", wbs.lower());
     if (self.location) |loc| {
         n.attr("grove_id", loc.grove_id);
         n.attr("path", loc.path);
@@ -79,6 +62,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
         n.attr("cols.begin", loc.pos.cols.begin);
         n.attr("cols.end", loc.pos.cols.end);
     }
+    self.meta.write(&n);
 }
 pub fn format(self: Self, w: *std.Io.Writer) !void {
     var r = rubr.naft.Node.root(w);

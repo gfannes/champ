@@ -1,3 +1,7 @@
+# mode = :safe
+mode = :fast
+# mode = :debug
+
 require('fileutils')
 
 here_dir = File.dirname(__FILE__)
@@ -11,10 +15,6 @@ end
 desc 'Install'
 task :install, :variant do |_task, args|
     variant = args[:variant]&.to_sym || :zig
-
-    # mode = :safe
-    mode = :fast
-    # mode = :debug
 
     case variant
     when :zig

@@ -54,14 +54,21 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
     try query.setup(query_input);
 
     for (self.forest.chores.list.items) |chore| {
+        // std.debug.print("{f}", .{chore});
+
         try query.prepare(chore);
         const node = self.forest.tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);
             try query.add(&def.ap);
         }
+        for (node.agg_amps.items) |ref| {
+            const def = ref.cptr(self.forest.defmgr.defs.items);
+            try query.add(&def.ap);
+        }
 
         if (query.distance()) |distance| {
+            // std.debug.print("  distance {}\n", .{distance});
             const n = try self.forest.tree.cget(chore.node_id);
             if (n.type == .file)
                 continue;
@@ -77,6 +84,8 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
                 },
             );
             self.max.update(node.content.len, chore.path.len);
+        } else {
+            // std.debug.print("  no distance\n", .{});
         }
     }
 

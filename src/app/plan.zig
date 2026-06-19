@@ -45,7 +45,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
 
     // Collect all chores
     for (self.forest.chores.list.items) |chore| {
-        const status = chore.status orelse continue;
+        const status = chore.meta.status orelse continue;
         switch (status.kind) {
             .Todo, .Wip, .Go, .Blocked, .Question => {},
             else => continue,
@@ -73,7 +73,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
 
         // Check that its start date is before today, if any
         // &todo &meta Add date to chore and re-enable this check
-        const date = if (chore.date) |date| ret: {
+        const date = if (chore.meta.date) |date| ret: {
             if (date.date.epoch_day.day > today.epoch_day.day)
                 continue;
             break :ret date;
