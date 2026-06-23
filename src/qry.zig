@@ -39,7 +39,7 @@ pub const Query = struct {
     only_status: bool = false,
     worker: ?[]const u8 = null,
     parts: Parts = .empty,
-    aps: std.ArrayList(*const amp.Path) = .empty,
+    paths: std.ArrayList(*const amp.Path) = .empty,
     chore: ?Chore = null,
 
     do_log: bool = false,
@@ -48,7 +48,7 @@ pub const Query = struct {
         for (self.parts.items) |part|
             self.a.free(part);
         self.parts.deinit(self.a);
-        self.aps.deinit(self.a);
+        self.paths.deinit(self.a);
     }
 
     pub fn setup(self: *Self, parts: []const []const u8) !void {
@@ -106,13 +106,13 @@ pub const Query = struct {
 
     // Call this to reset this Query instance to start the computation of a match with a new Chore
     pub fn prepare(self: *Self, chore: Chore) !void {
-        try self.aps.resize(self.a, 0);
+        try self.paths.resize(self.a, 0);
         self.chore = chore;
     }
 
     // Add all relevant amp.Paths that you want to consider for matching
-    pub fn add(self: *Self, ap: *const amp.Path) !void {
-        try self.aps.append(self.a, ap);
+    pub fn add(self: *Self, path: *const amp.Path) !void {
+        try self.paths.append(self.a, path);
     }
 
     // Compute the match itself
@@ -165,8 +165,8 @@ pub const Query = struct {
             if (self.do_log)
                 std.debug.print("Matching '{s}'\n", .{q_part});
             var maybe_min_distance: ?f64 = null;
-            for (self.aps.items) |ap| {
-                for (ap.parts.items) |a_part| {
+            for (self.paths.items) |path| {
+                for (path.parts.items) |a_part| {
                     var skip_count: usize = undefined;
                     const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
                     if (self.do_log)

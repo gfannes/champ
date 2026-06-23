@@ -60,11 +60,11 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
         const node = self.forest.tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.ap);
+            try query.add(&def.path);
         }
         for (node.agg_amps.items) |ref| {
             const def = ref.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.ap);
+            try query.add(&def.path);
         }
 
         if (query.distance()) |distance| {

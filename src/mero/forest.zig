@@ -451,13 +451,13 @@ pub const Forest = struct {
                                 var strange = rubr.strng.Strange{ .content = term.word };
                                 // &meta Parse term for amp.Path and amp.Meta
                                 if (amp.parse(&strange, &meta)) |maybe_ap_| {
-                                    var maybe_ap = maybe_ap_;
-                                    if (maybe_ap) |*ap| {
-                                        defer ap.deinit();
-                                        if (!ap.is_definition) {
+                                    var maybe_path = maybe_ap_;
+                                    if (maybe_path) |*path| {
+                                        defer path.deinit();
+                                        if (!path.is_definition) {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                                            if (try my.defmgr.resolve(ap, grove_id)) |defix| {
-                                                const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
+                                            if (try my.defmgr.resolve(path, grove_id)) |defix| {
+                                                const def = Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = path.is_dependency };
                                                 try n.org_amps.append(my.env.a, def);
 
                                                 if (my.is_new_file and n.type.isText(.Paragraph)) {
@@ -473,7 +473,7 @@ pub const Forest = struct {
                                                     }
                                                 }
                                             } else {
-                                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ ap, my.filepath });
+                                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.filepath });
                                             }
                                         }
                                     }
@@ -581,25 +581,25 @@ pub const Forest = struct {
 
                         // &meta Parse both amp.Path and amp.Meta
                         // Also check other terms: captials, checkbox, ...
-                        if (amp.parse(&strange, &meta)) |maybe_ap_| {
-                            var maybe_ap = maybe_ap_;
-                            if (maybe_ap) |*ap| {
-                                defer ap.deinit();
-                                if (ap.is_definition) {
+                        if (amp.parse(&strange, &meta)) |maybe_path_| {
+                            var maybe_path = maybe_path_;
+                            if (maybe_path) |*path| {
+                                defer path.deinit();
+                                if (path.is_definition) {
                                     if (n.def != null) {
-                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.filepath, my.defmgr.get(n.def.?.ix).?.ap, ap });
+                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.filepath, my.defmgr.get(n.def.?.ix).?.path, path });
                                         return error.OnlyOneDefAllowed;
                                     }
 
                                     // Make the def amp absolute, if necessary
-                                    if (!ap.is_absolute) {
+                                    if (!path.is_absolute) {
                                         var child_id = entry.id;
                                         // Try to find parent def
                                         const maybe_parent_def: ?amp.Path = block: while (true) {
                                             if (try my.tree.parent(child_id)) |parent| {
                                                 if (parent.data.def) |d| {
                                                     const pdef = d.ix.cptr(my.defmgr.defs.items);
-                                                    break :block pdef.ap;
+                                                    break :block pdef.path;
                                                 } else {
                                                     child_id = parent.id;
                                                 }
@@ -609,18 +609,18 @@ pub const Forest = struct {
                                         };
 
                                         if (maybe_parent_def) |parent_def| {
-                                            try ap.prepend(parent_def);
-                                            ap.is_definition = true;
+                                            try path.prepend(parent_def);
+                                            path.is_definition = true;
                                         } else {
-                                            try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ ap, my.filepath });
-                                            ap.is_absolute = true;
+                                            try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ path, my.filepath });
+                                            path.is_absolute = true;
                                         }
                                     }
 
                                     // Collect all defs in a separate struct
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                     const pos = filex.Pos{ .row = line, .cols = cols };
-                                    if (try my.defmgr.appendDef(ap.*, grove_id, my.filepath, entry.id, pos)) |amp_ix| {
+                                    if (try my.defmgr.appendDef(path.*, grove_id, my.filepath, entry.id, pos)) |amp_ix| {
                                         n.def = .{ .ix = amp_ix, .pos = pos };
                                         try n.org_amps.append(my.env.a, n.def.?);
                                     } else {

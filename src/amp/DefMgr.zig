@@ -41,7 +41,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u
         grove_id: usize,
         pub fn call(my: @This(), other: Def) bool {
             const other_grove_id = (other.location orelse return false).grove_id;
-            return other.ap.isFit(my.needle.*) and my.grove_id == other_grove_id;
+            return other.path.isFit(my.needle.*) and my.grove_id == other_grove_id;
         }
     }{ .needle = &def_ap, .grove_id = grove_id };
     if (rubr.algo.indexOfFirst(Def, self.defs.items, check_fit)) |ix| {
@@ -53,7 +53,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u
 
     const def_ix = Def.Ix.init(self.defs.items.len);
     try self.defs.append(aa, .{
-        .ap = try def_ap.copy(aa),
+        .path = try def_ap.copy(aa),
         .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
@@ -70,12 +70,12 @@ pub fn appendUnnamedDef(self: *Self, grove_id: usize, filepath: []const u8, node
     const aa = self.aral.allocator();
 
     const def_ix = Def.Ix.init(self.defs.items.len);
-    var ap = Path.init(aa);
-    try ap.parts.append(aa, Path.Part{ .content = "_unnamed" });
-    try ap.parts.append(aa, Path.Part{ .content = try std.fmt.allocPrint(aa, "{}", .{self.defs.items.len}) });
+    var path = Path.init(aa);
+    try path.parts.append(aa, Path.Part{ .content = "_unnamed" });
+    try path.parts.append(aa, Path.Part{ .content = try std.fmt.allocPrint(aa, "{}", .{self.defs.items.len}) });
 
     try self.defs.append(aa, .{
-        .ap = ap,
+        .path = path,
         .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
@@ -88,8 +88,8 @@ pub fn appendUnnamedDef(self: *Self, grove_id: usize, filepath: []const u8, node
     return def_ix;
 }
 
-pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
-    // std.debug.print("Resolving {f}\n", .{ap});
+pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
+    // std.debug.print("Resolving {f}\n", .{path});
 
     // Find matching def
     const Match = struct {
@@ -102,22 +102,22 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
     var is_ambiguous = false;
     for (&[_]bool{ true, false }) |grove_id_must_match| {
         if (grove_id_must_match == false and maybe_match != null)
-            // We found a match within the Grove of 'ap': do not check for matches outside this Grove.
+            // We found a match within the Grove of 'path': do not check for matches outside this Grove.
             continue;
 
         for (self.defs.items, 0..) |def, ix| {
             const def_grove_id = (def.location orelse continue).grove_id;
-            // We first check for a match within the Grove of 'ap', in a second iteration, we check for matches outside.
+            // We first check for a match within the Grove of 'path', in a second iteration, we check for matches outside.
             const grove_id_is_same = (def_grove_id == grove_id);
             if (grove_id_must_match != grove_id_is_same)
                 continue;
 
-            if (def.ap.isFit(ap.*)) {
+            if (def.path.isFit(path.*)) {
                 if (maybe_match) |match| {
                     if (!is_ambiguous) {
                         // This is the first ambiguous match we find: report the initial match as well
                         const d = match.ix.ptr(self.defs.items);
-                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ ap, def, d });
+                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ path, def, d });
                     }
                     is_ambiguous = true;
                 }
@@ -133,25 +133,25 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
 
     if (maybe_match) |match| {
         const def = match.ix.cptr(self.defs.items);
-        if (ap.is_absolute) {
-            if (ap.parts.items.len != def.ap.parts.items.len) {
-                try self.env.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ ap, def.ap });
+        if (path.is_absolute) {
+            if (path.parts.items.len != def.path.parts.items.len) {
+                try self.env.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ path, def.path });
                 return null;
             }
         } else {
-            try ap.extend(def.ap);
-            ap.is_definition = false;
+            try path.extend(def.path);
+            path.is_definition = false;
         }
 
         return match.ix;
     } else {
         // No match found, add a phony def
-        try ap.prependString(self.phony_prefix);
-        ap.is_absolute = true;
-        ap.is_definition = false;
+        try path.prependString(self.phony_prefix);
+        path.is_absolute = true;
+        path.is_definition = false;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
-        try self.defs.append(aa, .{ .ap = try ap.copy(aa), .meta = .{ .a = aa } });
+        try self.defs.append(aa, .{ .path = try path.copy(aa), .meta = .{ .a = aa } });
 
         return def_ix;
     }

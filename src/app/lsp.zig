@@ -126,13 +126,13 @@ pub const Lsp = struct {
                             const pos = org_ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
-                                maybe_ap = org_def.ap;
+                                maybe_ap = org_def.path;
                                 if (org_def.location) |location| {
                                     dst_filename = location.filepath;
                                     const def_pos = location.pos;
                                     range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
                                     range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.ap });
+                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.path });
                                 }
                             }
                         }
@@ -228,7 +228,7 @@ pub const Lsp = struct {
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
                     // Find Amp
-                    var maybe_ap: ?amp.Path = null;
+                    var maybe_path: ?amp.Path = null;
                     for (forest.chores.list.items) |chore| {
                         if (!std.mem.endsWith(u8, src_filename, chore.filepath))
                             continue;
@@ -238,22 +238,22 @@ pub const Lsp = struct {
                         for (node.org_amps.items) |ref| {
                             const pos = ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                if (maybe_ap) |ap|
-                                    std.debug.print("Already found an amp: '{f}' in '{s}' for filepath '{s}'\n", .{ ap, src_filename, chore.filepath });
+                                if (maybe_path) |path|
+                                    std.debug.print("Already found an amp: '{f}' in '{s}' for filepath '{s}'\n", .{ path, src_filename, chore.filepath });
                                 const def = ref.ix.cptr(forest.defmgr.defs.items);
-                                maybe_ap = def.ap;
+                                maybe_path = def.path;
                             }
                         }
                     }
 
                     // Find all usage locations
-                    if (maybe_ap) |ap| {
+                    if (maybe_path) |path| {
                         var locations = std.ArrayList(dto.Location).empty;
                         for (forest.chores.list.items) |chore| {
                             const node = forest.tree.cptr(chore.node_id);
                             for (node.org_amps.items) |ref| {
                                 const def = ref.ix.cptr(forest.defmgr.defs.items);
-                                if (ap.isFit(def.ap)) {
+                                if (path.isFit(def.path)) {
                                     const uri = try pathToUri_(chore.filepath, aaa);
                                     const pos = ref.pos;
                                     const range = dto.Range{
@@ -321,7 +321,7 @@ pub const Lsp = struct {
                     var completions: std.ArrayList(dto.CompletionItem) = .empty;
 
                     for (forest.defmgr.defs.items) |item| {
-                        if (rubr.slc.lastPtr(item.ap.parts.items)) |part| {
+                        if (rubr.slc.lastPtr(item.path.parts.items)) |part| {
                             if (context.triggerCharacter) |_| {
                                 try completions.append(aaa, dto.CompletionItem{
                                     .label = part.content,
@@ -354,8 +354,8 @@ pub const Lsp = struct {
                         const node = forest.tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const def = ref.ix.cptr(forest.defmgr.defs.items);
-                            if (def.ap.is_definition)
-                                try q.add(&def.ap);
+                            if (def.path.is_definition)
+                                try q.add(&def.path);
                         }
 
                         if (q.distance()) |distance| {

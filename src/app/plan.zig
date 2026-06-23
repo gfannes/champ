@@ -59,11 +59,11 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         const node = self.forest.tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.ap);
+            try query.add(&def.path);
         }
         for (node.agg_amps.items) |ref| {
             const def = ref.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.ap);
+            try query.add(&def.path);
         }
 
         // Check correspondence with provided query

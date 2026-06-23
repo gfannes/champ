@@ -22,21 +22,21 @@ pub const Location = struct {
     pos: filex.Pos,
 };
 
-ap: Path,
+path: Path,
 meta: Meta,
 
 location: ?Location = null,
 chore_id: ?usize = null,
 
 pub fn deinit(self: *Self) void {
-    self.ap.deinit();
+    self.path.deinit();
     self.meta.deinit();
 }
 
-pub fn injectMeta(self: *Self, ap: Path) !void {
-    if (!ap.isMeta())
+pub fn injectMeta(self: *Self, path: Path) !void {
+    if (!path.isMeta())
         return error.ExpectedMetaPath;
-    switch (ap.parts.items[0].meta.?) {
+    switch (path.parts.items[0].meta.?) {
         .status => |status| self.status = status,
         .cost => |cost| self.cost = cost,
         .order => |order| self.order = order,
@@ -52,7 +52,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     defer n.deinit();
     if (maybe_ix) |ix|
         n.attr("ix", ix);
-    n.attr("ap", self.ap);
+    n.attr("path", self.path);
     if (self.chore_id) |chore_id|
         n.attr("chore_id", chore_id);
     if (self.location) |loc| {
