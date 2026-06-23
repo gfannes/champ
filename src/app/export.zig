@@ -104,8 +104,8 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         },
                         .file => {
                             if (before) {
-                                if (std.mem.find(u8, n.path, needle)) |_| {
-                                    std.debug.print("{}: {s}\n", .{ my.section_level, n.path });
+                                if (std.mem.find(u8, n.filepath, needle)) |_| {
+                                    std.debug.print("{}: {s}\n", .{ my.section_level, n.filepath });
 
                                     my.mode = .Write;
                                     my.first_section = null;
@@ -115,7 +115,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                                     try my.output.print("\n", .{});
                                     my.mode = .Search;
 
-                                    if (amp.is_folder_metadata_fp(n.path)) {
+                                    if (amp.is_folder_metadata_fp(n.filepath)) {
                                         if (my.first_section) |section| {
                                             std.debug.print("Found section in md folder: {}\n", .{section.id});
                                             const has_section = rubr.slc.lastPtr(my.has_section_stack.items) orelse return error.UnexpectedEmptyStack;
@@ -229,7 +229,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                                         // Create destination folder
                                         try my.output_dir.createDirPath(my.env.io, std.fs.path.dirname(filepath) orelse ".");
 
-                                        const src_folder = std.fs.path.dirname(n.path) orelse return error.ExpectedAbsolutePath;
+                                        const src_folder = std.fs.path.dirname(n.filepath) orelse return error.ExpectedAbsolutePath;
                                         var src_dir = try std.Io.Dir.openDirAbsolute(my.env.io, src_folder, .{});
                                         defer src_dir.close(my.env.io);
 

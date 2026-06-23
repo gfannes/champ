@@ -28,7 +28,7 @@ pub fn call(self: Self) !void {
             // Skip this grove
             continue;
 
-        std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.path });
+        std.debug.print("Processing {s} {s}\n", .{ grove.name, grove.filepath });
 
         var w = walker.Walker{ .env = self.env };
         defer w.deinit();
@@ -50,12 +50,12 @@ pub fn call(self: Self) !void {
             byte_count: usize = 0,
             token_count: usize = 0,
 
-            pub fn call(my: *Cb, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+            pub fn call(my: *Cb, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
                 if (kind != walker.Kind.File)
                     return;
 
                 const offsets = maybe_offsets orelse return;
-                const name = path[offsets.name..];
+                const name = filepath[offsets.name..];
 
                 if (my.grove.include) |include| {
                     const ext = std.fs.path.extension(name);
@@ -78,11 +78,11 @@ pub fn call(self: Self) !void {
                         return;
 
                 if (my.env.log.level(2)) |out| {
-                    try out.print("{s}\n", .{path});
+                    try out.print("{s}\n", .{filepath});
                 }
                 if (my.env.log.level(3)) |out| {
-                    try out.print("  base: {s}\n", .{path[offsets.base..]});
-                    try out.print("  name: {s}\n", .{path[offsets.name..]});
+                    try out.print("  base: {s}\n", .{filepath[offsets.base..]});
+                    try out.print("  name: {s}\n", .{filepath[offsets.name..]});
                 }
 
                 // Read data: 160ms
@@ -119,16 +119,16 @@ pub fn call(self: Self) !void {
 
                         try parser.parse();
                     } else {
-                        std.debug.print("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+                        std.debug.print("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, filepath });
                         // return Error.UnknownFileType;
                     }
                 }
             }
         }{ .env = self.env, .outer = &self, .grove = &grove, .content = &content };
 
-        var dir = try std.Io.Dir.openDirAbsolute(self.env.io, grove.path, .{});
+        var dir = try std.Io.Dir.openDirAbsolute(self.env.io, grove.filepath, .{});
         defer dir.close(self.env.io);
-        std.debug.print("folder: {s} {}\n", .{ grove.path, dir });
+        std.debug.print("folder: {s} {}\n", .{ grove.filepath, dir });
 
         try w.walk(dir, &cb);
         std.debug.print("file_count: {}, byte_count {}MB, token_count {}\n", .{ cb.file_count, cb.byte_count / 1000000, cb.token_count });

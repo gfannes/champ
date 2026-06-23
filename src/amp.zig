@@ -9,8 +9,8 @@ pub const Def = @import("amp/Def.zig");
 pub const DefMgr = @import("amp/DefMgr.zig");
 pub const parse = @import("amp/parse.zig").parse;
 
-pub fn is_folder_metadata_fp(path: []const u8) bool {
-    return std.mem.endsWith(u8, path, "&.md");
+pub fn is_folder_metadata_fp(filepath: []const u8) bool {
+    return std.mem.endsWith(u8, filepath, "&.md");
 }
 
 test {

@@ -29,7 +29,7 @@ pub const Grove = struct {
     id: ?usize = null,
 
     name: []const u8,
-    path: []const u8,
+    filepath: []const u8,
     include: ?[][]const u8 = null,
     max_size: ?usize = null,
     max_count: ?usize = null,
@@ -39,7 +39,7 @@ pub const Grove = struct {
         var n = parent.node("Grove");
         defer n.deinit();
         n.attr("name", self.name);
-        n.attr("path", self.path);
+        n.attr("filepath", self.filepath);
         n.attr("autodef", self.autodef);
         if (self.max_size) |max_size|
             n.attr("max_size", max_size);
@@ -172,13 +172,13 @@ test "cfg" {
         \\    .groves = .{
         \\        .{
         \\            .name = "am",
-        \\            .path = "/home/geertf/am",
+        \\            .filepath = "/home/geertf/am",
         \\            .include = .{ "md", "rb", "txt", "hpp", "cpp", "h", "c" },
         \\            .max_size = 256000,
         \\        },
         \\        .{
         \\            .name = "gat",
-        \\            .path = "/home/geertf/gatenkaas",
+        \\            .filepath = "/home/geertf/gatenkaas",
         \\            .include = .{"md"},
         \\        },
         \\    },
@@ -200,13 +200,13 @@ test "cfg" {
         {
             const grove = config.groves[0];
             try ut.expectEqualSlices(u8, grove.name, "am");
-            try ut.expectEqualSlices(u8, grove.path, "/home/geertf/am");
+            try ut.expectEqualSlices(u8, grove.filepath, "/home/geertf/am");
             try ut.expectEqual(grove.max_size, 256000);
         }
         {
             const grove = config.groves[1];
             try ut.expectEqualSlices(u8, grove.name, "gat");
-            try ut.expectEqualSlices(u8, grove.path, "/home/geertf/gatenkaas");
+            try ut.expectEqualSlices(u8, grove.filepath, "/home/geertf/gatenkaas");
             try ut.expectEqual(grove.max_size, null);
         }
     } else try ut.expect(false);

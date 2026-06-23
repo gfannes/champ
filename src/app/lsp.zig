@@ -118,7 +118,7 @@ pub const Lsp = struct {
                     var dst_filename: ?[]const u8 = null;
                     var range = dto.Range{};
                     for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, src_filename, chore.path))
+                        if (!std.mem.endsWith(u8, src_filename, chore.filepath))
                             continue;
 
                         const node = forest.tree.cptr(chore.node_id);
@@ -128,11 +128,11 @@ pub const Lsp = struct {
                                 const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
                                 maybe_ap = org_def.ap;
                                 if (org_def.location) |location| {
-                                    dst_filename = location.path;
+                                    dst_filename = location.filepath;
                                     const def_pos = location.pos;
                                     range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
                                     range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.path, org_def.ap });
+                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.ap });
                                 }
                             }
                         }
@@ -196,7 +196,7 @@ pub const Lsp = struct {
                     var locations = std.ArrayList(dto.Location).empty;
                     for (plan.segments.items) |segment| {
                         const entries_count: usize = if (show_local_tasks)
-                            if (std.mem.endsWith(u8, src_filename, segment.path)) segment.entries.len else 0
+                            if (std.mem.endsWith(u8, src_filename, segment.filepath)) segment.entries.len else 0
                         else if (show_all_tasks)
                             segment.entries.len
                         else if (show_first_task)
@@ -205,7 +205,7 @@ pub const Lsp = struct {
                             0;
 
                         for (segment.entries[0..entries_count]) |entry| {
-                            const uri = try pathToUri_(entry.path, aaa);
+                            const uri = try pathToUri_(entry.filepath, aaa);
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(entry.rows.begin), .character = @intCast(entry.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(entry.rows.end), .character = @intCast(entry.cols.end) },
@@ -230,7 +230,7 @@ pub const Lsp = struct {
                     // Find Amp
                     var maybe_ap: ?amp.Path = null;
                     for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, src_filename, chore.path))
+                        if (!std.mem.endsWith(u8, src_filename, chore.filepath))
                             continue;
 
                         // We only check the org parts for references, not all inherited agg parts
@@ -239,7 +239,7 @@ pub const Lsp = struct {
                             const pos = ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 if (maybe_ap) |ap|
-                                    std.debug.print("Already found an amp: '{f}' in '{s}' for path '{s}'\n", .{ ap, src_filename, chore.path });
+                                    std.debug.print("Already found an amp: '{f}' in '{s}' for filepath '{s}'\n", .{ ap, src_filename, chore.filepath });
                                 const def = ref.ix.cptr(forest.defmgr.defs.items);
                                 maybe_ap = def.ap;
                             }
@@ -254,7 +254,7 @@ pub const Lsp = struct {
                             for (node.org_amps.items) |ref| {
                                 const def = ref.ix.cptr(forest.defmgr.defs.items);
                                 if (ap.isFit(def.ap)) {
-                                    const uri = try pathToUri_(chore.path, aaa);
+                                    const uri = try pathToUri_(chore.filepath, aaa);
                                     const pos = ref.pos;
                                     const range = dto.Range{
                                         .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
@@ -283,7 +283,7 @@ pub const Lsp = struct {
                     var document_symbols = std.ArrayList(dto.DocumentSymbol).empty;
 
                     for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, filename, chore.path))
+                        if (!std.mem.endsWith(u8, filename, chore.filepath))
                             continue;
 
                         const node = forest.tree.cptr(chore.node_id);
@@ -368,7 +368,7 @@ pub const Lsp = struct {
                             try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
                                 .name = node.content,
                                 .location = dto.Location{
-                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.path }),
+                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.filepath }),
                                     .range = range,
                                 },
                                 .score = @floatCast(distance),
@@ -436,9 +436,9 @@ pub const Lsp = struct {
         const len = try std.Io.Dir.realPathFileAbsolute(io, b, buf);
         return buf[0..len];
     }
-    fn pathToUri_(path: []const u8, a: std.mem.Allocator) ![]const u8 {
+    fn pathToUri_(filepath: []const u8, a: std.mem.Allocator) ![]const u8 {
         const prefix = "file://";
-        return try std.mem.concat(a, u8, &[_][]const u8{ prefix, path });
+        return try std.mem.concat(a, u8, &[_][]const u8{ prefix, filepath });
     }
 };
 

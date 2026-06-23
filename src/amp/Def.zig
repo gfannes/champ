@@ -17,7 +17,7 @@ pub const Ix = rubr.idx.Ix(@This());
 
 pub const Location = struct {
     grove_id: usize,
-    path: []const u8,
+    filepath: []const u8,
     node_id: usize,
     pos: filex.Pos,
 };
@@ -57,7 +57,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
         n.attr("chore_id", chore_id);
     if (self.location) |loc| {
         n.attr("grove_id", loc.grove_id);
-        n.attr("path", loc.path);
+        n.attr("filepath", loc.filepath);
         n.attr("row", loc.pos.row);
         n.attr("cols.begin", loc.pos.cols.begin);
         n.attr("cols.end", loc.pos.cols.end);

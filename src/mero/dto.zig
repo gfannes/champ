@@ -137,7 +137,7 @@ pub const Node = struct {
     agg_amps: DefIxs = .empty,
 
     // &perf: Only activate relevant fields depending on type
-    path: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
+    filepath: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
     content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: subslices are present many times
 
     content_rows: idx.Range = .{},

@@ -12,7 +12,7 @@ const amp = @import("../amp.zig");
 
 const Self = @This();
 const Entry = struct {
-    path: []const u8,
+    filepath: []const u8,
     content: []const u8,
     date: ?amp.Date,
     order: i32,
@@ -20,7 +20,7 @@ const Entry = struct {
     cols: rubr.idx.Range,
 };
 const Segment = struct {
-    path: []const u8,
+    filepath: []const u8,
     order: i32,
     entries: []const Entry,
 };
@@ -82,7 +82,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         const n = self.forest.tree.cptr(chore.node_id);
 
         const entry = Entry{
-            .path = n.path,
+            .filepath = n.filepath,
             .content = n.content,
             .date = date,
             .order = myorder,
@@ -114,9 +114,9 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
     std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
 
     for (self.all_entries.items, 0..) |entry, ix0| {
-        const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.path else "";
-        if (!std.mem.eql(u8, prev_path, entry.path)) {
-            try self.segments.append(self.env.a, Segment{ .path = entry.path, .order = entry.order, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
+        const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.filepath else "";
+        if (!std.mem.eql(u8, prev_path, entry.filepath)) {
+            try self.segments.append(self.env.a, Segment{ .filepath = entry.filepath, .order = entry.order, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
         } else {
             if (rubr.slc.lastPtr(self.segments.items)) |ptr|
                 ptr.entries.len += 1;
@@ -151,7 +151,7 @@ pub fn show(self: Self, all: bool, details: bool) !void {
     for (self.segments.items) |segment| {
         const filename_style = rubr.ansi.Style{ .fg = .{ .color = .White, .intense = true }, .underline = true };
         const reset_style = rubr.ansi.Style{ .reset = true };
-        try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.path, reset_style });
+        try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.filepath, reset_style });
 
         for (segment.entries) |entry| {
             const entry_style = rubr.ansi.Style{ .fg = .{ .color = color(entry.order) } };

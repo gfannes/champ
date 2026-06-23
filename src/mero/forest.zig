@@ -123,13 +123,13 @@ pub const Forest = struct {
                 my.node_stack.deinit(my.env.a);
             }
 
-            pub fn call(my: *My, dir: std.Io.Dir, path: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+            pub fn call(my: *My, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
                 switch (kind) {
                     .Enter => {
                         var name: []const u8 = undefined;
                         var node_type: Node.Type = undefined;
                         if (maybe_offsets) |offsets| {
-                            name = path[offsets.name..];
+                            name = filepath[offsets.name..];
                             node_type = .folder;
                         } else {
                             name = "<ROOT>";
@@ -140,7 +140,7 @@ pub const Forest = struct {
                         const n = entry.data;
                         n.* = Node{ .a = my.env.a };
                         n.type = node_type;
-                        n.path = try my.aa.dupe(u8, path);
+                        n.filepath = try my.aa.dupe(u8, filepath);
 
                         try my.node_stack.append(my.env.a, entry.id);
                     },
@@ -151,8 +151,8 @@ pub const Forest = struct {
                                 const file_ids = my.tree.childIdsMut(folder_id);
                                 const Ftor = struct {
                                     pub fn lt(m: *const My, a: Tree.Id, b: Tree.Id) bool {
-                                        // &perf: this uses the full path while we know that only the filename itself differs
-                                        return std.mem.lessThan(u8, m.tree.cptr(a).path, m.tree.cptr(b).path);
+                                        // &perf: this uses the full filepath while we know that only the filename itself differs
+                                        return std.mem.lessThan(u8, m.tree.cptr(a).filepath, m.tree.cptr(b).filepath);
                                     }
                                 };
                                 std.sort.block(
@@ -166,7 +166,7 @@ pub const Forest = struct {
                     },
                     .File => {
                         const offsets = maybe_offsets orelse return error.ExpectedOffsets;
-                        const name = path[offsets.name..];
+                        const name = filepath[offsets.name..];
 
                         if (my.cfg_grove.include) |include| {
                             const ext = std.fs.path.extension(name);
@@ -198,7 +198,7 @@ pub const Forest = struct {
                                 n.* = Node{
                                     .a = my.env.a,
                                     .type = .{ .file = .{ .language = language } },
-                                    .path = try my.aa.dupe(u8, path),
+                                    .filepath = try my.aa.dupe(u8, filepath),
                                     .grove_id = my.cfg_grove.id,
                                 };
                                 {
@@ -229,7 +229,7 @@ pub const Forest = struct {
                             }{ .terms = my.tree.cptr(file_nid).type.file.terms.items };
                             try my.tree.dfs(file_nid, &cb2);
                         } else {
-                            try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, path });
+                            try my.env.log.warning("Unsupported extension '{s}' for '{}' '{s}'\n", .{ my_ext, dir, filepath });
                         }
                     },
                 }
@@ -237,8 +237,8 @@ pub const Forest = struct {
         }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.tree };
         defer cb.deinit();
 
-        var dir = std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.path, .{}) catch |err| {
-            try self.env.log.err("Could not open grove folder '{s}'.\n", .{cfg_grove.path});
+        var dir = std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.filepath, .{}) catch |err| {
+            try self.env.log.err("Could not open grove folder '{s}'.\n", .{cfg_grove.filepath});
             return err;
         };
         defer dir.close(self.env.io);
@@ -391,7 +391,7 @@ pub const Forest = struct {
             tree: *const Tree,
             defmgr: *amp.DefMgr,
 
-            path: []const u8 = &.{},
+            filepath: []const u8 = &.{},
             grove_id: ?usize = null,
             is_new_file: bool = false,
 
@@ -403,10 +403,10 @@ pub const Forest = struct {
                 switch (n.type) {
                     .grove => {},
                     .folder => {
-                        my.path = n.path;
+                        my.filepath = n.filepath;
                     },
                     .file => {
-                        my.path = n.path;
+                        my.filepath = n.filepath;
                         if (n.grove_id == null)
                             return error.ExpectedGroveId;
                         my.grove_id = n.grove_id;
@@ -414,7 +414,7 @@ pub const Forest = struct {
 
                         // &meta Move this to createDefs()
                         // Create a Def for a filepath that contains a date (or other metadata)
-                        // if (amp.Date.findDate(my.path, .{ .strict_end = false, .allow_yyyy = false })) |date| {
+                        // if (amp.Date.findDate(my.filepath, .{ .strict_end = false, .allow_yyyy = false })) |date| {
                         //     var w = std.Io.Writer.Allocating.init(my.aa);
                         //     defer w.deinit();
                         //     try w.writer.print("&:s:{f}", .{date});
@@ -423,7 +423,7 @@ pub const Forest = struct {
                         //     // &meta Create a phony Def and add the date to it
                         //     var meta = amp.Meta{ .a = my.env.a };
                         //     var path = amp.Path.parse(&strange, &meta) catch |err| {
-                        //         try my.env.log.err("Could not parse amp from filepath '{s}' {}\n", .{ my.path, err });
+                        //         try my.env.log.err("Could not parse amp from filepath '{s}' {}\n", .{ my.filepath, err });
                         //         return err;
                         //     };
                         //     defer path.deinit();
@@ -431,7 +431,7 @@ pub const Forest = struct {
                         //     if (try my.defmgr.resolve(&path, grove_id)) |amp_ix| {
                         //         try n.org_amps.append(my.env.a, .{ .ix = amp_ix, .pos = .{} });
                         //     } else {
-                        //         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.path });
+                        //         try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ path, my.filepath });
                         //     }
                         // }
                     },
@@ -465,7 +465,7 @@ pub const Forest = struct {
                                                     if (try my.tree.parent(entry.id)) |file| {
                                                         try file.data.org_amps.append(my.env.a, def);
 
-                                                        if (amp.is_folder_metadata_fp(file.data.path)) {
+                                                        if (amp.is_folder_metadata_fp(file.data.filepath)) {
                                                             if (try my.tree.parent(file.id)) |folder| {
                                                                 try folder.data.org_amps.append(my.env.a, def);
                                                             }
@@ -473,12 +473,12 @@ pub const Forest = struct {
                                                     }
                                                 }
                                             } else {
-                                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ ap, my.path });
+                                                try my.env.log.warning("Could not resolve amp '{f}' in '{s}'\n", .{ ap, my.filepath });
                                             }
                                         }
                                     }
                                 } else |err| {
-                                    try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
+                                    try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.filepath, line, err });
                                     continue;
                                 }
                             } else if (term.kind == .Newline) {
@@ -507,7 +507,7 @@ pub const Forest = struct {
             tree: *Tree,
             defmgr: *amp.DefMgr,
 
-            path: []const u8 = &.{},
+            filepath: []const u8 = &.{},
             is_new_file: bool = false,
             grove_id: ?usize = null,
             do_process_amp_md: bool = false,
@@ -521,13 +521,13 @@ pub const Forest = struct {
 
                 switch (n.type) {
                     .grove, .folder => {
-                        my.path = n.path;
+                        my.filepath = n.filepath;
                         // Process '&.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
                         for (my.tree.childIds(entry.id)) |child_id| {
                             const child = my.tree.ptr(child_id);
-                            if (amp.is_folder_metadata_fp(child.path)) {
+                            if (amp.is_folder_metadata_fp(child.filepath)) {
                                 // Allow processing '&.md'
                                 my.do_process_amp_md = true;
                                 try my.tree.dfs(child_id, my);
@@ -536,18 +536,18 @@ pub const Forest = struct {
                         }
                     },
                     .file => {
-                        defer my.path = n.path;
+                        defer my.filepath = n.filepath;
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
-                        my.do_process_other = if (amp.is_folder_metadata_fp(n.path)) my.do_process_amp_md else true;
+                        my.do_process_other = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
 
                         // &wikilink: Add filepaths
                         if (false) {
-                            if (std.mem.endsWith(u8, n.path, ".md")) {
+                            if (std.mem.endsWith(u8, n.filepath, ".md")) {
                                 var wiki_ap = amp.Path{ .a = my.env.a };
-                                try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part{ .content = n.path });
-                                _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.path, entry.id, .{});
+                                try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part{ .content = n.filepath });
+                                _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.filepath, entry.id, .{});
                             }
                         }
                     },
@@ -587,7 +587,7 @@ pub const Forest = struct {
                                 defer ap.deinit();
                                 if (ap.is_definition) {
                                     if (n.def != null) {
-                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.path, my.defmgr.get(n.def.?.ix).?.ap, ap });
+                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.filepath, my.defmgr.get(n.def.?.ix).?.ap, ap });
                                         return error.OnlyOneDefAllowed;
                                     }
 
@@ -612,7 +612,7 @@ pub const Forest = struct {
                                             try ap.prepend(parent_def);
                                             ap.is_definition = true;
                                         } else {
-                                            try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ ap, my.path });
+                                            try my.env.log.warning("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is\n", .{ ap, my.filepath });
                                             ap.is_absolute = true;
                                         }
                                     }
@@ -620,20 +620,20 @@ pub const Forest = struct {
                                     // Collect all defs in a separate struct
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                     const pos = filex.Pos{ .row = line, .cols = cols };
-                                    if (try my.defmgr.appendDef(ap.*, grove_id, my.path, entry.id, pos)) |amp_ix| {
+                                    if (try my.defmgr.appendDef(ap.*, grove_id, my.filepath, entry.id, pos)) |amp_ix| {
                                         n.def = .{ .ix = amp_ix, .pos = pos };
                                         try n.org_amps.append(my.env.a, n.def.?);
                                     } else {
-                                        try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.path});
+                                        try my.env.log.warning("Illegal or duplicate definition found in '{s}'\n", .{my.filepath});
                                     }
-                                } else if (ap.is_dependency) {
+                                } else {
                                     needs_def = true;
                                 }
                             } else {
                                 // std.debug.print("Found metadata\n", .{});
                             }
                         } else |err| {
-                            try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.path, line, err });
+                            try my.env.log.warning("Could not parse amp in '{s}':{} {}\n", .{ my.filepath, line, err });
                             continue;
                         }
                     } else if (term.kind == .Newline) {
@@ -648,7 +648,7 @@ pub const Forest = struct {
                 if (n.def == null and needs_def) {
                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                     const pos = filex.Pos{ .row = n.content_rows.begin };
-                    n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.path, entry.id, pos), .pos = pos };
+                    n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.filepath, entry.id, pos), .pos = pos };
                     // We add this Def to the org_amps as well to ensure aggregation picks it up
                     try n.org_amps.append(my.env.a, n.def.?);
                 }
@@ -665,7 +665,7 @@ pub const Forest = struct {
                         file.data.def = n.def;
                         try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
-                        if (amp.is_folder_metadata_fp(file.data.path)) {
+                        if (amp.is_folder_metadata_fp(file.data.filepath)) {
                             if (try my.tree.parent(file.id)) |folder| {
                                 folder.data.def = n.def;
                                 try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
@@ -682,7 +682,7 @@ pub const Forest = struct {
         const n = self.tree.ptr(id);
         switch (n.type) {
             .file => {
-                if (std.mem.endsWith(u8, n.path, name))
+                if (std.mem.endsWith(u8, n.filepath, name))
                     return Tree.Entry{ .id = id, .data = n };
             },
             .folder, .frove => {

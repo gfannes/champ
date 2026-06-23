@@ -18,7 +18,7 @@ pub const Chore = struct {
     node_id: usize, // Id for forest.tree
     meta: amp.Meta,
 
-    path: []const u8 = &.{},
+    filepath: []const u8 = &.{},
 
     order_offset: i32 = 0,
     order_min: i32 = std.math.maxInt(i32),
@@ -49,8 +49,8 @@ pub const Chore = struct {
         n.attr("order_min", self.order_min);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
-        if (self.path.len > 0)
-            n.attr("path", self.path);
+        if (self.filepath.len > 0)
+            n.attr("filepath", self.filepath);
         self.meta.write(&n);
     }
 
@@ -96,17 +96,17 @@ pub const Chores = struct {
         if (def.meta.cost) |cost|
             chore.my_cost = cost.value;
 
-        // Setup chore.path
+        // Setup chore.filepath
         var maybe_id = rubr.opt.value(node_id);
         while (maybe_id) |id| {
             const n = tree.cptr(id);
             switch (n.type) {
-                .grove, .folder, .file => chore.path = n.path,
+                .grove, .folder, .file => chore.filepath = n.filepath,
                 else => {},
             }
             maybe_id = if (try tree.parent(id)) |p| p.id else null;
-            if (chore.path.len > 0)
-                // We found a path: stop search
+            if (chore.filepath.len > 0)
+                // We found a filepath: stop search
                 maybe_id = null;
         }
 

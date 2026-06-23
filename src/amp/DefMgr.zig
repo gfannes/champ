@@ -31,7 +31,7 @@ pub fn deinit(self: *Self) void {
 }
 
 // Takes deep copy of def
-pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, node_id: usize, pos: filex.Pos) !?Def.Ix {
+pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u8, node_id: usize, pos: filex.Pos) !?Def.Ix {
     if (self.env.log.level(1)) |w| {
         try w.print("appendDef() '{f}'\n", .{def_ap});
     }
@@ -45,7 +45,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
         }
     }{ .needle = &def_ap, .grove_id = grove_id };
     if (rubr.algo.indexOfFirst(Def, self.defs.items, check_fit)) |ix| {
-        try self.env.log.warning("Definition '{f}' from '{s}' is already present in Grove {}: {f}.\n", .{ def_ap, path, grove_id, self.defs.items[ix] });
+        try self.env.log.warning("Definition '{f}' from '{s}' is already present in Grove {}: {f}.\n", .{ def_ap, filepath, grove_id, self.defs.items[ix] });
         return null;
     }
 
@@ -57,7 +57,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
         .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
-            .path = path,
+            .filepath = filepath,
             .node_id = node_id,
             .pos = pos,
         },
@@ -66,7 +66,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, path: []const u8, n
     return def_ix;
 }
 
-pub fn appendUnnamedDef(self: *Self, grove_id: usize, path: []const u8, node_id: usize, pos: filex.Pos) !Def.Ix {
+pub fn appendUnnamedDef(self: *Self, grove_id: usize, filepath: []const u8, node_id: usize, pos: filex.Pos) !Def.Ix {
     const aa = self.aral.allocator();
 
     const def_ix = Def.Ix.init(self.defs.items.len);
@@ -79,7 +79,7 @@ pub fn appendUnnamedDef(self: *Self, grove_id: usize, path: []const u8, node_id:
         .meta = .{ .a = aa },
         .location = .{
             .grove_id = grove_id,
-            .path = path,
+            .filepath = filepath,
             .node_id = node_id,
             .pos = pos,
         },
@@ -102,12 +102,12 @@ pub fn resolve(self: *Self, ap: *Path, grove_id: usize) !?Def.Ix {
     var is_ambiguous = false;
     for (&[_]bool{ true, false }) |grove_id_must_match| {
         if (grove_id_must_match == false and maybe_match != null)
-            // We found a match within the Grove of 'path': do not check for matches outside this Grove.
+            // We found a match within the Grove of 'ap': do not check for matches outside this Grove.
             continue;
 
         for (self.defs.items, 0..) |def, ix| {
             const def_grove_id = (def.location orelse continue).grove_id;
-            // We first check for a match within the Grove of 'path', in a second iteration, we check for matches outside.
+            // We first check for a match within the Grove of 'ap', in a second iteration, we check for matches outside.
             const grove_id_is_same = (def_grove_id == grove_id);
             if (grove_id_must_match != grove_id_is_same)
                 continue;

@@ -11,13 +11,13 @@ const qry = @import("../qry.zig");
 const Self = @This();
 
 const Entry = struct {
-    path: []const u8,
+    filepath: []const u8,
     content: []const u8,
     rows: rubr.idx.Range,
     cols: rubr.idx.Range,
 };
 const Segment = struct {
-    path: []const u8,
+    filepath: []const u8,
     entries: []const Entry,
 };
 const Details = struct {

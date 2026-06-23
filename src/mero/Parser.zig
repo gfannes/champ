@@ -31,7 +31,7 @@ root_id: Tree.Id,
 tree: *Tree,
 language: Language,
 content: []const u8,
-path: []const u8,
+filepath: []const u8,
 tokenizer: tkn.Tokenizer,
 
 pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
@@ -46,7 +46,7 @@ pub fn init(a: std.mem.Allocator, root_id: Tree.Id, tree: *Tree) !Self {
         .tree = tree,
         .language = language,
         .content = r.content,
-        .path = r.path,
+        .filepath = r.filepath,
         .tokenizer = tkn.Tokenizer.init(r.content),
     };
 }
@@ -164,7 +164,7 @@ fn pop_line(self: *Self) !?Node {
     }
 
     n.content = content;
-    n.path = self.path;
+    n.filepath = self.filepath;
 
     return n;
 }
@@ -381,7 +381,7 @@ fn pop_amp_term(self: *Self) ?Term {
 
             var saw_nonhat: bool = false;
             while (self.tokenizer.peek()) |token| {
-                if (is_whitespace(token) or is_newline(token) or (is_questionmark(token) and saw_nonhat) or (is_exclamation(token) and saw_nonhat))
+                if (is_whitespace(token) or is_newline(token) or (saw_nonhat and (is_questionmark(token) or is_exclamation(token) or is_comma(token))))
                     // We accept this Amp
                     break;
 
@@ -916,6 +916,9 @@ fn is_questionmark(t: tkn.Token) bool {
 }
 fn is_exclamation(t: tkn.Token) bool {
     return t.symbol == .Exclamation;
+}
+fn is_comma(t: tkn.Token) bool {
+    return t.symbol == .Comma;
 }
 
 fn terms(self: *Self) *dto.Terms {
