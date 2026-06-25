@@ -56,7 +56,7 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
     for (self.forest.chores.list.items) |chore| {
         // std.debug.print("{f}", .{chore});
 
-        try query.prepare(chore);
+        try query.prepare(chore, self.config.default_worker);
         const node = self.forest.tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);

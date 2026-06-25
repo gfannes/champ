@@ -154,6 +154,7 @@ pub const App = struct {
 
                     var obj = Plan{
                         .env = self.env,
+                        .config = &self.config,
                         .forest = forest,
                     };
                     defer obj.deinit();

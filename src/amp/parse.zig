@@ -23,8 +23,13 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             meta.order = Meta.Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative };
             return null;
         } else if (strange.popChar('@')) {
-            try meta.appendWorker(Meta.Worker{ .name = strange.popAll() orelse return error.InvalidWorker });
-            return null;
+            const name = strange.popAll() orelse return error.InvalidWorker;
+            try meta.appendWorker(Meta.Worker{ .name = name });
+            var path = Path.init(meta.a);
+            errdefer path.deinit();
+            try path.parts.append(path.a, .{ .content = "worker" });
+            try path.parts.append(path.a, .{ .content = name });
+            return path;
         } else if (strange.popChar('?')) {
             meta.wbs = Meta.Wbs.parse(strange.str(), .{});
             return null;

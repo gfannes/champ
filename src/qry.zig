@@ -38,6 +38,7 @@ pub const Query = struct {
     include: Include = .{},
     only_status: bool = false,
     worker: ?[]const u8 = null,
+    default_worker: ?[]const u8 = null,
     parts: Parts = .empty,
     paths: std.ArrayList(*const amp.Path) = .empty,
     chore: ?Chore = null,
@@ -89,7 +90,8 @@ pub const Query = struct {
                     self.include.forward = true;
                     self.only_status = true;
                 } else if (strange.popChar('@')) {
-                    self.worker = strange.popAll();
+                    // Worker '' represents 'all workers'
+                    self.worker = strange.popAll() orelse "";
                 }
 
                 const str: []const u8 = if (strange.popTo(' ')) |str| str else if (strange.popAll()) |str| str else &.{};
@@ -105,9 +107,10 @@ pub const Query = struct {
     }
 
     // Call this to reset this Query instance to start the computation of a match with a new Chore
-    pub fn prepare(self: *Self, chore: Chore) !void {
+    pub fn prepare(self: *Self, chore: Chore, default_worker: ?[]const u8) !void {
         try self.paths.resize(self.a, 0);
         self.chore = chore;
+        self.default_worker = default_worker;
     }
 
     // Add all relevant amp.Paths that you want to consider for matching
@@ -148,12 +151,41 @@ pub const Query = struct {
 
         var worker_matches: bool = false;
         if (self.worker) |worker| {
-            for (chore.meta.workers.items) |w| {
-                if (std.mem.eql(u8, w.name, worker))
-                    worker_matches = true;
+            if (worker.len == 0) {
+                // Any worker is OK
+                worker_matches = true;
+            } else {
+                // We are looking for Chores assigned to 'worker'
+                if (rubr.slc.isEmpty(chore.meta.workers.items)) {
+                    // No explicit assignment: this Chore belong to 'default_worker'
+                    if (self.default_worker) |default_worker| {
+                        if (std.mem.eql(u8, default_worker, worker))
+                            worker_matches = true;
+                    }
+                } else {
+                    // Explicit assigment: check for a match
+                    for (chore.meta.workers.items) |w| {
+                        if (std.mem.eql(u8, w.name, worker))
+                            worker_matches = true;
+                    }
+                }
             }
         } else {
-            worker_matches = rubr.slc.isEmpty(chore.meta.workers.items);
+            // By default, we look for all Chores assigned to the 'default_worker', if set
+            if (self.default_worker) |default_worker| {
+                // There is a 'default_worker', look for Chores assigned to this
+                if (rubr.slc.isEmpty(chore.meta.workers.items)) {
+                    worker_matches = true;
+                } else {
+                    for (chore.meta.workers.items) |w| {
+                        if (std.mem.eql(u8, w.name, default_worker))
+                            worker_matches = true;
+                    }
+                }
+            } else {
+                // No 'default_worker': unassigned Chores are OK
+                worker_matches = rubr.slc.isEmpty(chore.meta.workers.items);
+            }
         }
         if (!worker_matches)
             return null;

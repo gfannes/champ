@@ -169,6 +169,7 @@ pub const Lsp = struct {
 
                     var plan = Plan{
                         .env = self.env,
+                        .config = self.config,
                         .forest = forest,
                     };
                     defer plan.deinit();
@@ -350,7 +351,7 @@ pub const Lsp = struct {
                             // We only take text chores into account
                             continue;
 
-                        try q.prepare(chore);
+                        try q.prepare(chore, self.config.default_worker);
                         const node = forest.tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const def = ref.ix.cptr(forest.defmgr.defs.items);

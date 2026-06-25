@@ -74,12 +74,12 @@ pub const Forest = struct {
     }
 
     pub fn load(self: *Self, config: *const cfg.file.Config) !void {
-        const wanted_groves = config.default orelse return error.ExpectedConfigDefault;
-        if (rubr.slc.isEmpty(wanted_groves))
+        const selected_groves = config.selected_groves orelse return error.ExpectedConfigDefault;
+        if (rubr.slc.isEmpty(selected_groves))
             return error.ExpectedAtLeastOneGrove;
 
         for (config.groves) |cfg_grove| {
-            if (strings.contains(u8, wanted_groves, cfg_grove.name))
+            if (strings.contains(u8, selected_groves, cfg_grove.name))
                 try self.loadGrove(&cfg_grove);
         }
 

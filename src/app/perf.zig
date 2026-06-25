@@ -21,10 +21,10 @@ config: *const cfg.file.Config,
 cli_args: *const cfg.cli.Args,
 
 pub fn call(self: Self) !void {
-    const wanted_groves = self.config.default orelse return error.ExpectedConfigDefault;
+    const selected_groves = self.config.selected_groves orelse return error.ExpectedConfigDefault;
 
     for (self.config.groves) |grove| {
-        if (!strings.contains(u8, wanted_groves, grove.name))
+        if (!strings.contains(u8, selected_groves, grove.name))
             // Skip this grove
             continue;
 

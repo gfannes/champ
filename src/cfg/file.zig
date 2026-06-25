@@ -6,9 +6,10 @@ const cli = @import("cli.zig");
 // '~/.config/champ/config.zon'
 pub const Config = struct {
     groves: []Grove = &.{},
-    max_memsize: ?usize = null,
-    default: ?[][]const u8 = null,
+    selected_groves: ?[][]const u8 = null,
+    default_worker: ?[]const u8 = null,
     lsp: Lsp = .{},
+    max_memsize: ?usize = null,
 
     pub fn write(self: Config, parent: *rubr.naft.Node) void {
         var n = parent.node("Config");
@@ -16,8 +17,8 @@ pub const Config = struct {
         if (self.max_memsize) |max_memsize|
             n.attr("max_memsize", max_memsize);
         for (self.groves) |grove| {
-            if (self.default) |wanted_groves| {
-                if (!rubr.strings.contains(u8, wanted_groves, grove.name))
+            if (self.selected_groves) |selected_groves| {
+                if (!rubr.strings.contains(u8, selected_groves, grove.name))
                     continue;
             }
             grove.write(&n);
@@ -67,6 +68,7 @@ pub const Lsp = struct {
 // '~/.config/champ/fui.zon'
 pub const Fui = struct {
     extra: ?[][]const u8 = null,
+    worker: ?[]const u8 = null,
 };
 
 // Loads Config from a file in ZON format
@@ -108,7 +110,7 @@ pub const Loader = struct {
                 if (self.cli_args) |cli_args| {
                     if (cli_args.groves.items.len > 0)
                         // cli.Args.groves overrules Config.default
-                        self.config.?.default = cli_args.groves.items;
+                        self.config.?.selected_groves = cli_args.groves.items;
                 }
             },
             .Fui => {
