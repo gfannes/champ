@@ -13,6 +13,7 @@ pub const Cost = struct {
 pub const Order = struct {
     value: i32,
     relative: bool,
+    is_exclusive: bool = false,
 };
 pub const Worker = struct {
     name: []const u8,
@@ -85,8 +86,11 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
     //     n.attr("date", date.lower());
     if (self.cost) |cost|
         n.attr("cost", cost.value);
-    if (self.order) |order|
+    if (self.order) |order| {
         n.attr("order", order.value);
+        n.attr("relative", order.relative);
+        n.attr("is_exclusive", order.is_exclusive);
+    }
     for (self.workers.items) |worker| {
         n.attr("worker", worker.name);
     }

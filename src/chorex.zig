@@ -93,8 +93,10 @@ pub const Chores = struct {
         };
         try chore.meta.update(def.meta);
 
-        if (def.meta.cost) |cost|
+        if (chore.meta.cost) |cost|
             chore.my_cost = cost.value;
+        if (chore.meta.order) |order|
+            chore.order_min = order.value;
 
         // Setup chore.filepath
         var maybe_id = rubr.opt.value(node_id);
@@ -120,11 +122,14 @@ pub const Chores = struct {
         const chore = &self.list.items[chore_id];
 
         // Aggregate metadata from def into chore
+        const is_exclusive: bool = if (chore.meta.order) |order| order.is_exclusive else false;
         if (def.meta.order) |order| {
             if (order.relative) {
                 chore.order_offset += order.value;
             } else {
-                chore.order_min = @min(chore.order_min, order.value);
+                if (!is_exclusive) {
+                    chore.order_min = @min(chore.order_min, order.value);
+                }
             }
         }
         for (def.meta.workers.items) |worker| {

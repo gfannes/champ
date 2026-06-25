@@ -20,7 +20,7 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             return null;
         } else if (strange.popChar('#')) {
             const relative = if (strange.front()) |ch| ch == '+' or ch == '-' else false;
-            meta.order = Meta.Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative };
+            meta.order = Meta.Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative, .is_exclusive = is_exclusive };
             return null;
         } else if (strange.popChar('@')) {
             const name = strange.popAll() orelse return error.InvalidWorker;
