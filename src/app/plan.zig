@@ -129,24 +129,23 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         std.mem.reverse(Segment, self.segments.items);
 }
 
-fn ground(order: i32) rubr.ansi.Style.Ground {
+fn style(order: i32) rubr.ansi.Style {
     const colors: []const rubr.ansi.Style.Ground.Color = &.{ .Red, .Yellow, .Green, .Magenta, .Blue, .Cyan, .White };
 
-    var res: rubr.ansi.Style.Ground = .{ .color = colors[0] };
-
-    if (order >= 0) {
+    const color = if (order < 0)
+        colors[0]
+    else block: {
         const uorder: usize = @intCast(order);
 
         var ix: usize = uorder / 10;
         if (ix >= colors.len)
             ix = colors.len - 1;
-        res.color = colors[ix];
-    }
+        break :block colors[ix];
+    };
 
-    if (@rem(order, 10) == 0)
-        res.intense = true;
+    const bold = @rem(order, 10) == 0;
 
-    return res;
+    return rubr.ansi.Style{ .fg = .{ .color = color }, .bold = bold };
 }
 
 pub fn show(self: Self, all: bool, details: bool) !void {
@@ -160,8 +159,7 @@ pub fn show(self: Self, all: bool, details: bool) !void {
         try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.filepath, reset_style });
 
         for (segment.entries) |entry| {
-            const entry_style = rubr.ansi.Style{ .fg = ground(entry.order) };
-            try self.env.stdout.print("  {f}{s}{f} (&#{})", .{ entry_style, entry.content, reset_style, entry.order });
+            try self.env.stdout.print("  {f}{s}{f} (&#{})", .{ style(entry.order), entry.content, reset_style, entry.order });
             try self.env.stdout.print("\n", .{});
         }
     }

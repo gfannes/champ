@@ -9,6 +9,7 @@ pub const Error = error{
     InvalidPrio,
     InvalidWorker,
     InvalidWbs,
+    CannotBeRelativeAndExclusive,
 };
 
 pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
@@ -20,6 +21,8 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             return null;
         } else if (strange.popChar('#')) {
             const relative = if (strange.front()) |ch| ch == '+' or ch == '-' else false;
+            if (relative and is_exclusive)
+                return error.CannotBeRelativeAndExclusive;
             meta.order = Meta.Order{ .value = strange.popInt(i32) orelse return error.InvalidOrder, .relative = relative, .is_exclusive = is_exclusive };
             return null;
         } else if (strange.popChar('@')) {

@@ -22,6 +22,7 @@ pub const Chore = struct {
 
     order_offset: i32 = 0,
     order_min: i32 = std.math.maxInt(i32),
+    order_min_locked: bool = false,
     my_cost: u32 = 0,
     child_costs: u32 = 0,
 
@@ -47,6 +48,7 @@ pub const Chore = struct {
         n.attr("node_id", self.node_id);
         n.attr("order_offset", self.order_offset);
         n.attr("order_min", self.order_min);
+        n.attr("order_min_locked", self.order_min_locked);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
         if (self.filepath.len > 0)
@@ -95,8 +97,10 @@ pub const Chores = struct {
 
         if (chore.meta.cost) |cost|
             chore.my_cost = cost.value;
-        if (chore.meta.order) |order|
+        if (chore.meta.order) |order| {
             chore.order_min = order.value;
+            chore.order_min_locked = order.is_exclusive;
+        }
 
         // Setup chore.filepath
         var maybe_id = rubr.opt.value(node_id);
@@ -122,13 +126,13 @@ pub const Chores = struct {
         const chore = &self.list.items[chore_id];
 
         // Aggregate metadata from def into chore
-        const is_exclusive: bool = if (chore.meta.order) |order| order.is_exclusive else false;
         if (def.meta.order) |order| {
             if (order.relative) {
                 chore.order_offset += order.value;
             } else {
-                if (!is_exclusive) {
+                if (!chore.order_min_locked) {
                     chore.order_min = @min(chore.order_min, order.value);
+                    chore.order_min_locked = order.is_exclusive;
                 }
             }
         }
