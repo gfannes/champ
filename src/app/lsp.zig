@@ -185,9 +185,7 @@ pub const Lsp = struct {
                     } else |err| {
                         std.debug.print("Failed to load fui: {}", .{err});
                     }
-                    const query_input = if (show_local_tasks)
-                        &.{}
-                    else if (loader.fui != null and loader.fui.?.extra != null)
+                    const query_input = if (loader.fui != null and loader.fui.?.extra != null)
                         loader.fui.?.extra.?
                     else
                         &.{};
