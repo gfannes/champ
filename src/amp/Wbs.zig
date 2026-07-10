@@ -47,3 +47,12 @@ pub fn parse(str: []const u8, options: Options) ?Self {
 
     return res;
 }
+
+pub fn write(self: Self, parent: *rubr.naft.Node) void {
+    var node = parent.node("Wbs");
+    defer node.deinit();
+
+    node.attr("kind", self.kind);
+    if (self.prio) |prio|
+        node.attr("prio", prio);
+}

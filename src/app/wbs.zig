@@ -17,5 +17,12 @@ pub fn init(_: *Self) !void {}
 pub fn deinit(_: *Self) void {}
 
 pub fn call(self: *Self) !void {
-    _ = self;
+    var root = rubr.naft.Node.root(self.env.stdout);
+    defer root.deinit();
+
+    for (self.forest.chores.list.items) |chore| {
+        if (chore.meta.wbs) |wbs| {
+            wbs.write(&root);
+        }
+    }
 }
