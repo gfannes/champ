@@ -7,6 +7,7 @@ Goal: create a plan for the day
 - Collect side-channel info
 	- Email, discord, whatsapp, letters, ...
 - Rework past day logs into one for today
+	- Update `.config/champ/fui.zig` to `day`
 	- Review/update status
 	- Handle quick items
 - Check champ urgencies
@@ -14,6 +15,3 @@ Goal: create a plan for the day
 	- [x] Collate all chores per file &#10
 - Update prio
 	- [x] Open master project list efficiently from hx &#11
-- Update searchability
-	- Move items to storage
-	- Annotate
