@@ -84,16 +84,27 @@ pub const Forest = struct {
         }
 
         // &todo: Measure/print performance
-
+        var s = rubr.profile.Scope.start(self.env.io, .A);
         try self.createDefs();
 
+        try s.mark(.B);
         try self.resolveAmps();
 
+        try s.mark(.C);
         try self.aggregateAmps();
 
+        try s.mark(.D);
         try self.createChores();
 
+        try s.mark(.E);
         try self.computeChores();
+
+        try s.stop();
+        std.log.info("A: {f}\n", .{try s.measurement(.A)});
+        std.log.info("B: {f}\n", .{try s.measurement(.B)});
+        std.log.info("C: {f}\n", .{try s.measurement(.C)});
+        std.log.info("D: {f}\n", .{try s.measurement(.D)});
+        std.log.info("E: {f}\n", .{try s.measurement(.E)});
 
         self.valid = true;
     }
@@ -350,6 +361,7 @@ pub const Forest = struct {
             cb.update_count = 0;
             try self.tree.dfsAll(&cb);
             if (cb.update_count == 0)
+                // Nothing changed: we are done
                 break;
             if (ix + 1 == n) {
                 try self.env.stderr.print("Did not converge after {} iterations\n", .{n});
