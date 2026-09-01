@@ -164,14 +164,22 @@ pub const Node = struct {
         defer n.deinit();
         if (maybe_id) |id|
             n.attr("id", id);
-        n.attr("type", self.type);
-        n.attr("content", self.content);
+        switch (self.type) {
+            .grove => n.attr1("grove"),
+            .folder => n.attr("folder", self.filepath),
+            .file => |file| {
+                n.attr("path", self.filepath);
+                n.attr("language", file.language);
+            },
+            .text => |text| n.attr("text", text.kind),
+        }
         if (self.def) |def|
             n.attr("def", def.ix);
         for (self.org_amps.items) |org|
             n.attr("org", org.ix);
         for (self.agg_amps.items) |agg|
             n.attr("agg", agg);
+        n.attr("content", self.content);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
         switch (self.type) {

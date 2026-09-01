@@ -165,10 +165,11 @@ pub fn order(maybe_a: ?Self, maybe_b: ?Self) std.math.Order {
         if (maybe_b) |b| {
             return std.math.order(a.date.epoch_day.day, b.date.epoch_day.day);
         } else {
-            return .lt;
+            return .gt;
         }
     } else {
-        return if (maybe_b) |_| .gt else .eq;
+        // &chore:sort: null comes first: that is consistent with 'unscheduled' is shown first
+        return if (maybe_b) |_| .lt else .eq;
     }
 }
 

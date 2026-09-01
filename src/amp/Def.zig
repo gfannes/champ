@@ -57,6 +57,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
         n.attr("chore_id", chore_id);
     if (self.location) |loc| {
         n.attr("grove_id", loc.grove_id);
+        n.attr("node_id", loc.node_id);
         n.attr("filepath", loc.filepath);
         n.attr("row", loc.pos.row);
         n.attr("cols.begin", loc.pos.cols.begin);

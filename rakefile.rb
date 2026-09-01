@@ -1,6 +1,8 @@
-# mode = :safe
-mode = :fast
-# mode = :debug
+# default_mode = :safe
+default_mode = :fast
+# default_mode = :debug
+
+default_variant = :zig
 
 require('fileutils')
 
@@ -13,8 +15,9 @@ task :default do
 end
 
 desc 'Install'
-task :install, :variant do |_task, args|
-    variant = args[:variant]&.to_sym || :zig
+task :install, %i[mode variant] do |_task, args|
+    mode = args[:mode]&.to_sym || default_mode
+    variant = args[:variant]&.to_sym || default_variant
 
     case variant
     when :zig
@@ -39,7 +42,7 @@ end
 
 desc 'Run'
 task :run, %i[extra mode] do |_task, args|
-    mode = args[:mode]&.to_sym || :release
+    mode = args[:mode]&.to_sym || default_mode
     sh("xmake f -m #{mode}")
     sh('xmake build -v ampp')
 
@@ -54,7 +57,7 @@ task :ut, %i[filter] do |_task, args|
     sh "zig build test #{filter} -freference-trace=10"
 
     unless :cpp
-        mode = :release
+        mode = default_mode
         # mode = :debug
         # sh("xmake f -c") # This was needed once to make xmake detect the local toolchains
         sh("xmake f -m #{mode}")
@@ -86,4 +89,32 @@ task :clangd do
         end
         fo.puts("    Add: [-std=c++23, #{include_dirs * ', '}]")
     end
+end
+
+desc('Run e2e tests')
+task :e2e do
+    tmp_dir = File.join(here_dir, 'tmp')
+    FileUtils.rm_rf(tmp_dir)
+    FileUtils.mkdir(tmp_dir)
+
+    fp = "e2e/date_in_filename.naft"
+    sh("naft -u #{fp} #{tmp_dir}")
+
+    config_fp = File.join(tmp_dir, 'config.zon')
+    config = <<~EOS
+        .{
+            .groves = .{
+                .{
+                    .name = "test",
+                    .filepath = "#{tmp_dir}",
+                    .include = .{ "md" },
+                },
+            },
+            .selected_groves = .{ "test" },
+        }
+    EOS
+    File.write(config_fp, config)
+
+    sh("champ -u #{config_fp} pl")
+    sh("champ -u #{config_fp} ch -d")
 end

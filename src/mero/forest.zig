@@ -266,11 +266,12 @@ pub const Forest = struct {
                 const n = entry.data;
 
                 if (rubr.slc.isEmpty(n.org_amps.items)) {
-                    // std.debug.print("No orgs for {}\n", .{entry.id});
+                    // std.log.debug("No orgs for {}", .{entry.id});
                     return;
                 }
                 // Tree-based inheritance between Nodes
                 if (my.parent(entry.id)) |parent_entry| {
+                    std.log.debug("Injecting from {?} to {?}", .{ parent_entry.data.def, n.def });
                     try my.injectAmps(parent_entry.data, n);
                 }
 
@@ -280,9 +281,11 @@ pub const Forest = struct {
                     const def = org.ix.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
                         if (org.is_dependency) {
+                            // Inject our Tags into org node
                             const def_node = my.tree.get(location.node_id) catch continue;
                             try my.injectAmps(n, def_node);
                         } else {
+                            // Inject Tags from org node into us
                             const def_node = my.tree.cget(location.node_id) catch continue;
                             try my.injectAmps(def_node, n);
                         }
@@ -669,12 +672,14 @@ pub const Forest = struct {
                     // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
                     // If the file is '&.md', it is copied to the Folder as well
                     if (try my.tree.parent(entry.id)) |file| {
-                        file.data.def = n.def;
+                        if (file.data.def == null)
+                            file.data.def = n.def;
                         try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
                         if (amp.is_folder_metadata_fp(file.data.filepath)) {
                             if (try my.tree.parent(file.id)) |folder| {
-                                folder.data.def = n.def;
+                                if (folder.data.def == null)
+                                    folder.data.def = n.def;
                                 try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
                             }
                         }

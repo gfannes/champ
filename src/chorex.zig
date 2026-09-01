@@ -25,6 +25,7 @@ pub const Chore = struct {
     order_min_locked: bool = false,
     my_cost: u32 = 0,
     child_costs: u32 = 0,
+    date_min: ?amp.Date = null,
 
     pub fn deinit(self: *Self) void {
         self.parts.deinit();
@@ -51,6 +52,8 @@ pub const Chore = struct {
         n.attr("order_min_locked", self.order_min_locked);
         n.attr("my_cost", self.my_cost);
         n.attr("child_costs", self.child_costs);
+        if (self.date_min) |date_min|
+            n.attr("date_min", date_min);
         if (self.filepath.len > 0)
             n.attr("filepath", self.filepath);
         self.meta.write(&n);
@@ -101,6 +104,7 @@ pub const Chores = struct {
             chore.order_min = order.value;
             chore.order_min_locked = order.is_exclusive;
         }
+        chore.date_min = chore.meta.date;
 
         // Setup chore.filepath
         var maybe_id = rubr.opt.value(node_id);
@@ -138,6 +142,16 @@ pub const Chores = struct {
         }
         for (def.meta.workers.items) |worker| {
             try chore.meta.appendWorker(worker);
+        }
+        // &chore:sort: We track the smallest date when present since this has highest prio
+        if (def.meta.date) |date| {
+            if (chore.date_min) |date_min| {
+                if (date.date.epoch_day.day < date_min.date.epoch_day.day)
+                    chore.date_min = date;
+            } else {
+                // This Chore has no date yet: inherit from def
+                chore.date_min = date;
+            }
         }
 
         // Aggregate metadata from chore into def

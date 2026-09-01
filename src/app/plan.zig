@@ -74,7 +74,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
 
         // Check that its start date is before today, if any
         // &todo &meta Add date to chore and re-enable this check
-        const date = if (chore.meta.date) |date| ret: {
+        const date = if (chore.date_min) |date| ret: {
             if (date.date.epoch_day.day > today.epoch_day.day)
                 continue;
             break :ret date;
@@ -109,13 +109,14 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             const ord = std.math.order(a.order, b.order);
             if (ord != .eq)
                 return ord;
-            return amp.Date.order(b.date, a.date);
+            return amp.Date.order(a.date, b.date);
         }
     };
     std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
 
     for (self.all_entries.items, 0..) |entry, ix0| {
-        const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.filepath else "";
+        // const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.filepath else "";
+        const prev_path = "";
         if (!std.mem.eql(u8, prev_path, entry.filepath)) {
             try self.segments.append(self.env.a, Segment{ .filepath = entry.filepath, .order = entry.order, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
         } else {

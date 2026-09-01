@@ -81,9 +81,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
 
     if (self.status) |status|
         n.attr("status", status.lower());
-    // &todo &meta print date
-    // if (self.date) |date|
-    //     n.attr("date", date.lower());
+    if (self.date) |date|
+        n.attr("date", date);
     if (self.cost) |cost|
         n.attr("cost", cost.value);
     if (self.order) |order| {
