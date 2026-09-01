@@ -74,6 +74,8 @@ pub const Forest = struct {
     }
 
     pub fn load(self: *Self, config: *const cfg.file.Config) !void {
+        var s = try rubr.profile.Scope.start(self.env.io, .{ .ix = 0, .name = "loadGroves" });
+
         const selected_groves = config.selected_groves orelse return error.ExpectedConfigDefault;
         if (rubr.slc.isEmpty(selected_groves))
             return error.ExpectedAtLeastOneGrove;
@@ -83,20 +85,19 @@ pub const Forest = struct {
                 try self.loadGrove(&cfg_grove);
         }
 
-        // &todo: Measure/print performance
-        var s = try rubr.profile.Scope.start(self.env.io, .{ .ix = 0, .name = "createDefs" });
+        try s.mark(.{ .ix = 1, .name = "createDefs" });
         try self.createDefs();
 
-        try s.mark(.{ .ix = 1, .name = "resolveAmps" });
+        try s.mark(.{ .ix = 2, .name = "resolveAmps" });
         try self.resolveAmps();
 
-        try s.mark(.{ .ix = 2, .name = "aggregateAmps" });
+        try s.mark(.{ .ix = 3, .name = "aggregateAmps" });
         try self.aggregateAmps();
 
-        try s.mark(.{ .ix = 3, .name = "createChores" });
+        try s.mark(.{ .ix = 4, .name = "createChores" });
         try self.createChores();
 
-        try s.mark(.{ .ix = 4, .name = "comptuChores" });
+        try s.mark(.{ .ix = 5, .name = "comptuChores" });
         try self.computeChores();
 
         try s.stop();

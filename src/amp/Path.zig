@@ -51,16 +51,23 @@ pub fn copy(self: Self, a: std.mem.Allocator) !Self {
 
 // rhs is the smaller one
 pub fn isFit(self: Self, rhs: Self) bool {
-    var rhs_rit = std.mem.reverseIterator(rhs.parts.items);
-    var self_rit = std.mem.reverseIterator(self.parts.items);
-    while (rhs_rit.nextPtr()) |rhs_part| {
-        const self_part: *const Part = self_rit.nextPtr() orelse return false;
-        if (!std.mem.eql(u8, rhs_part.content, self_part.content))
+    const self_len = self.parts.items.len;
+    const rhs_len = rhs.parts.items.len;
+
+    if (rhs_len > self_len)
+        // rhs is longer: this cannot fit
+        return false;
+    const self_offset = self_len - rhs_len;
+
+    if (rhs.is_absolute and self_offset != 0)
+        // if rhs is absolute, it can only match with self if the length is the same
+        return false;
+
+    for (self.parts.items[self_offset..], rhs.parts.items) |self_part, rhs_part| {
+        if (!std.mem.eql(u8, self_part.content, rhs_part.content))
+            // this part is different
             return false;
     }
-
-    if (rhs.is_absolute and self_rit.nextPtr() != null)
-        return false;
 
     return true;
 }
