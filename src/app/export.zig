@@ -183,7 +183,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                                 switch (status.kind) {
                                     .Todo, .Wip, .Go, .Blocked, .Question => {
                                         const section = maybe_section orelse {
-                                            try my.env.log.err("Chore {} has no parent section\n", .{chore_id});
+                                            std.log.err("Chore {} has no parent section", .{chore_id});
                                             return error.ExpectedSection;
                                         };
 

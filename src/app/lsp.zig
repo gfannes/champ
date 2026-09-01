@@ -42,7 +42,7 @@ pub const Lsp = struct {
     }
 
     pub fn call(self: *Self) !void {
-        try self.env.log.info("Lsp server started {}\n", .{(std.Io.Clock.now(.real, self.env.io))});
+        std.log.info("Lsp server started {}", .{(std.Io.Clock.now(.real, self.env.io))});
 
         var readbuf: [1024]u8 = undefined;
         var cin = std.Io.File.stdin().reader(self.env.io, &readbuf);
@@ -59,7 +59,7 @@ pub const Lsp = struct {
         var do_continue = true;
         var init_ok = false;
         while (do_continue) : (count += 1) {
-            try self.env.log.info("[Iteration](count:{})\n", .{count});
+            std.log.info("[Iteration](count:{})", .{count});
 
             const request = try server.receive();
 
@@ -288,7 +288,7 @@ pub const Lsp = struct {
                         const node = forest.tree.cptr(chore.node_id);
 
                         if (rubr.slc.isEmpty(node.org_amps.items)) {
-                            try self.env.log.warning("Expected to find at least one AMP for Chore\n", .{});
+                            std.log.warn("Expected to find at least one AMP for Chore", .{});
                             continue;
                         }
 
@@ -399,7 +399,7 @@ pub const Lsp = struct {
                     }
                     try server.send(null);
                 } else {
-                    try self.env.log.warning("Unhandled request '{s}'\n", .{request.method});
+                    std.log.warn("Unhandled request '{s}'", .{request.method});
                 }
             } else {
                 if (request.is("textDocument/didOpen")) {
@@ -412,7 +412,7 @@ pub const Lsp = struct {
                 } else if (request.is("exit")) {
                     do_continue = false;
                 } else {
-                    try self.env.log.warning("Unhandled notification '{s}'\n", .{request.method});
+                    std.log.warn("Unhandled notification '{s}'", .{request.method});
                 }
             }
         }

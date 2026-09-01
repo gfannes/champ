@@ -33,6 +33,7 @@ pub const Args = struct {
     print_help: bool = false,
     groves: Strings = undefined,
     logfile: ?[]const u8 = null,
+    configfile: ?[]const u8 = null,
     do_scan: bool = false,
     do_parse: bool = false,
     verbose: usize = 0,
@@ -55,10 +56,6 @@ pub const Args = struct {
     }
     pub fn deinit(_: *Self) void {}
 
-    pub fn setLogfile(self: *Self, logfile: []const u8) !void {
-        self.logfile = try self.env.aa.dupe(u8, logfile);
-    }
-
     pub fn parse(self: *Self) !void {
         self.exe_name = (self.args.pop() orelse return error.CouldNotFindExeName).arg;
 
@@ -77,6 +74,9 @@ pub const Args = struct {
             } else if (arg.is("-l", "--log")) {
                 if (self.args.pop()) |x|
                     self.logfile = x.arg;
+            } else if (arg.is("-u", "--config")) {
+                if (self.args.pop()) |x|
+                    self.configfile = x.arg;
             } else if (arg.is("-s", "--scan")) {
                 self.do_scan = true;
             } else if (arg.is("-P", "--parse")) {
@@ -132,6 +132,7 @@ pub const Args = struct {
             "    -v  --verbose LEVEL  Verbosity LEVEL [optional, default 0]\n" ++
             "    -g  --grove   NAME   Use grove NAME\n" ++
             "    -l  --log     FILE   Log to FILE\n" ++
+            "    -u  --config  FILE   Use config FILE\n" ++
             "    -s  --scan           Scan\n" ++
             "    -P  --parse          Parse\n" ++
             "    -O  --max-order      Maximum order to show\n" ++

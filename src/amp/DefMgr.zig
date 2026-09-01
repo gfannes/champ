@@ -45,7 +45,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u
         }
     }{ .needle = &def_ap, .grove_id = grove_id };
     if (rubr.algo.indexOfFirst(Def, self.defs.items, check_fit)) |ix| {
-        try self.env.log.warning("Definition '{f}' from '{s}' is already present in Grove {}: {f}.\n", .{ def_ap, filepath, grove_id, self.defs.items[ix] });
+        std.log.warn("Definition '{f}' from '{s}' is already present in Grove {}: {f}.", .{ def_ap, filepath, grove_id, self.defs.items[ix] });
         return null;
     }
 
@@ -117,7 +117,7 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
                     if (!is_ambiguous) {
                         // This is the first ambiguous match we find: report the initial match as well
                         const d = match.ix.ptr(self.defs.items);
-                        try self.env.log.warning("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'\n", .{ path, def, d });
+                        std.log.warn("Ambiguous AMP found: '{f}' fits with def '{f}' and '{f}'", .{ path, def, d });
                     }
                     is_ambiguous = true;
                 }
@@ -135,7 +135,7 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
         const def = match.ix.cptr(self.defs.items);
         if (path.is_absolute) {
             if (path.parts.items.len != def.path.parts.items.len) {
-                try self.env.log.warning("Could not resolve '{f}', it matches with '{f}', but it is absolute\n", .{ path, def.path });
+                std.log.warn("Could not resolve '{f}', it matches with '{f}', but it is absolute", .{ path, def.path });
                 return null;
             }
         } else {

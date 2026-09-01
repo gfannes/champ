@@ -159,7 +159,7 @@ pub fn show(self: Self, all: bool, details: bool) !void {
         try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.filepath, reset_style });
 
         for (segment.entries) |entry| {
-            try self.env.stdout.print("  {f}{s}{f} (&#{})", .{ style(entry.order), entry.content, reset_style, entry.order });
+            try self.env.stdout.print("  {f}{s}{f} (&#{} {?})", .{ style(entry.order), entry.content, reset_style, entry.order, entry.date });
             try self.env.stdout.print("\n", .{});
         }
     }

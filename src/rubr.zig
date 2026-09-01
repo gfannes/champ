@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs]` from https://github.com/gfannes/rubr from 2026-05-27
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs]` from https://github.com/gfannes/rubr from 2026-09-01
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -313,6 +313,7 @@ pub const strng = struct {
             return count;
         }
     
+        // Pops ch as well but won't include this in the return slice
         pub fn popTo(self: *Self, ch: u8) ?[]const u8 {
             if (std.mem.indexOfScalar(u8, self.content, ch)) |ix| {
                 defer self._popFront(ix + 1);
@@ -1676,6 +1677,8 @@ pub const lsp = struct {
             }
         };
         
+        // {"capabilities":{"textDocument":{"diagnostic":{"dynamicRegistration":false,"relatedDocumentSupport":true},"formatting":{"dynamicRegistration":false},"hover":{"contentFormat":["markdown"]},"inlayHint":{"dynamicRegistration":false},"publishDiagnostics":{"tagSupport":{"valueSet":[1,2]},"versionSupport":true},"rename":{"dynamicRegistration":false,"honorsChangeAnnotations":false,"prepareSupport":true},"signatureHelp":{"signatureInformation":{"activeParameterSupport":true,"documentationFormat":["markdown"],"parameterInformation":{"labelOffsetSupport":true}}}},"window":{"showDocument":{"support":true},"workDoneProgress":true},"workspace":{"applyEdit":true,"configuration":true,"diagnostic":{"refreshSupport":true},"didChangeConfiguration":{"dynamicRegistration":false},"didChangeWatchedFiles":{"dynamicRegistration":true,"relativePatternSupport":false},"executeCommand":{"dynamicRegistration":false},"fileOperations":{"didRename":true,"willRename":true},"inlayHint":{"refreshSupport":false},"symbol":{"dynamicRegistration":false},"workspaceEdit":{"documentChanges":true,"failureHandling":"abort","normalizesLineEndings":false,"resourceOperations":["create","rename","delete"]},"workspaceFolders":true}},"clientInfo":{"name":"helix","version":"25.07.1 (8de22be5)"},"processId":17329,"rootPath":"/Users/geertf","rootUri":null,"workspaceFolders":[]}
+        
         // Generic Response with injected, optional Result
         // &todo: Add support for 'error'
         pub fn Response(Result: type) type {
@@ -2152,6 +2155,12 @@ pub const fs = struct {
     
             @memmove(res.buffer[0..res.len], value);
             return res;
+        }
+    
+        pub fn cwd(io: std.Io) !Self {
+            var rv: Self = .{};
+            rv.len = try std.process.currentPath(io, &rv.buffer);
+            return rv;
         }
     
         pub fn add(self: *Self, part: []const u8) !void {

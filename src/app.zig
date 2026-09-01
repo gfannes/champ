@@ -93,15 +93,31 @@ pub const App = struct {
         self.config_loader = cfg.file.Loader{ .env = self.env, .cli_args = &self.cli_args };
         const cfg_loader = &self.config_loader.?;
 
-        // &:zig:build:info Couple filename with build.zig.zon#name
-        var config_path = try rubr.fs.Path.home(self.env.envmap);
-        try config_path.add(".config");
-        try config_path.add("champ");
-        try config_path.add("config.zon");
+        var config_path: rubr.fs.Path = undefined;
 
-        const ret = try cfg_loader.loadFromFile(config_path.path(), .Config);
+        if (self.cli_args.configfile) |configfile| {
+            if (std.fs.path.isAbsolute(configfile)) {
+                try config_path.set(configfile);
+            } else {
+                config_path = try rubr.fs.Path.cwd(self.env.io);
+                try config_path.add(configfile);
+            }
+        } else {
+            // &:zig:build:info Couple filename with build.zig.zon#name
+            config_path = try rubr.fs.Path.home(self.env.envmap);
+            try config_path.add(".config");
+            try config_path.add("champ");
+            try config_path.add("config.zon");
+        }
+
+        const filename = config_path.path();
+        const ret = cfg_loader.loadFromFile(filename, .Config) catch |err| {
+            std.log.err("Could not open '{s}': {}", .{ filename, err });
+            return err;
+        };
+
         if (ret)
-            std.debug.print("Loaded config from '{s}'\n", .{config_path.path()});
+            std.log.info("Loaded config from '{s}'", .{config_path.path()});
 
         self.config = cfg_loader.config orelse return Error.CouldNotLoadConfig;
 

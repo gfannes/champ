@@ -95,18 +95,18 @@ pub fn extend(self: *Self, rhs: Self) !void {
     }
 }
 
-pub fn format(self: Self, io: *std.Io.Writer) !void {
-    try io.print("&", .{});
+pub fn format(self: Self, w: *std.Io.Writer) !void {
+    try w.print("&", .{});
     if (self.is_definition)
-        try io.print("&", .{});
+        try w.print("&", .{});
     var prefix: []const u8 = if (self.is_absolute) ":" else "";
     for (self.parts.items) |part| {
         const exclusive_str = if (part.is_exclusive) "^" else "";
-        try io.print("{s}{s}{s}", .{ prefix, exclusive_str, part.content });
+        try w.print("{s}{s}{s}", .{ prefix, exclusive_str, part.content });
         prefix = ":";
     }
     if (self.is_dependency)
-        try io.print("&", .{});
+        try w.print("&", .{});
 }
 
 test "amp.Path" {
