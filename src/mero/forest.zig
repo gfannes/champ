@@ -84,27 +84,23 @@ pub const Forest = struct {
         }
 
         // &todo: Measure/print performance
-        var s = rubr.profile.Scope.start(self.env.io, .A);
+        var s = try rubr.profile.Scope.start(self.env.io, .{ .ix = 0, .name = "createDefs" });
         try self.createDefs();
 
-        try s.mark(.B);
+        try s.mark(.{ .ix = 1, .name = "resolveAmps" });
         try self.resolveAmps();
 
-        try s.mark(.C);
+        try s.mark(.{ .ix = 2, .name = "aggregateAmps" });
         try self.aggregateAmps();
 
-        try s.mark(.D);
+        try s.mark(.{ .ix = 3, .name = "createChores" });
         try self.createChores();
 
-        try s.mark(.E);
+        try s.mark(.{ .ix = 4, .name = "comptuChores" });
         try self.computeChores();
 
         try s.stop();
-        std.log.info("A: {f}\n", .{try s.measurement(.A)});
-        std.log.info("B: {f}\n", .{try s.measurement(.B)});
-        std.log.info("C: {f}\n", .{try s.measurement(.C)});
-        std.log.info("D: {f}\n", .{try s.measurement(.D)});
-        std.log.info("E: {f}\n", .{try s.measurement(.E)});
+        std.log.info("{f}\n", .{s});
 
         self.valid = true;
     }
