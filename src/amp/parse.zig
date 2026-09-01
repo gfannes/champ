@@ -27,10 +27,10 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             return null;
         } else if (strange.popChar('@')) {
             const name = strange.popAll() orelse return error.InvalidWorker;
-            try meta.appendWorker(Meta.Worker{ .name = name });
+            try meta.appendWorker(Meta.Worker{ .name = name, .is_exclusive = is_exclusive });
             var path = Path.init(meta.a);
             errdefer path.deinit();
-            try path.parts.append(path.a, .{ .content = "worker" });
+            try path.parts.append(path.a, .{ .content = "worker", .is_exclusive = is_exclusive });
             try path.parts.append(path.a, .{ .content = name });
             return path;
         } else if (strange.popChar('?')) {
@@ -101,4 +101,64 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
     }
 
     return error.ExpectedAmp;
+}
+
+test "amp.parse" {
+    const ut = std.testing;
+
+    const Scn = struct {
+        repr: []const u8,
+        exp: []const u8,
+    };
+
+    const scns = [_]Scn{
+        .{ .repr = "&abc", .exp = "&abc" },
+        .{ .repr = "&&abc", .exp = "&&abc" },
+        .{ .repr = "&:abc", .exp = "&:abc" },
+        .{ .repr = "&&:abc", .exp = "&&:abc" },
+        .{ .repr = "&&:!abc", .exp = "&&:!abc" },
+        .{ .repr = "&&:!abc:", .exp = "&&:!abc" },
+        .{ .repr = "&&:a:b&:c", .exp = "&&:a:b&:c" },
+        .{ .repr = "&&:a:b&:c:", .exp = "&&:a:b&:c" },
+        .{ .repr = "&&:status:~status", .exp = "&&:status:~status" },
+        .{ .repr = "&abc&", .exp = "&abc&" },
+
+        .{ .repr = "&$123", .exp = "&_cost:123" },
+        .{ .repr = "&#123", .exp = "&_order:123" },
+        .{ .repr = "&#-123", .exp = "&_order:-123" },
+        .{ .repr = "&@geert", .exp = "&worker:geert" },
+        .{ .repr = "&^@geert", .exp = "&^worker:geert" },
+        .{ .repr = "&?proj", .exp = "&_wbs:project" },
+        .{ .repr = "&todo", .exp = "&_status:todo" },
+        .{ .repr = "&go", .exp = "&_status:go" },
+        .{ .repr = "&wip", .exp = "&_status:wip" },
+        .{ .repr = "&done", .exp = "&_status:done" },
+        .{ .repr = "TODO", .exp = "&_status:todo" },
+        .{ .repr = "GO", .exp = "&_status:go" },
+        .{ .repr = "WIP", .exp = "&_status:wip" },
+        .{ .repr = "DONE", .exp = "&_status:done" },
+        .{ .repr = "[ ]", .exp = "&_status:todo" },
+        .{ .repr = "[*]", .exp = "&_status:go" },
+        .{ .repr = "[/]", .exp = "&_status:wip" },
+        .{ .repr = "[x]", .exp = "&_status:done" },
+        .{ .repr = "[~]", .exp = "&_status:assigned" },
+        .{ .repr = "&2027", .exp = "&_date:20819" },
+    };
+
+    for (scns) |scn| {
+        std.debug.print("{s}\n", .{scn.repr});
+        var strange = rubr.strng.Strange{ .content = scn.repr };
+
+        var meta = Meta{ .a = ut.allocator };
+        defer meta.deinit();
+
+        var maybe_path = try parse(&strange, &meta);
+        if (maybe_path) |*path| {
+            defer path.deinit();
+
+            const act = try std.fmt.allocPrint(ut.allocator, "{f}", .{path});
+            try ut.expectEqualSlices(u8, scn.exp, act);
+            defer ut.allocator.free(act);
+        }
+    }
 }

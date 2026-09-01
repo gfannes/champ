@@ -16,7 +16,6 @@ const Self = @This();
 pub const Ix = rubr.idx.Ix(@This());
 
 pub const Location = struct {
-    grove_id: usize,
     filepath: []const u8,
     node_id: usize,
     pos: filex.Pos,
@@ -24,6 +23,7 @@ pub const Location = struct {
 
 path: Path,
 meta: Meta,
+grove_id: usize,
 
 location: ?Location = null,
 chore_id: ?usize = null,
@@ -31,20 +31,6 @@ chore_id: ?usize = null,
 pub fn deinit(self: *Self) void {
     self.path.deinit();
     self.meta.deinit();
-}
-
-pub fn injectMeta(self: *Self, path: Path) !void {
-    if (!path.isMeta())
-        return error.ExpectedMetaPath;
-    switch (path.parts.items[0].meta.?) {
-        .status => |status| self.status = status,
-        .cost => |cost| self.cost = cost,
-        .order => |order| self.order = order,
-        .worker => |worker| self.worker = worker,
-        .wbs => |wbs| self.wbs = wbs,
-        .date => |date| self.date = date,
-        else => {},
-    }
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
@@ -55,8 +41,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node, maybe_ix: ?usize) void {
     n.attr("path", self.path);
     if (self.chore_id) |chore_id|
         n.attr("chore_id", chore_id);
+    n.attr("grove_id", self.grove_id);
     if (self.location) |loc| {
-        n.attr("grove_id", loc.grove_id);
         n.attr("node_id", loc.node_id);
         n.attr("filepath", loc.filepath);
         n.attr("row", loc.pos.row);

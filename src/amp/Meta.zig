@@ -17,6 +17,7 @@ pub const Order = struct {
 };
 pub const Worker = struct {
     name: []const u8,
+    is_exclusive: bool = false,
 };
 
 a: std.mem.Allocator,

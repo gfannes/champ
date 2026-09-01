@@ -40,8 +40,7 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u
         needle: *const Path,
         grove_id: usize,
         pub fn call(my: @This(), other: Def) bool {
-            const other_grove_id = (other.location orelse return false).grove_id;
-            return other.path.isFit(my.needle.*) and my.grove_id == other_grove_id;
+            return other.path.isFit(my.needle.*) and my.grove_id == other.grove_id;
         }
     }{ .needle = &def_ap, .grove_id = grove_id };
     if (rubr.algo.indexOfFirst(Def, self.defs.items, check_fit)) |ix| {
@@ -55,8 +54,8 @@ pub fn appendDef(self: *Self, def_ap: Path, grove_id: usize, filepath: []const u
     try self.defs.append(aa, .{
         .path = try def_ap.copy(aa),
         .meta = .{ .a = aa },
+        .grove_id = grove_id,
         .location = .{
-            .grove_id = grove_id,
             .filepath = filepath,
             .node_id = node_id,
             .pos = pos,
@@ -77,8 +76,8 @@ pub fn appendUnnamedDef(self: *Self, grove_id: usize, filepath: []const u8, node
     try self.defs.append(aa, .{
         .path = path,
         .meta = .{ .a = aa },
+        .grove_id = grove_id,
         .location = .{
-            .grove_id = grove_id,
             .filepath = filepath,
             .node_id = node_id,
             .pos = pos,
@@ -105,10 +104,12 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
             // We found a match within the Grove of 'path': do not check for matches outside this Grove.
             continue;
 
+        // &perf: this is a hot loop: checking def.grove_id is expensive because each Def is large (240 bytes) and causes caching issues. Better store the location info outside defs.
+        // - First rework moved grove_id from location into def itself: improved performance with 20%
+        // - Maybe the def.path.isFit() is hot now
         for (self.defs.items, 0..) |def, ix| {
-            const def_grove_id = (def.location orelse continue).grove_id;
             // We first check for a match within the Grove of 'path', in a second iteration, we check for matches outside.
-            const grove_id_is_same = (def_grove_id == grove_id);
+            const grove_id_is_same = (def.grove_id == grove_id);
             if (grove_id_must_match != grove_id_is_same)
                 continue;
 
@@ -121,7 +122,7 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
                     }
                     is_ambiguous = true;
                 }
-                maybe_match = Match{ .ix = .{ .ix = ix }, .grove_id = def_grove_id };
+                maybe_match = Match{ .ix = .{ .ix = ix }, .grove_id = def.grove_id };
             }
         }
     }
@@ -151,7 +152,11 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
         path.is_definition = false;
 
         const def_ix = Def.Ix.init(self.defs.items.len);
-        try self.defs.append(aa, .{ .path = try path.copy(aa), .meta = .{ .a = aa } });
+        try self.defs.append(aa, .{
+            .path = try path.copy(aa),
+            .meta = .{ .a = aa },
+            .grove_id = grove_id,
+        });
 
         return def_ix;
     }
