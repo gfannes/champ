@@ -115,9 +115,9 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
     std.sort.block(Entry, self.all_entries.items, Fn{}, Fn.call);
 
     for (self.all_entries.items, 0..) |entry, ix0| {
-        // const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.filepath else "";
-        const prev_path = "";
-        if (!std.mem.eql(u8, prev_path, entry.filepath)) {
+        const prev_path = if (rubr.slc.last(self.segments.items)) |item| item.filepath else "";
+        const filepath_is_same_as_previous = std.mem.eql(u8, prev_path, entry.filepath);
+        if (!filepath_is_same_as_previous) {
             try self.segments.append(self.env.a, Segment{ .filepath = entry.filepath, .order = entry.order, .entries = self.all_entries.items[ix0 .. ix0 + 1] });
         } else {
             if (rubr.slc.lastPtr(self.segments.items)) |ptr|
@@ -125,7 +125,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
         }
     }
 
-    // // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
+    // &todo: Handle this in show() with an iterator that can be configured at runtime between normal/reverse
     if (reverse)
         std.mem.reverse(Segment, self.segments.items);
 }

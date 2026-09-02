@@ -101,7 +101,8 @@ pub const Forest = struct {
         try self.computeChores();
 
         try s.stop();
-        std.log.info("{f}\n", .{s});
+
+        std.log.info("Duration measurements for loading and parsing the data:\n{f}", .{s});
 
         self.valid = true;
     }
