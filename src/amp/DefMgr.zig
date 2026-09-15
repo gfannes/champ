@@ -163,7 +163,7 @@ pub fn resolve(self: *Self, path: *Path, grove_id: usize) !?Def.Ix {
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
-    var n = parent.node("Chores");
+    var n = parent.node("DefMgr");
     defer n.deinit();
     for (self.defs.items, 0..) |e, ix0| {
         e.write(&n, ix0);
