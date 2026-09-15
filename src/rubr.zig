@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile]` from https://github.com/gfannes/rubr from 2026-09-01
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile]` from https://github.com/gfannes/rubr from 2026-09-15
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -1999,7 +1999,7 @@ pub const fuzz = struct {
                 return if (cl.case_sensitive)
                     std.mem.indexOfScalar(u8, slice, ch)
                 else
-                    std.ascii.indexOfIgnoreCase(slice, (&ch)[0..1]);
+                    std.ascii.findIgnoreCase(slice, (&ch)[0..1]);
             }
         }{};
     
@@ -2268,7 +2268,7 @@ pub const profile = struct {
         ix: usize,
         start_ts: std.Io.Timestamp,
     
-        measurements: [max_measurement_count]?Measurement = [_]?Measurement{null} ** max_measurement_count,
+        measurements: [max_measurement_count]?Measurement = @splat(null),
         running: bool = true,
     
         pub fn start(io: std.Io, desc: Descriptor) !Self {

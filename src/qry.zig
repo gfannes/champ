@@ -21,12 +21,12 @@ pub const Query = struct {
         forward: bool = false,
 
         pub fn set_all(my: *My, val: bool) void {
-            inline for (@typeInfo(My).@"struct".fields) |field|
-                @field(my, field.name) = val;
+            inline for (@typeInfo(My).@"struct".field_names) |field_name|
+                @field(my, field_name) = val;
         }
         pub fn is_all(my: My, val: bool) bool {
-            inline for (@typeInfo(My).@"struct".fields) |field| {
-                const my_val = @field(my, field.name);
+            inline for (@typeInfo(My).@"struct".field_names) |field_name| {
+                const my_val = @field(my, field_name);
                 if (my_val != val)
                     return false;
             }

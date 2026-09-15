@@ -169,7 +169,7 @@ pub const Symbol = enum(u8) {
 };
 
 const ch__symbol: [256]Symbol = blk: {
-    var t = [_]Symbol{.Word} ** 256;
+    var t: [256]Symbol = @splat(.Word);
 
     t[' '] = .Space;
     t['\t'] = .Tab;
