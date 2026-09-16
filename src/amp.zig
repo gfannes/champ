@@ -8,6 +8,7 @@ pub const Wbs = @import("amp/Wbs.zig");
 pub const Def = @import("amp/Def.zig");
 pub const DefMgr = @import("amp/DefMgr.zig");
 pub const parse = @import("amp/parse.zig").parse;
+pub const Tree = @import("amp/Tree.zig");
 
 pub fn is_folder_metadata_fp(filepath: []const u8) bool {
     return std.mem.endsWith(u8, filepath, "&.md");
@@ -23,4 +24,5 @@ test {
     ut.refAllDecls(Wbs);
     ut.refAllDecls(Def);
     ut.refAllDecls(DefMgr);
+    ut.refAllDecls(Tree);
 }

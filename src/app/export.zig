@@ -267,7 +267,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
     var cb = Cb{
         .env = self.env,
-        .tree = &self.forest.tree,
+        .tree = &self.forest.dto_tree,
         .defmgr = &self.forest.defmgr,
         .chores = &self.forest.chores,
         .output_dir = &output_dir,
@@ -277,7 +277,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
     for (needles) |needle| {
         cb.needle = needle;
-        try self.forest.tree.dfsAll(&cb);
+        try self.forest.dto_tree.dfsAll(&cb);
     }
 
     {
@@ -320,7 +320,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
             if (status_choreids.entries.len > 0) {
                 // Write title
                 {
-                    const section = try self.forest.tree.cget(section_id);
+                    const section = try self.forest.dto_tree.cget(section_id);
 
                     try w.print("\n### ", .{});
                     var trim: []const u8 = " ";
@@ -361,7 +361,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
                         {
                             var first: bool = true;
-                            const n = self.forest.tree.cptr(ch.node_id);
+                            const n = self.forest.dto_tree.cptr(ch.node_id);
                             for (n.type.text.terms.slice) |term| {
                                 switch (term.kind) {
                                     .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},

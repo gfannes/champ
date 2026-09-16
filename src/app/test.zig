@@ -20,7 +20,7 @@ forest: mero.Forest = undefined,
 
 pub fn init(self: *Self) !void {
     self.forest = .{ .env = self.env };
-    self.forest.init();
+    try self.forest.init();
 }
 pub fn deinit(self: *Self) void {
     self.forest.deinit();

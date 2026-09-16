@@ -125,6 +125,9 @@ pub const Node = struct {
 
     type: Type = undefined,
 
+    // Node id into amp.Tree.tree
+    amp_node: ?usize = null,
+
     // Ref to a definition that is directly present in this Node
     // Is also added to org_amps
     def: ?Def = null,

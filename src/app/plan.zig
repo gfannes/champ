@@ -57,7 +57,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             continue;
 
         try query.prepare(chore, self.config.default_worker);
-        const node = self.forest.tree.cptr(chore.node_id);
+        const node = self.forest.dto_tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);
             try query.add(&def.path);
@@ -80,7 +80,7 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             break :ret date;
         } else null;
 
-        const n = self.forest.tree.cptr(chore.node_id);
+        const n = self.forest.dto_tree.cptr(chore.node_id);
 
         const entry = Entry{
             .filepath = n.filepath,

@@ -57,7 +57,7 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
         // std.debug.print("{f}", .{chore});
 
         try query.prepare(chore, self.config.default_worker);
-        const node = self.forest.tree.cptr(chore.node_id);
+        const node = self.forest.dto_tree.cptr(chore.node_id);
         for (node.org_amps.items) |ref| {
             const def = ref.ix.cptr(self.forest.defmgr.defs.items);
             try query.add(&def.path);
@@ -69,7 +69,7 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
 
         if (query.distance()) |distance| {
             // std.debug.print("  distance {}\n", .{distance});
-            const n = try self.forest.tree.cget(chore.node_id);
+            const n = try self.forest.dto_tree.cget(chore.node_id);
             if (n.type == .file)
                 continue;
             try self.all_entries.append(

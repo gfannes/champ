@@ -58,6 +58,8 @@ pub fn call(self: *Self, what: [][]const u8, details: u8) !void {
 }
 
 pub fn show(self: *Self) !void {
+    try self.env.stdout.print("{f}", .{self.forest.amp_tree});
+
     var root = rubr.naft.Node.root(self.env.stdout);
     defer root.deinit();
 
@@ -81,7 +83,7 @@ pub fn show(self: *Self) !void {
                 }
             };
             const cb = Cb{ .env = self.env, .n = &n };
-            try self.forest.tree.dfsAll(&cb);
+            try self.forest.dto_tree.dfsAll(&cb);
         } else {
             const Cb = struct {
                 env: rubr.Env,
@@ -99,7 +101,7 @@ pub fn show(self: *Self) !void {
                 }
             };
             var cb = Cb{ .env = self.env };
-            try self.forest.tree.dfsAll(&cb);
+            try self.forest.dto_tree.dfsAll(&cb);
             n.attr("node_count", cb.node_count);
             n.attr("term_count", cb.term_count);
         }

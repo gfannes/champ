@@ -230,7 +230,7 @@ pub const App = struct {
         self.maybe_forest = mero.Forest{ .env = self.env };
 
         var forest = if (self.maybe_forest) |*ptr| ptr else return error.ExpectedForest;
-        forest.init();
+        try forest.init();
         try forest.load(&self.config);
 
         return forest;

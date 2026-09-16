@@ -35,7 +35,7 @@ pub const Lsp = struct {
 
     pub fn init(self: *Self) !void {
         self.forest_pp = .{ .env = self.env, .cli_args = self.cli_args };
-        self.forest_pp.init();
+        try self.forest_pp.init();
     }
     pub fn deinit(self: *Self) void {
         self.forest_pp.deinit();
@@ -121,7 +121,7 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, src_filename, chore.filepath))
                             continue;
 
-                        const node = forest.tree.cptr(chore.node_id);
+                        const node = forest.dto_tree.cptr(chore.node_id);
                         for (node.org_amps.items) |org_ref| {
                             const pos = org_ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
@@ -233,7 +233,7 @@ pub const Lsp = struct {
                             continue;
 
                         // We only check the org parts for references, not all inherited agg parts
-                        const node = forest.tree.cptr(chore.node_id);
+                        const node = forest.dto_tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const pos = ref.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
@@ -249,7 +249,7 @@ pub const Lsp = struct {
                     if (maybe_path) |path| {
                         var locations = std.ArrayList(dto.Location).empty;
                         for (forest.chores.list.items) |chore| {
-                            const node = forest.tree.cptr(chore.node_id);
+                            const node = forest.dto_tree.cptr(chore.node_id);
                             for (node.org_amps.items) |ref| {
                                 const def = ref.ix.cptr(forest.defmgr.defs.items);
                                 if (path.isFit(def.path)) {
@@ -285,7 +285,7 @@ pub const Lsp = struct {
                         if (!std.mem.endsWith(u8, filename, chore.filepath))
                             continue;
 
-                        const node = forest.tree.cptr(chore.node_id);
+                        const node = forest.dto_tree.cptr(chore.node_id);
 
                         if (rubr.slc.isEmpty(node.org_amps.items)) {
                             std.log.warn("Expected to find at least one AMP for Chore", .{});
@@ -345,12 +345,12 @@ pub const Lsp = struct {
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.chores.list.items) |chore| {
-                        if (forest.tree.cptr(chore.node_id).type != .text)
+                        if (forest.dto_tree.cptr(chore.node_id).type != .text)
                             // We only take text chores into account
                             continue;
 
                         try q.prepare(chore, self.config.default_worker);
-                        const node = forest.tree.cptr(chore.node_id);
+                        const node = forest.dto_tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const def = ref.ix.cptr(forest.defmgr.defs.items);
                             if (def.path.is_definition)
@@ -459,11 +459,11 @@ pub const ForestPP = struct {
 
     reload_counter: usize = 0,
 
-    pub fn init(self: *Self) void {
+    pub fn init(self: *Self) !void {
         self.config_loader = cfg.file.Loader{ .env = self.env, .cli_args = self.cli_args };
         for (&self.pp) |*forest| {
             forest.* = .{ .env = self.env };
-            forest.init();
+            try forest.init();
         }
     }
     pub fn deinit(self: *Self) void {
@@ -554,7 +554,7 @@ pub const ForestPP = struct {
                 const config = self.config_loader.config orelse return error.CouldNotLoadConfig;
 
                 const forest = self.pong();
-                forest.reinit();
+                try forest.reinit();
                 try forest.load(&config);
 
                 // Swap ping and pong
