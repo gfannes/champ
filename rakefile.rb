@@ -93,28 +93,38 @@ end
 
 desc('Run e2e tests')
 task :e2e do
-    tmp_dir = File.join(here_dir, 'tmp')
+    e2e_dir = File.join(here_dir, 'e2e')
+
+    tmp_dir = File.join(e2e_dir, 'tmp')
     FileUtils.rm_rf(tmp_dir)
     FileUtils.mkdir(tmp_dir)
 
-    fp = "e2e/date_in_filename.naft"
-    sh("naft -u #{fp} #{tmp_dir}")
+    fps = %w[
+        date_in_filename.naft
+        toy.naft
+    ]
 
-    config_fp = File.join(tmp_dir, 'config.zon')
-    config = <<~EOS
-        .{
-            .groves = .{
-                .{
-                    .name = "test",
-                    .filepath = "#{tmp_dir}",
-                    .include = .{ "md" },
+    fps.each do |fp|
+        my_dir = File.join(tmp_dir, File.basename(fp, '.*'))
+
+        sh("naft -u #{File.join(e2e_dir, fp)} #{my_dir}")
+
+        config_fp = File.join(my_dir, 'config.zon')
+        config = <<~EOS
+            .{
+                .groves = .{
+                    .{
+                        .name = "test",
+                        .filepath = "#{my_dir}",
+                        .include = .{ "md" },
+                    },
                 },
-            },
-            .selected_groves = .{ "test" },
-        }
-    EOS
-    File.write(config_fp, config)
+                .selected_groves = .{ "test" },
+            }
+        EOS
+        File.write(config_fp, config)
 
-    sh("champ -u #{config_fp} pl")
-    sh("champ -u #{config_fp} ch -d")
+        sh("champ -u #{config_fp} pl")
+        sh("champ -u #{config_fp} ch -d")
+    end
 end
