@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile]` from https://github.com/gfannes/rubr from 2026-09-15
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile]` from https://github.com/gfannes/rubr from 2026-09-22
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -486,6 +486,13 @@ pub const naft = struct {
         has_block: bool = false,
         // Indicates if this Node already contains a Node. This is used for deciding newlines etc.
         has_node: bool = false,
+    
+        // Helper to implement `fn format()` when `fn write()` is present
+        pub fn write(v: anytype, w: *std.Io.Writer) void {
+            var r = Node.root(w);
+            defer r.deinit();
+            v.write(&r);
+        }
     
         pub fn root(w: ?*std.Io.Writer) Node {
             return .{ .w = w, .has_block = true };
@@ -1300,10 +1307,10 @@ pub const tree = struct {
         return struct {
             const Self = @This();
             pub const Id = usize;
-            pub const Ids = std.ArrayList(usize);
+            pub const Ids = std.ArrayList(Id);
     
             pub const Entry = struct {
-                id: usize,
+                id: Id,
                 data: *Data,
             };
     
@@ -1312,10 +1319,9 @@ pub const tree = struct {
                 child_ids: Ids,
                 parent_id: ?Id = null,
             };
-            const Nodes = std.ArrayList(Node);
     
             a: std.mem.Allocator,
-            nodes: Nodes = .empty,
+            nodes: std.ArrayList(Node) = .empty,
             root_ids: Ids = .empty,
     
             pub fn init(a: std.mem.Allocator) Self {

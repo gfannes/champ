@@ -27,6 +27,8 @@ pub fn init(a: std.mem.Allocator) !Self {
     return rv;
 }
 pub fn deinit(self: *Self) void {
+    for (self.tree.nodes.items) |node|
+        self.a.free(node.data.locations);
     self.tree.deinit();
 }
 
@@ -49,7 +51,9 @@ pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepa
             // No match found: insert new node
             const entry = try self.tree.addChild(parent);
             parent = entry.id;
-            entry.data.* = .{ .name = part.content, .node_id = dto_id, .filepath = filepath, .pos = pos };
+            const locations = try self.a.alloc(Node.Location, 1);
+            locations[0] = .{ .path = filepath, .pos = pos, .node_id = dto_id };
+            entry.data.* = .{ .name = part.content, .locations = locations };
         }
     }
 
@@ -58,24 +62,37 @@ pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepa
 
 pub fn addUnnamed(self: *Self, parent_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     const entry = try self.tree.addChild(parent_id);
-    entry.data.* = .{ .node_id = dto_id, .filepath = filepath, .pos = pos };
+    const locations = try self.a.alloc(Node.Location, 1);
+    locations[0] = .{ .path = filepath, .pos = pos, .node_id = dto_id };
+    entry.data.* = .{ .locations = locations };
     return entry.id;
 }
 
-pub fn format(self: Self, w: *std.Io.Writer) !void {
+pub fn write(self: Self, parent: *rubr.naft.Node) void {
+    var n = parent.node("Tree");
+    defer n.deinit();
+
     for (self.tree.root_ids.items) |root_id| {
-        try self.format_(w, root_id, 0);
+        try self.write_(&n, root_id);
     }
 }
-fn format_(self: Self, w: *std.Io.Writer, id: usize, depth: usize) !void {
-    for (0..depth) |_|
-        try w.print("  ", .{});
+fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
+    var n = parent.node("Node");
+    defer n.deinit();
 
-    try w.print("{f}", .{self.tree.cptr(id).*});
+    const node = self.tree.cptr(id).*;
+    if (node.name) |name|
+        n.attr("name", name);
+    for (node.locations) |location|
+        location.write(&n);
 
     for (self.tree.childIds(id)) |child_id| {
-        try self.format_(w, child_id, depth + 1);
+        try self.write_(&n, child_id);
     }
+}
+
+pub fn format(self: Self, w: *std.Io.Writer) !void {
+    rubr.naft.Node.write(self, w);
 }
 
 test "amp.Tree" {
