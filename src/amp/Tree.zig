@@ -72,6 +72,46 @@ pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath:
     return entry.id;
 }
 
+pub fn resolve(self: *Self, ap: Path) !?usize {
+    var cb = struct {
+        const My = @This();
+        ap: Path,
+        tree: *Tree,
+        depth: usize = 0,
+        found_id: ?usize = null,
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+            if (before) {
+                my.depth += 1;
+                if (my.isFit(entry)) {
+                    // &todo: handle ambiguous matches
+                    my.found_id = entry.id;
+                }
+            } else {
+                my.depth -= 1;
+            }
+        }
+
+        fn isFit(my: My, leaf: Tree.Entry) bool {
+            const part_count = my.ap.parts.items.len;
+            if (my.depth < part_count)
+                return false;
+
+            var entry = leaf;
+            for (0..part_count) |ix0| {
+                const part = my.ap.parts.items[part_count - 1 - ix0];
+                const name = entry.data.name orelse return false;
+                std.log.debug("Comparing {s} with {s}", .{ part.content, name });
+                if (!std.mem.eql(u8, part.content, name))
+                    return false;
+                entry = (my.tree.parent(entry.id) catch return false) orelse return false;
+            }
+            return true;
+        }
+    }{ .ap = ap, .tree = &self.tree };
+    try self.tree.dfs(self.root.id, &cb);
+    return cb.found_id;
+}
+
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
     var n = parent.node("Tree");
     defer n.deinit();

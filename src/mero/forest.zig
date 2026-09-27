@@ -281,7 +281,7 @@ pub const Forest = struct {
                 }
                 // Tree-based inheritance between Nodes
                 if (my.parent(entry.id)) |parent_entry| {
-                    std.log.debug("Injecting from {?} to {?}", .{ parent_entry.data.def, n.def });
+                    // std.log.debug("Injecting from {?} to {?}", .{ parent_entry.data.def, n.def });
                     try my.injectAmps(parent_entry.data, n);
                 }
 
@@ -402,7 +402,8 @@ pub const Forest = struct {
 
             env: Env,
             aa: std.mem.Allocator,
-            tree: *const dto.Tree,
+            dto_tree: *const dto.Tree,
+            amp_tree: *amp.Tree,
             defmgr: *amp.DefMgr,
 
             filepath: []const u8 = &.{},
@@ -446,6 +447,11 @@ pub const Forest = struct {
                                     if (maybe_ap) |*ap| {
                                         defer ap.deinit();
                                         if (!ap.is_definition) {
+                                            std.log.info("Resolving {f}", .{ap.*});
+                                            if (try my.amp_tree.resolve(ap.*)) |amp_node| {
+                                                std.log.info("Resolved {f} to {}\n", .{ ap.*, amp_node });
+                                            }
+
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                             if (try my.defmgr.resolve(ap, grove_id)) |defix| {
                                                 const def = dto.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
@@ -453,11 +459,11 @@ pub const Forest = struct {
 
                                                 if (my.is_new_file and n.type.isText(.Paragraph)) {
                                                     // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
-                                                    if (try my.tree.parent(entry.id)) |file| {
+                                                    if (try my.dto_tree.parent(entry.id)) |file| {
                                                         try file.data.org_amps.append(my.env.a, def);
 
                                                         if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                                                            if (try my.tree.parent(file.id)) |folder| {
+                                                            if (try my.dto_tree.parent(file.id)) |folder| {
                                                                 try folder.data.org_amps.append(my.env.a, def);
                                                             }
                                                         }
@@ -483,7 +489,8 @@ pub const Forest = struct {
         }{
             .env = self.env,
             .aa = self.aral.allocator(),
-            .tree = &self.dto_tree,
+            .dto_tree = &self.dto_tree,
+            .amp_tree = &self.amp_tree,
             .defmgr = &self.defmgr,
         };
         try self.dto_tree.dfsAll(&cb);
