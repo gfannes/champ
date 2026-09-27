@@ -2,7 +2,7 @@
 	[file](name:&.md)(content:&&:toy)
 	[file](name:a.md)(content:&&a &alias_a^
 - [ ] Do this
-- &&b
+- &&b &c
 - &&:c
 	)
 }

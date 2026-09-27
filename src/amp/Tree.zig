@@ -35,9 +35,17 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+    return try self.addAbsolute_(self.root.id, ap, grove_id, dto_id, filepath, pos);
+}
+
+pub fn addPhony(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+    return try self.addAbsolute_(self.phony.id, ap, grove_id, dto_id, filepath, pos);
+}
+
+fn addAbsolute_(self: *Self, node_id: usize, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     _ = grove_id;
 
-    var parent = self.root.id;
+    var parent = node_id;
     for (ap.parts.items) |part| {
         var maybe_child_id: ?usize = null;
         for (self.tree.childIds(parent)) |child_id| {
@@ -72,12 +80,6 @@ pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath:
     return entry.id;
 }
 
-pub fn addPhony(self: *Self, ap: Path) !usize {
-    _ = self;
-    _ = ap;
-    return 0;
-}
-
 pub fn resolve(self: *Self, ap: Path) !?usize {
     var cb = struct {
         const My = @This();
@@ -106,7 +108,7 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
             for (0..part_count) |ix0| {
                 const part = my.ap.parts.items[part_count - 1 - ix0];
                 const name = entry.data.name orelse return false;
-                std.log.debug("Comparing {s} with {s}", .{ part.content, name });
+                // std.log.debug("Comparing {s} with {s}", .{ part.content, name });
                 if (!std.mem.eql(u8, part.content, name))
                     return false;
                 entry = (my.tree.parent(entry.id) catch return false) orelse return false;
@@ -116,6 +118,63 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
     }{ .ap = ap, .tree = &self.tree };
     try self.tree.dfs(self.root.id, &cb);
     return cb.found_id;
+}
+
+pub fn addDependency(self: *Self, from: usize, to: usize) !bool {
+    if (from == to)
+        // No self-dependencies
+        return false;
+
+    const node = self.tree.ptr(from);
+    var deps = &node.dependencies;
+    for (deps.items) |dep|
+        if (dep == to)
+            return false;
+    try deps.append(self.a, to);
+    return true;
+}
+
+pub fn addAncestralDependencies(self: *Self) !void {
+    var cb = struct {
+        const My = @This();
+        outer: *Self,
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+            if (!before)
+                return;
+            if (try my.outer.tree.parent(entry.id)) |parent|
+                _ = try my.outer.addDependency(parent.id, entry.id);
+        }
+    }{ .outer = self };
+    try self.tree.dfsAll(&cb);
+}
+
+pub fn aggregateDependencies(self: *Self) !void {
+    var cb = struct {
+        const My = @This();
+        new_dep_count: u64 = 0,
+        outer: *Self,
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+            if (!before)
+                return;
+
+            // Do not directly iterate on items since addDependencies() might reallocate that
+            for (0..entry.data.dependencies.items.len) |ix0| {
+                const dep = entry.data.dependencies.items[ix0];
+                for (my.outer.tree.cptr(dep).dependencies.items) |depp| {
+                    if (try my.outer.addDependency(entry.id, depp))
+                        my.new_dep_count += 1;
+                }
+            }
+        }
+    }{ .outer = self };
+
+    while (true) {
+        cb.new_dep_count = 0;
+        try self.tree.dfsAll(&cb);
+        if (cb.new_dep_count == 0)
+            break;
+        std.log.info("Found {} new dependencies, aggregating again", .{cb.new_dep_count});
+    }
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {

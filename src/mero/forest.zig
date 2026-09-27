@@ -23,6 +23,7 @@ pub const Error = error{
     TextMustHaveParent,
     ParagraphMustHaveParent,
     FileMustHaveParent,
+    ExpectedAmpNode,
 };
 
 pub const Forest = struct {
@@ -260,6 +261,9 @@ pub const Forest = struct {
 
     // Distribute parent org_amps and agg_amps from root to leaf into agg_amps
     fn aggregateAmps(self: *Self) !void {
+        // try self.amp_tree.addAncestralDependencies();
+        try self.amp_tree.aggregateDependencies();
+
         var cb = struct {
             const My = @This();
 
@@ -302,7 +306,7 @@ pub const Forest = struct {
                     }
                 }
 
-                // Inherite Tags from aggs that resolve to a named Def.
+                // Inherit Tags from aggs that resolve to a named Def.
                 for (n.agg_amps.items) |agg| {
                     const def = agg.cptr(my.defmgr.defs.items);
                     if (def.location) |location| {
@@ -447,14 +451,18 @@ pub const Forest = struct {
                                     if (maybe_ap) |*ap| {
                                         defer ap.deinit();
                                         if (!ap.is_definition) {
+                                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+
                                             std.log.info("Resolving {f}", .{ap.*});
-                                            if (try my.amp_tree.resolve(ap.*)) |amp_node| {
-                                                std.log.info("Resolved {f} to {}", .{ ap.*, amp_node });
-                                            } else {
-                                                _ = try my.amp_tree.addPhony(ap.*);
+                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse (try my.amp_tree.addPhony(ap.*, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols }));
+                                            if (n.amp_node) |n_amp_node| {
+                                                if (ap.is_dependency) {
+                                                    _ = try my.amp_tree.addDependency(amp_node, n_amp_node);
+                                                } else {
+                                                    _ = try my.amp_tree.addDependency(n_amp_node, amp_node);
+                                                }
                                             }
 
-                                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                             if (try my.defmgr.resolve(ap, grove_id)) |defix| {
                                                 const def = dto.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
                                                 try n.org_amps.append(my.env.a, def);
