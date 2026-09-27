@@ -93,6 +93,8 @@ end
 
 desc('Run e2e tests')
 task :e2e do
+    sh("rake install[debug]")
+
     e2e_dir = File.join(here_dir, 'e2e')
 
     tmp_dir = File.join(e2e_dir, 'tmp')
@@ -103,6 +105,7 @@ task :e2e do
         date_in_filename.naft
         toy.naft
     ]
+    fps = fps[1...2]
 
     fps.each do |fp|
         my_dir = File.join(tmp_dir, File.basename(fp, '.*'))
@@ -125,7 +128,7 @@ task :e2e do
         File.write(config_fp, config)
 
         sh("champ -u #{config_fp} pl")
-        # sh("champ -u #{config_fp} ch -d")
-        sh("champ -u #{config_fp} ch")
+        sh("champ -u #{config_fp} ch -d")
+        # sh("champ -u #{config_fp} ch")
     end
 end

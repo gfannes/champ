@@ -8,4 +8,5 @@
 }
 [folder](name:grove2){
 	[file](name:&.md)(content:&&:toy^)
+	[file](name:20260926.md)(content:&&:date_task)
 }

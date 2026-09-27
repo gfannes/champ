@@ -126,6 +126,7 @@ pub const Node = struct {
     type: Type = undefined,
 
     // Node id into amp.Tree.tree
+    // &todo &amp_node:remove
     amp_node: ?usize = null,
 
     // Ref to a definition that is directly present in this Node
@@ -176,6 +177,8 @@ pub const Node = struct {
             },
             .text => |text| n.attr("text", text.kind),
         }
+        if (self.amp_node) |amp_node|
+            n.attr("amp_node", amp_node);
         if (self.def) |def|
             n.attr("def", def.ix);
         for (self.org_amps.items) |org|

@@ -20,6 +20,9 @@ pub const Error = error{
     ExpectedGroveId,
     TooManyIterations,
     ExpectedConfigDefault,
+    TextMustHaveParent,
+    ParagraphMustHaveParent,
+    FileMustHaveParent,
 };
 
 pub const Forest = struct {
@@ -502,9 +505,19 @@ pub const Forest = struct {
             do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
+            path: std.ArrayList(?usize) = .empty,
+
+            fn deinit(my: *My) void {
+                my.path.deinit(my.env.a);
+            }
+
             pub fn call(my: *My, entry: dto.Tree.Entry, before: bool) !void {
-                if (!before)
+                if (!before) {
+                    _ = my.path.pop();
                     return;
+                }
+
+                try my.path.append(my.env.a, null);
 
                 const n = entry.data;
 
@@ -563,6 +576,9 @@ pub const Forest = struct {
                             n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, n.filepath, entry.id, pos), .pos = pos };
                             // We add this Def to the org_amps as well to ensure aggregation picks it up
                             try n.org_amps.append(my.env.a, n.def.?);
+
+                            const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), entry.id, n.filepath, pos);
+                            try my.setAmpNode(entry, amp_node);
                         }
 
                         if (n.def) |ref| {
@@ -650,7 +666,8 @@ pub const Forest = struct {
                                         std.log.warn("Illegal or duplicate definition found in '{s}'", .{my.filepath});
                                     }
 
-                                    n.amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
+                                    const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
+                                    try my.setAmpNode(entry, amp_node);
                                 } else {
                                     needs_def = true;
                                 }
@@ -668,25 +685,9 @@ pub const Forest = struct {
                 }
 
                 if (n.amp_node == null and is_node) {
-                    var maybe_parent: ?usize = null;
-                    var child_id = entry.id;
-                    while (maybe_parent == null) {
-                        if (try my.dto_tree.parent(child_id)) |parent| {
-                            if (parent.data.amp_node) |node_id| {
-                                // We found the parent
-                                maybe_parent = node_id;
-                            } else {
-                                child_id = parent.id;
-                            }
-                        } else {
-                            // We hit root and cannot continue
-                            break;
-                        }
-                    }
-                    if (maybe_parent) |parent| {
-                        const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                        n.amp_node = try my.amp_tree.addUnnamed(parent, entry.id, my.filepath, pos);
-                    }
+                    const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
+                    const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), entry.id, my.filepath, pos);
+                    try my.setAmpNode(entry, amp_node);
                 }
 
                 if (meta.hasData())
@@ -723,7 +724,42 @@ pub const Forest = struct {
                     }
                 }
             }
+
+            fn setAmpNode(my: *My, entry: dto.Tree.Entry, amp_node: usize) !void {
+                my.path.items[my.path.items.len - 1] = amp_node;
+
+                const n = entry.data;
+
+                n.amp_node = amp_node;
+
+                if (my.is_new_file and n.type.isText(.Paragraph)) {
+                    if (my.path.items[my.path.items.len - 2]) |id| {
+                        try my.amp_tree.tree.ptr(amp_node).dependencies.append(my.env.a, id);
+                    }
+                    // We use amp_node instead of the any pre-existing File amp.Node
+                    my.path.items[my.path.items.len - 2] = amp_node;
+
+                    const file = try my.dto_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
+                    if (amp.is_folder_metadata_fp(file.data.filepath)) {
+                        if (my.path.items[my.path.items.len - 3]) |id| {
+                            try my.amp_tree.tree.ptr(amp_node).dependencies.append(my.env.a, id);
+                        }
+                        // We use amp_node instead of the any pre-existing Folder amp.Node
+                        my.path.items[my.path.items.len - 3] = amp_node;
+                    }
+                }
+            }
+
+            fn parentAmpNode(my: My) ?usize {
+                var rit = std.mem.reverseIterator(my.path.items);
+                while (rit.next()) |maybe_amp_node| {
+                    if (maybe_amp_node) |amp_node|
+                        return amp_node;
+                }
+                return null;
+            }
         }{ .env = self.env, .dto_tree = &self.dto_tree, .amp_tree = &self.amp_tree, .defmgr = &self.defmgr };
+        defer cb.deinit();
         try self.dto_tree.dfsAll(&cb);
     }
 

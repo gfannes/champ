@@ -8,7 +8,7 @@ const Self = @This();
 pub const Location = struct {
     path: []const u8 = &.{},
     pos: ?filex.Pos = null,
-    node_id: ?usize = null,
+    dto_id: ?usize = null,
 
     pub fn write(self: @This(), parent: *rubr.naft.Node) void {
         var n = parent.node("Location");
@@ -16,13 +16,14 @@ pub const Location = struct {
         n.attr("path", self.path);
         if (self.pos) |pos|
             n.attr("row", pos.row);
-        if (self.node_id) |node_id|
-            n.attr("node_id", node_id);
+        if (self.dto_id) |dto_id|
+            n.attr("dto_id", dto_id);
     }
 };
 
 name: ?[]const u8 = null,
 locations: []Location = &.{},
+dependencies: std.ArrayList(usize) = .empty,
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
     var n = parent.node("Node");

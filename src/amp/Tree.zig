@@ -27,8 +27,10 @@ pub fn init(a: std.mem.Allocator) !Self {
     return rv;
 }
 pub fn deinit(self: *Self) void {
-    for (self.tree.nodes.items) |node|
+    for (self.tree.nodes.items) |*node| {
         self.a.free(node.data.locations);
+        node.data.dependencies.deinit(self.a);
+    }
     self.tree.deinit();
 }
 
@@ -52,7 +54,7 @@ pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepa
             const entry = try self.tree.addChild(parent);
             parent = entry.id;
             const locations = try self.a.alloc(Node.Location, 1);
-            locations[0] = .{ .path = filepath, .pos = pos, .node_id = dto_id };
+            locations[0] = .{ .path = filepath, .pos = pos, .dto_id = dto_id };
             entry.data.* = .{ .name = part.content, .locations = locations };
         }
     }
@@ -60,10 +62,12 @@ pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepa
     return parent;
 }
 
-pub fn addUnnamed(self: *Self, parent_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+    const parent_id = maybe_parent_id orelse self.root.id;
+
     const entry = try self.tree.addChild(parent_id);
     const locations = try self.a.alloc(Node.Location, 1);
-    locations[0] = .{ .path = filepath, .pos = pos, .node_id = dto_id };
+    locations[0] = .{ .path = filepath, .pos = pos, .dto_id = dto_id };
     entry.data.* = .{ .locations = locations };
     return entry.id;
 }
@@ -80,9 +84,13 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
     var n = parent.node("Node");
     defer n.deinit();
 
+    n.attr("id", id);
+
     const node = self.tree.cptr(id).*;
     if (node.name) |name|
         n.attr("name", name);
+    for (node.dependencies.items) |dep|
+        n.attr("dep", dep);
     for (node.locations) |location|
         location.write(&n);
 
