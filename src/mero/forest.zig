@@ -449,7 +449,9 @@ pub const Forest = struct {
                                         if (!ap.is_definition) {
                                             std.log.info("Resolving {f}", .{ap.*});
                                             if (try my.amp_tree.resolve(ap.*)) |amp_node| {
-                                                std.log.info("Resolved {f} to {}\n", .{ ap.*, amp_node });
+                                                std.log.info("Resolved {f} to {}", .{ ap.*, amp_node });
+                                            } else {
+                                                _ = try my.amp_tree.addPhony(ap.*);
                                             }
 
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;

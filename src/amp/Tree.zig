@@ -72,6 +72,12 @@ pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath:
     return entry.id;
 }
 
+pub fn addPhony(self: *Self, ap: Path) !usize {
+    _ = self;
+    _ = ap;
+    return 0;
+}
+
 pub fn resolve(self: *Self, ap: Path) !?usize {
     var cb = struct {
         const My = @This();
