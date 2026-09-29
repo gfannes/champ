@@ -34,17 +34,17 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
-    return try self.addAbsolute_(self.root.id, ap, grove_id, dto_id, filepath, pos);
+    const id = try self.addAbsolute_(self.root.id, ap);
+    try self.tree.ptr(id).appendLocation(.Definition, grove_id, filepath, pos, dto_id);
+    return id;
 }
 
-pub fn addPhony(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
-    return try self.addAbsolute_(self.phony.id, ap, grove_id, dto_id, filepath, pos);
+pub fn addPhony(self: *Self, ap: Path) !usize {
+    return try self.addAbsolute_(self.phony.id, ap);
 }
 
-fn addAbsolute_(self: *Self, node_id: usize, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
-    _ = grove_id;
-
-    var parent = node_id;
+fn addAbsolute_(self: *Self, root_node_id: usize, ap: Path) !usize {
+    var parent = root_node_id;
     for (ap.parts.items) |part| {
         var maybe_child_id: ?usize = null;
         for (self.tree.childIds(parent)) |child_id| {
@@ -53,6 +53,7 @@ fn addAbsolute_(self: *Self, node_id: usize, ap: Path, grove_id: usize, dto_id: 
                 maybe_child_id = child_id;
             }
         }
+
         if (maybe_child_id) |child_id| {
             // Found match: continue the search
             parent = child_id;
@@ -62,23 +63,25 @@ fn addAbsolute_(self: *Self, node_id: usize, ap: Path, grove_id: usize, dto_id: 
             entry.data.init(self.a, part.content);
 
             parent = entry.id;
-
-            try entry.data.appendLocation(filepath, pos, dto_id);
         }
     }
 
     return parent;
 }
 
-pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     const parent_id = maybe_parent_id orelse self.root.id;
 
     const entry = try self.tree.addChild(parent_id);
     entry.data.init(self.a, null);
 
-    try entry.data.appendLocation(filepath, pos, dto_id);
+    try entry.data.appendLocation(.Definition, grove_id, filepath, pos, dto_id);
 
     return entry.id;
+}
+
+pub fn addReference(self: *Self, id: usize, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !void {
+    try self.tree.ptr(id).appendLocation(.Reference, grove_id, filepath, pos, dto_id);
 }
 
 pub fn resolve(self: *Self, ap: Path) !?usize {
@@ -185,20 +188,12 @@ pub fn aggregateDependencies(self: *Self) !void {
     }
 }
 
-pub fn aggregateMeta(self: *Self) !void {
-    var cb = struct {
-        const My = @This();
-        outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
-            if (!before)
-                return;
-            for (entry.data.ancestors.items) |ancestor| {
-                if (my.outer.tree.ptr(ancestor).meta) |meta|
-                    try entry.data.updateMeta(meta);
-            }
+pub fn aggregateData(self: *Self) !void {
+    for (self.tree.nodes.items) |*entry| {
+        for (entry.data.ancestors.items) |ancestor| {
+            try entry.data.aggregate(self.tree.ptr(ancestor));
         }
-    }{ .outer = self };
-    try self.tree.dfsAll(&cb);
+    }
 }
 
 pub fn updateMeta(self: *Self, node: usize, meta: Meta) !void {
@@ -226,8 +221,8 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
         n.attr("ancestor", ancestor);
     if (node.meta) |meta|
         meta.write(&n);
-    for (node.locations.items) |location|
-        location.write(&n);
+    for (node.def_locs.items) |def_loc|
+        def_loc.write(&n);
 
     for (self.tree.childIds(id)) |child_id| {
         try self.write_(&n, child_id);

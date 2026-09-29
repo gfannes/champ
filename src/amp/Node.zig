@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Meta = @import("Meta.zig");
+const Date = @import("Date.zig");
 
 const filex = @import("../filex.zig");
 const rubr = @import("../rubr.zig");
@@ -9,26 +10,34 @@ const Self = @This();
 
 pub const Location = struct {
     path: []const u8 = &.{},
-    pos: ?filex.Pos = null,
-    dto_id: ?usize = null,
+    pos: filex.Pos,
+    dto_id: usize,
+    grove_id: usize,
 
     pub fn write(self: @This(), parent: *rubr.naft.Node) void {
         var n = parent.node("Location");
         defer n.deinit();
         n.attr("path", self.path);
-        if (self.pos) |pos|
-            n.attr("row", pos.row);
-        if (self.dto_id) |dto_id|
-            n.attr("dto_id", dto_id);
+        n.attr("grove_id", self.grove_id);
+        n.attr("row", self.pos.row);
+        n.attr("dto_id", self.dto_id);
     }
 };
 
 a: std.mem.Allocator,
 name: ?[]const u8 = null,
-locations: std.ArrayList(Location) = .empty,
+def_locs: std.ArrayList(Location) = .empty,
+ref_locs: std.ArrayList(Location) = .empty,
 ancestors: std.ArrayList(usize) = .empty,
 direct_ancestor_count: usize = 0,
 meta: ?Meta = null,
+
+order_offset: i32 = 0,
+order_min: i32 = std.math.maxInt(i32),
+order_min_locked: bool = false,
+my_cost: u32 = 0,
+child_costs: u32 = 0,
+date_min: ?Date = null,
 
 pub fn init(self: *Self, a: std.mem.Allocator, name: ?[]const u8) void {
     self.* = .{
@@ -38,14 +47,66 @@ pub fn init(self: *Self, a: std.mem.Allocator, name: ?[]const u8) void {
 }
 
 pub fn deinit(self: *Self) void {
-    self.locations.deinit(self.a);
+    self.def_locs.deinit(self.a);
+    self.ref_locs.deinit(self.a);
     self.ancestors.deinit(self.a);
     if (self.meta) |*meta|
         meta.deinit();
 }
 
-pub fn appendLocation(self: *Self, filepath: []const u8, pos: filex.Pos, dto_id: usize) !void {
-    try self.locations.append(self.a, .{ .path = filepath, .pos = pos, .dto_id = dto_id });
+pub fn order(self: Self) i32 {
+    return self.order_offset + self.order_min;
+}
+
+pub const Where = enum { Definition, Reference };
+pub fn appendLocation(self: *Self, where: Where, grove_id: usize, filepath: []const u8, pos: filex.Pos, dto_id: usize) !void {
+    const locs = switch (where) {
+        .Definition => &self.def_locs,
+        .Reference => &self.ref_locs,
+    };
+    try locs.append(self.a, .{ .path = filepath, .pos = pos, .dto_id = dto_id, .grove_id = grove_id });
+}
+
+pub fn aggregate(self: *Self, other: *Self) !void {
+    // Aggregate metadata from other into self
+    if (other.meta) |other_meta| {
+        if (other_meta.hasData()) {
+            if (self.meta == null)
+                self.meta = try other_meta.dup(self.a);
+
+            if (self.meta) |*self_meta| {
+                if (other_meta.order) |ordr| {
+                    if (ordr.relative) {
+                        self.order_offset += ordr.value;
+                    } else {
+                        if (!self.order_min_locked) {
+                            self.order_min = @min(self.order_min, ordr.value);
+                            self.order_min_locked = ordr.is_exclusive;
+                        }
+                    }
+                }
+                for (other_meta.workers.items) |worker| {
+                    try self_meta.appendWorker(worker);
+                }
+
+                // &chore:sort: We track the smallest date when present since this has highest prio
+                if (other_meta.date) |date| {
+                    if (self.date_min) |date_min| {
+                        if (date.date.epoch_day.day < date_min.date.epoch_day.day)
+                            self.date_min = date;
+                    } else {
+                        // This Chore has no date yet: inherit from def
+                        self.date_min = date;
+                    }
+                }
+            }
+        }
+    }
+
+    // Aggregate metadata from self into other
+    if (self != other) {
+        other.child_costs += self.my_cost;
+    }
 }
 
 pub fn updateMeta(self: *Self, meta: Meta) !void {

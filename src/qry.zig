@@ -2,7 +2,6 @@ const std = @import("std");
 
 const rubr = @import("rubr.zig");
 
-const Chore = @import("chorex.zig").Chore;
 const amp = @import("amp.zig");
 
 pub const Query = struct {
@@ -41,7 +40,7 @@ pub const Query = struct {
     default_worker: ?[]const u8 = null,
     parts: Parts = .empty,
     paths: std.ArrayList(*const amp.Path) = .empty,
-    chore: ?Chore = null,
+    meta: ?amp.Meta = null,
 
     do_log: bool = false,
 
@@ -106,10 +105,10 @@ pub const Query = struct {
         }
     }
 
-    // Call this to reset this Query instance to start the computation of a match with a new Chore
-    pub fn prepare(self: *Self, chore: Chore, default_worker: ?[]const u8) !void {
+    // Call this to reset this Query instance to start the computation of a match with a new Meta
+    pub fn prepare(self: *Self, meta: amp.Meta, default_worker: ?[]const u8) !void {
         try self.paths.resize(self.a, 0);
-        self.chore = chore;
+        self.meta = meta;
         self.default_worker = default_worker;
     }
 
@@ -120,10 +119,10 @@ pub const Query = struct {
 
     // Compute the match itself
     pub fn distance(self: Self) ?f64 {
-        const chore = self.chore orelse return null;
+        const meta = self.meta orelse return null;
 
         var status_is_match: ?bool = null;
-        if (chore.meta.status) |status| {
+        if (meta.status) |status| {
             if (status.kind == .Done and self.include.done)
                 status_is_match = true;
             if (status.kind == .Todo and self.include.todo)
@@ -155,36 +154,36 @@ pub const Query = struct {
                 // Any worker is OK
                 worker_matches = true;
             } else {
-                // We are looking for Chores assigned to 'worker'
-                if (rubr.slc.isEmpty(chore.meta.workers.items)) {
-                    // No explicit assignment: this Chore belong to 'default_worker'
+                // We are looking for Metas assigned to 'worker'
+                if (rubr.slc.isEmpty(meta.workers.items)) {
+                    // No explicit assignment: this Meta belongs to 'default_worker'
                     if (self.default_worker) |default_worker| {
                         if (std.mem.eql(u8, default_worker, worker))
                             worker_matches = true;
                     }
                 } else {
                     // Explicit assigment: check for a match
-                    for (chore.meta.workers.items) |w| {
+                    for (meta.workers.items) |w| {
                         if (std.mem.eql(u8, w.name, worker))
                             worker_matches = true;
                     }
                 }
             }
         } else {
-            // By default, we look for all Chores assigned to the 'default_worker', if set
+            // By default, we look for all Metas assigned to the 'default_worker', if set
             if (self.default_worker) |default_worker| {
-                // There is a 'default_worker', look for Chores assigned to this
-                if (rubr.slc.isEmpty(chore.meta.workers.items)) {
+                // There is a 'default_worker', look for Metas assigned to this
+                if (rubr.slc.isEmpty(meta.workers.items)) {
                     worker_matches = true;
                 } else {
-                    for (chore.meta.workers.items) |w| {
+                    for (meta.workers.items) |w| {
                         if (std.mem.eql(u8, w.name, default_worker))
                             worker_matches = true;
                     }
                 }
             } else {
-                // No 'default_worker': unassigned Chores are OK
-                worker_matches = rubr.slc.isEmpty(chore.meta.workers.items);
+                // No 'default_worker': unassigned Metas are OK
+                worker_matches = rubr.slc.isEmpty(meta.workers.items);
             }
         }
         if (!worker_matches)

@@ -382,7 +382,7 @@ pub const Forest = struct {
     }
 
     fn computeChores(self: *Self) !void {
-        try self.amp_tree.aggregateMeta();
+        try self.amp_tree.aggregateData();
 
         for (self.defmgr.defs.items) |def| {
             if (def.location) |location| {
@@ -456,7 +456,7 @@ pub const Forest = struct {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
                                             std.log.debug("Resolving {f}", .{ap.*});
-                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse (try my.amp_tree.addPhony(ap.*, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols }));
+                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse (try my.amp_tree.addPhony(ap.*));
                                             if (n.amp_node) |n_amp_node| {
                                                 if (ap.is_dependency) {
                                                     _ = try my.amp_tree.addAncestralDependency(amp_node, n_amp_node);
@@ -464,6 +464,8 @@ pub const Forest = struct {
                                                     _ = try my.amp_tree.addAncestralDependency(n_amp_node, amp_node);
                                                 }
                                             }
+
+                                            try my.amp_tree.addReference(amp_node, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols });
 
                                             if (try my.defmgr.resolve(ap, grove_id)) |defix| {
                                                 const def = dto.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
@@ -599,7 +601,7 @@ pub const Forest = struct {
                             // We add this Def to the org_amps as well to ensure aggregation picks it up
                             try n.org_amps.append(my.env.a, n.def.?);
 
-                            const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), entry.id, n.filepath, pos);
+                            const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
                             try my.setAmpNode(entry, amp_node);
                         }
 
@@ -710,8 +712,9 @@ pub const Forest = struct {
                 }
 
                 if (n.amp_node == null and is_node) {
+                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                     const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                    const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), entry.id, my.filepath, pos);
+                    const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
                     try my.setAmpNode(entry, amp_node);
                 }
 

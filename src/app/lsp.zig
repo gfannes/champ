@@ -113,32 +113,50 @@ pub const Lsp = struct {
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
-                    // Find Amp corresponding to this src_filename and position
-                    var maybe_ap: ?amp.Path = null;
-                    var dst_filename: ?[]const u8 = null;
+                    // Find definition filename/range corresponding to this src_filename and position
+                    var def_filename: ?[]const u8 = null;
                     var range = dto.Range{};
-                    for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, src_filename, chore.filepath))
-                            continue;
+                    if (true) {
+                        for (forest.amp_tree.tree.nodes.items) |entry| {
+                            const node = entry.data;
+                            for (node.ref_locs.items) |ref_loc| {
+                                if (!std.mem.endsWith(u8, src_filename, ref_loc.path))
+                                    continue;
 
-                        const node = forest.dto_tree.cptr(chore.node_id);
-                        for (node.org_amps.items) |org_ref| {
-                            const pos = org_ref.pos;
-                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
-                                maybe_ap = org_def.path;
-                                if (org_def.location) |location| {
-                                    dst_filename = location.filepath;
-                                    const def_pos = location.pos;
-                                    range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
-                                    range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                    try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.path });
+                                const pos = ref_loc.pos;
+                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                    if (rubr.slc.first(node.def_locs.items)) |def_loc| {
+                                        def_filename = def_loc.path;
+                                        const def_pos = def_loc.pos;
+                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
+                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (forest.chores.list.items) |chore| {
+                            if (!std.mem.endsWith(u8, src_filename, chore.filepath))
+                                continue;
+
+                            const node = forest.dto_tree.cptr(chore.node_id);
+                            for (node.org_amps.items) |org_ref| {
+                                const pos = org_ref.pos;
+                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                    const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
+                                    if (org_def.location) |location| {
+                                        def_filename = location.filepath;
+                                        const def_pos = location.pos;
+                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
+                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
+                                        try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.path });
+                                    }
                                 }
                             }
                         }
                     }
 
-                    if (dst_filename) |filename| {
+                    if (def_filename) |filename| {
                         const uri = try pathToUri_(filename, aaa);
 
                         const location = dto.Location{ .uri = uri, .range = range };
@@ -349,7 +367,7 @@ pub const Lsp = struct {
                             // We only take text chores into account
                             continue;
 
-                        try q.prepare(chore, self.config.default_worker);
+                        try q.prepare(chore.meta, self.config.default_worker);
                         const node = forest.dto_tree.cptr(chore.node_id);
                         for (node.org_amps.items) |ref| {
                             const def = ref.ix.cptr(forest.defmgr.defs.items);
