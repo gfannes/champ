@@ -45,126 +45,79 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
     try query.setup(query_input);
 
     // Collect all chores
-    if (true) {
-        for (self.forest.amp_tree.tree.nodes.items) |entry_| {
-            const node = entry_.data;
-            const meta = node.meta orelse continue;
+    for (self.forest.amp_tree.tree.nodes.items, 0..) |entry_, id| {
+        const node = entry_.data;
+        const meta = node.meta orelse continue;
 
-            const status = meta.status orelse continue;
-            switch (status.kind) {
-                .Todo, .Wip, .Go, .Blocked, .Question => {},
-                else => continue,
-            }
-
-            const myorder = node.order();
-            if (myorder > max_order)
-                continue;
-
-            var filepath: []const u8 = &.{};
-            var content: []const u8 = &.{};
-            var rows: rubr.idx.Range = .{};
-            var cols: rubr.idx.Range = .{};
-
-            try query.prepare(meta, self.config.default_worker);
-            for (node.def_locs.items) |def_loc| {
-                if (filepath.len == 0)
-                    filepath = def_loc.path;
-
-                const dto_node = self.forest.dto_tree.cptr(def_loc.dto_id);
-                if (content.len == 0)
-                    content = dto_node.content;
-                if (rows.empty())
-                    rows = dto_node.content_rows;
-                if (cols.empty())
-                    cols = dto_node.content_cols;
-
-                for (dto_node.org_amps.items) |ref| {
-                    const def = ref.ix.cptr(self.forest.defmgr.defs.items);
-                    try query.add(&def.path);
-                }
-                for (dto_node.agg_amps.items) |ref| {
-                    const def = ref.cptr(self.forest.defmgr.defs.items);
-                    try query.add(&def.path);
-                }
-            }
-
-            // Check correspondence with provided query
-            const distance = query.distance() orelse continue;
-            if (distance > 1.0)
-                continue;
-
-            // Check that its start date is before today, if any
-            // &todo &meta Add date to chore and re-enable this check
-            const date = if (node.date_min) |date| ret: {
-                if (date.date.epoch_day.day > today.epoch_day.day)
-                    continue;
-                break :ret date;
-            } else null;
-
-            const entry = Entry{
-                .filepath = filepath,
-                .content = content,
-                .date = date,
-                .order = myorder,
-                .rows = rows,
-                .cols = cols,
-            };
-
-            try self.all_entries.append(
-                self.env.a,
-                entry,
-            );
+        const status = meta.status orelse continue;
+        switch (status.kind) {
+            .Todo, .Wip, .Go, .Blocked, .Question => {},
+            else => continue,
         }
-    } else {
-        for (self.forest.chores.list.items) |chore| {
-            const status = chore.meta.status orelse continue;
-            switch (status.kind) {
-                .Todo, .Wip, .Go, .Blocked, .Question => {},
-                else => continue,
-            }
 
-            const myorder = chore.order();
-            if (myorder > max_order)
-                continue;
+        const myorder = node.order();
+        if (myorder > max_order)
+            continue;
 
-            try query.prepare(chore.meta, self.config.default_worker);
-            const dto_node = self.forest.dto_tree.cptr(chore.node_id);
-            for (dto_node.org_amps.items) |ref| {
-                const def = ref.ix.cptr(self.forest.defmgr.defs.items);
-                try query.add(&def.path);
-            }
-            for (dto_node.agg_amps.items) |ref| {
-                const def = ref.cptr(self.forest.defmgr.defs.items);
-                try query.add(&def.path);
-            }
+        var filepath: []const u8 = &.{};
+        var content: []const u8 = &.{};
+        var rows: rubr.idx.Range = .{};
+        var cols: rubr.idx.Range = .{};
 
-            // Check correspondence with provided query
-            const distance = query.distance() orelse continue;
-            if (distance > 1.0)
-                continue;
-
-            // Check that its start date is before today, if any
-            // &todo &meta Add date to chore and re-enable this check
-            const date = if (chore.date_min) |date| ret: {
-                if (date.date.epoch_day.day > today.epoch_day.day)
-                    continue;
-                break :ret date;
-            } else null;
-
-            const entry = Entry{
-                .filepath = dto_node.filepath,
-                .content = dto_node.content,
-                .date = date,
-                .order = myorder,
-                .rows = dto_node.content_rows,
-                .cols = dto_node.content_cols,
-            };
-
-            try self.all_entries.append(
-                self.env.a,
-                entry,
-            );
+        var aps: std.ArrayList(amp.Path) = .empty;
+        defer {
+            for (aps.items) |*ap|
+                ap.deinit();
+            aps.deinit(self.env.a);
         }
+
+        for (node.locations.items) |location| {
+            if (filepath.len == 0)
+                filepath = location.path;
+
+            const dto_node = self.forest.dto_tree.cptr(location.dto_id);
+            if (content.len == 0)
+                content = dto_node.content;
+            if (rows.empty())
+                rows = dto_node.content_rows;
+            if (cols.empty())
+                cols = dto_node.content_cols;
+
+            try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, id));
+            for (node.ancestors.items) |ancestor|
+                try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
+        }
+
+        try query.prepare(meta, self.config.default_worker);
+        for (aps.items) |*ap|
+            try query.add(ap);
+
+        // Check correspondence with provided query
+        const distance = query.distance() orelse continue;
+        if (distance > 1.0)
+            continue;
+
+        // Check that its start date is before today, if any
+        // &todo &meta Add date to chore and re-enable this check
+        const date = if (node.date_min) |date| ret: {
+            if (date.date.epoch_day.day > today.epoch_day.day)
+                continue;
+            break :ret date;
+        } else null;
+
+        const entry = Entry{
+            .filepath = filepath,
+            .content = content,
+            .date = date,
+            .order = myorder,
+            .rows = rows,
+            .cols = cols,
+        };
+
+        try self.all_entries.append(
+            self.env.a,
+            entry,
+        );
     }
 
     // Sort according to:

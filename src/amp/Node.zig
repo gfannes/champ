@@ -8,26 +8,31 @@ const rubr = @import("../rubr.zig");
 
 const Self = @This();
 
+pub const Error = error{
+    FoundDefinitionAfterReference,
+};
+
 pub const Location = struct {
     path: []const u8 = &.{},
     pos: filex.Pos,
     dto_id: usize,
     grove_id: usize,
 
-    pub fn write(self: @This(), parent: *rubr.naft.Node) void {
+    pub fn write(self: @This(), parent: *rubr.naft.Node, typ: []const u8) void {
         var n = parent.node("Location");
         defer n.deinit();
-        n.attr("path", self.path);
+        n.attr("type", typ);
         n.attr("grove_id", self.grove_id);
         n.attr("row", self.pos.row);
         n.attr("dto_id", self.dto_id);
+        n.attr("path", self.path);
     }
 };
 
 a: std.mem.Allocator,
 name: ?[]const u8 = null,
-def_locs: std.ArrayList(Location) = .empty,
-ref_locs: std.ArrayList(Location) = .empty,
+locations: std.ArrayList(Location) = .empty,
+def_count: usize = 0,
 ancestors: std.ArrayList(usize) = .empty,
 direct_ancestor_count: usize = 0,
 meta: ?Meta = null,
@@ -47,11 +52,16 @@ pub fn init(self: *Self, a: std.mem.Allocator, name: ?[]const u8) void {
 }
 
 pub fn deinit(self: *Self) void {
-    self.def_locs.deinit(self.a);
-    self.ref_locs.deinit(self.a);
+    self.locations.deinit(self.a);
     self.ancestors.deinit(self.a);
     if (self.meta) |*meta|
         meta.deinit();
+}
+
+pub fn isDone(self: Self) bool {
+    const meta = self.meta orelse return false;
+    const status = meta.status orelse return false;
+    return status.kind == .Done;
 }
 
 pub fn order(self: Self) i32 {
@@ -60,11 +70,12 @@ pub fn order(self: Self) i32 {
 
 pub const Where = enum { Definition, Reference };
 pub fn appendLocation(self: *Self, where: Where, grove_id: usize, filepath: []const u8, pos: filex.Pos, dto_id: usize) !void {
-    const locs = switch (where) {
-        .Definition => &self.def_locs,
-        .Reference => &self.ref_locs,
-    };
-    try locs.append(self.a, .{ .path = filepath, .pos = pos, .dto_id = dto_id, .grove_id = grove_id });
+    if (where == .Definition) {
+        if (self.def_count != self.locations.items.len)
+            return error.FoundDefinitionAfterReference;
+        self.def_count += 1;
+    }
+    try self.locations.append(self.a, .{ .path = filepath, .pos = pos, .dto_id = dto_id, .grove_id = grove_id });
 }
 
 pub fn aggregate(self: *Self, other: *Self) !void {
@@ -72,7 +83,7 @@ pub fn aggregate(self: *Self, other: *Self) !void {
     if (other.meta) |other_meta| {
         if (other_meta.hasData()) {
             if (self.meta == null)
-                self.meta = try other_meta.dup(self.a);
+                self.meta = try other_meta.copy(self.a);
 
             if (self.meta) |*self_meta| {
                 if (other_meta.order) |ordr| {
@@ -115,7 +126,7 @@ pub fn updateMeta(self: *Self, meta: Meta) !void {
     if (self.meta) |*m| {
         try m.update(meta);
     } else {
-        self.meta = try meta.dup(self.a);
+        self.meta = try meta.copy(self.a);
     }
 }
 
@@ -127,8 +138,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
         n.attr("name", name);
 
     self.meta.write(&n);
-    for (self.locations.items) |location| {
-        location.write(&n);
+    for (self.locations.items, 0..) |location, ix0| {
+        location.write(&n, if (ix0 < self.def_count) "def" else "ref");
     }
 }
 

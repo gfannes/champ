@@ -116,51 +116,33 @@ pub const Lsp = struct {
                     // Find definition filename/range corresponding to this src_filename and position
                     var def_filename: ?[]const u8 = null;
                     var range = dto.Range{};
-                    if (true) {
-                        for (forest.amp_tree.tree.nodes.items) |entry| {
-                            const node = entry.data;
-                            for (node.ref_locs.items) |ref_loc| {
-                                if (!std.mem.endsWith(u8, src_filename, ref_loc.path))
-                                    continue;
+                    for (forest.amp_tree.tree.nodes.items) |entry| {
+                        const node = entry.data;
+                        if (node.name == null)
+                            continue;
+                        if (node.def_count == 0)
+                            continue;
 
-                                const pos = ref_loc.pos;
-                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                    if (rubr.slc.first(node.def_locs.items)) |def_loc| {
-                                        def_filename = def_loc.path;
-                                        const def_pos = def_loc.pos;
-                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
-                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        for (forest.chores.list.items) |chore| {
-                            if (!std.mem.endsWith(u8, src_filename, chore.filepath))
+                        for (node.locations.items) |location| {
+                            if (!std.mem.endsWith(u8, src_filename, location.path))
                                 continue;
 
-                            const node = forest.dto_tree.cptr(chore.node_id);
-                            for (node.org_amps.items) |org_ref| {
-                                const pos = org_ref.pos;
-                                if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                    const org_def = org_ref.ix.cptr(forest.defmgr.defs.items);
-                                    if (org_def.location) |location| {
-                                        def_filename = location.filepath;
-                                        const def_pos = location.pos;
-                                        range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
-                                        range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
-                                        try self.env.log.print("Found match for chore '{s}': {f}\n", .{ chore.filepath, org_def.path });
-                                    }
+                            const pos = location.pos;
+                            if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
+                                if (rubr.slc.first(node.locations.items[0..node.def_count])) |def_loc| {
+                                    def_filename = def_loc.path;
+                                    const def_pos = def_loc.pos;
+                                    range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
+                                    range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
                                 }
                             }
                         }
                     }
 
                     if (def_filename) |filename| {
+                        std.log.info("Found definition in '{s}'", .{filename});
                         const uri = try pathToUri_(filename, aaa);
-
                         const location = dto.Location{ .uri = uri, .range = range };
-
                         try server.send(location);
                     } else {
                         try server.send(null);
@@ -244,44 +226,40 @@ pub const Lsp = struct {
                     var src_filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const src_filename = try uriToPath_(textdoc.uri, &src_filename_buf, aaa, self.env.io);
 
-                    // Find Amp
-                    var maybe_path: ?amp.Path = null;
-                    for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, src_filename, chore.filepath))
-                            continue;
+                    // Find matching amp.Node
+                    var maybe_node_id: ?usize = null;
+                    for (forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
+                        const node = entry.data;
 
-                        // We only check the org parts for references, not all inherited agg parts
-                        const node = forest.dto_tree.cptr(chore.node_id);
-                        for (node.org_amps.items) |ref| {
-                            const pos = ref.pos;
+                        for (node.locations.items) |location| {
+                            if (!std.mem.endsWith(u8, src_filename, location.path))
+                                continue;
+
+                            const pos = location.pos;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
-                                if (maybe_path) |path|
-                                    std.debug.print("Already found an amp: '{f}' in '{s}' for filepath '{s}'\n", .{ path, src_filename, chore.filepath });
-                                const def = ref.ix.cptr(forest.defmgr.defs.items);
-                                maybe_path = def.path;
+                                maybe_node_id = id;
+                                break;
                             }
                         }
+
+                        if (maybe_node_id != null)
+                            break;
                     }
 
-                    // Find all usage locations
-                    if (maybe_path) |path| {
-                        var locations = std.ArrayList(dto.Location).empty;
-                        for (forest.chores.list.items) |chore| {
-                            const node = forest.dto_tree.cptr(chore.node_id);
-                            for (node.org_amps.items) |ref| {
-                                const def = ref.ix.cptr(forest.defmgr.defs.items);
-                                if (path.isFit(def.path)) {
-                                    const uri = try pathToUri_(chore.filepath, aaa);
-                                    const pos = ref.pos;
-                                    const range = dto.Range{
-                                        .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
-                                        .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
-                                    };
-                                    const location = dto.Location{ .uri = uri, .range = range };
-                                    try locations.append(aaa, location);
-                                }
-                            }
+                    // Emit all reference locations
+                    if (maybe_node_id) |node_id| {
+                        var locations: std.ArrayList(dto.Location) = .empty;
+                        for (forest.amp_tree.tree.cptr(node_id).locations.items) |location| {
+                            const uri = try pathToUri_(location.path, aaa);
+                            const pos = location.pos;
+                            const range = dto.Range{
+                                .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
+                                .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
+                            };
+                            const dto_location = dto.Location{ .uri = uri, .range = range };
+                            try locations.append(aaa, dto_location);
                         }
+
                         try server.send(locations.items);
                     } else {
                         try server.send(null);
@@ -297,33 +275,29 @@ pub const Lsp = struct {
                     var filename_buf: [std.fs.max_path_bytes]u8 = undefined;
                     const filename = try uriToPath_(textdoc.uri, &filename_buf, aaa, self.env.io);
 
-                    var document_symbols = std.ArrayList(dto.DocumentSymbol).empty;
+                    var document_symbols: std.ArrayList(dto.DocumentSymbol) = .empty;
 
-                    for (forest.chores.list.items) |chore| {
-                        if (!std.mem.endsWith(u8, filename, chore.filepath))
+                    for (forest.amp_tree.tree.nodes.items) |entry| {
+                        const node = entry.data;
+
+                        if (node.isDone())
                             continue;
 
-                        const node = forest.dto_tree.cptr(chore.node_id);
+                        for (node.locations.items) |location| {
+                            if (!std.mem.endsWith(u8, filename, location.path))
+                                continue;
 
-                        if (rubr.slc.isEmpty(node.org_amps.items)) {
-                            std.log.warn("Expected to find at least one AMP for Chore", .{});
-                            continue;
+                            const pos = location.pos;
+                            const range = dto.Range{
+                                .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
+                                .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
+                            };
+                            try document_symbols.append(aaa, dto.DocumentSymbol{
+                                .name = forest.dto_tree.cptr(location.dto_id).content,
+                                .range = range,
+                                .selectionRange = range,
+                            });
                         }
-
-                        if (chore.isDone())
-                            continue;
-
-                        const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
-                        const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
-                        const range = dto.Range{
-                            .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
-                            .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
-                        };
-                        try document_symbols.append(aaa, dto.DocumentSymbol{
-                            .name = node.content,
-                            .range = range,
-                            .selectionRange = range,
-                        });
                     }
 
                     try server.send(document_symbols.items);
@@ -362,36 +336,71 @@ pub const Lsp = struct {
                     defer q.deinit();
                     try q.setup(&[_][]const u8{query});
 
-                    for (forest.chores.list.items) |chore| {
-                        if (forest.dto_tree.cptr(chore.node_id).type != .text)
-                            // We only take text chores into account
-                            continue;
+                    for (forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
+                        const node = entry.data;
+                        const meta = node.meta orelse continue;
 
-                        try q.prepare(chore.meta, self.config.default_worker);
-                        const node = forest.dto_tree.cptr(chore.node_id);
-                        for (node.org_amps.items) |ref| {
-                            const def = ref.ix.cptr(forest.defmgr.defs.items);
-                            if (def.path.is_definition)
-                                try q.add(&def.path);
+                        var aps: std.ArrayList(amp.Path) = .empty;
+
+                        try aps.append(aaa, try forest.amp_tree.ampPath(aaa, id));
+                        for (node.ancestors.items[0..node.direct_ancestor_count]) |ancestor| {
+                            try aps.append(aaa, try forest.amp_tree.ampPath(aaa, ancestor));
+                        }
+
+                        try q.prepare(meta, self.config.default_worker);
+                        for (aps.items) |*ap| {
+                            try q.add(ap);
                         }
 
                         if (q.distance()) |distance| {
-                            const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
-                            const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
-                            const range = dto.Range{
-                                .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
-                                .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
-                            };
-                            try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
-                                .name = node.content,
-                                .location = dto.Location{
-                                    .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.filepath }),
-                                    .range = range,
-                                },
-                                .score = @floatCast(distance),
-                            });
+                            if (rubr.slc.first(node.locations.items)) |location| {
+                                const pos = location.pos;
+                                const range = dto.Range{
+                                    .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
+                                    .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
+                                };
+                                try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
+                                    .name = forest.dto_tree.cptr(location.dto_id).content,
+                                    .location = dto.Location{
+                                        .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", location.path }),
+                                        .range = range,
+                                    },
+                                    .score = @floatCast(distance),
+                                });
+                            }
                         }
                     }
+
+                    // for (forest.chores.list.items) |chore| {
+                    //     if (forest.dto_tree.cptr(chore.node_id).type != .text)
+                    //         // We only take text chores into account
+                    //         continue;
+
+                    //     try q.prepare(chore.meta, self.config.default_worker);
+                    //     const node = forest.dto_tree.cptr(chore.node_id);
+                    //     for (node.org_amps.items) |ref| {
+                    //         const def = ref.ix.cptr(forest.defmgr.defs.items);
+                    //         if (def.path.is_definition)
+                    //             try q.add(&def.path);
+                    //     }
+
+                    //     if (q.distance()) |distance| {
+                    //         const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
+                    //         const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
+                    //         const range = dto.Range{
+                    //             .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
+                    //             .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
+                    //         };
+                    //         try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
+                    //             .name = node.content,
+                    //             .location = dto.Location{
+                    //                 .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.filepath }),
+                    //                 .range = range,
+                    //             },
+                    //             .score = @floatCast(distance),
+                    //         });
+                    //     }
+                    // }
 
                     const ByScore = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {

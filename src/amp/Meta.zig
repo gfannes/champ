@@ -36,7 +36,7 @@ pub fn deinit(self: *Self) void {
     self.workers.deinit(self.a);
 }
 
-pub fn dup(self: Self, a: std.mem.Allocator) !Self {
+pub fn copy(self: Self, a: std.mem.Allocator) !Self {
     var rv = Self{
         .a = a,
         .cost = self.cost,

@@ -33,6 +33,21 @@ pub fn deinit(self: *Self) void {
     self.tree.deinit();
 }
 
+pub fn ampPath(self: Self, a: std.mem.Allocator, id: usize) !Path {
+    var rv = Path.init(a);
+    try self.ampPath_(&rv, id);
+    return rv;
+}
+fn ampPath_(self: Self, ap: *Path, id: usize) !void {
+    if (try self.tree.parent(id)) |parent| {
+        if (parent.id != self.root.id and parent.id != self.phony.id) {
+            try self.ampPath_(ap, parent.id);
+            if (self.tree.cptr(id).name) |name|
+                try ap.parts.append(ap.a, .{ .content = name });
+        }
+    }
+}
+
 pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     const id = try self.addAbsolute_(self.root.id, ap);
     try self.tree.ptr(id).appendLocation(.Definition, grove_id, filepath, pos, dto_id);
@@ -221,8 +236,8 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
         n.attr("ancestor", ancestor);
     if (node.meta) |meta|
         meta.write(&n);
-    for (node.def_locs.items) |def_loc|
-        def_loc.write(&n);
+    for (node.locations.items, 0..) |location, ix0|
+        location.write(&n, if (ix0 < node.def_count) "def" else "ref");
 
     for (self.tree.childIds(id)) |child_id| {
         try self.write_(&n, child_id);
