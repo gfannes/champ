@@ -36,6 +36,23 @@ pub fn deinit(self: *Self) void {
     self.workers.deinit(self.a);
 }
 
+pub fn dup(self: Self, a: std.mem.Allocator) !Self {
+    var rv = Self{
+        .a = a,
+        .cost = self.cost,
+        .order = self.order,
+        .wbs = self.wbs,
+        .status = self.status,
+        .date = self.date,
+    };
+    for (self.workers.items) |worker|
+        try rv.workers.append(rv.a, .{
+            .name = try rv.a.dupe(u8, worker.name),
+            .is_exclusive = worker.is_exclusive,
+        });
+    return rv;
+}
+
 pub fn update(self: *Self, src: Self) !void {
     self.cost = src.cost;
     self.order = src.order;

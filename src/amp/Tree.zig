@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Node = @import("Node.zig");
 const Path = @import("Path.zig");
+const Meta = @import("Meta.zig");
 
 const rubr = @import("../rubr.zig");
 const filex = @import("../filex.zig");
@@ -20,17 +21,15 @@ pub fn init(a: std.mem.Allocator) !Self {
         .tree = .init(a),
     };
     rv.root = try rv.tree.addChild(null);
-    rv.root.data.* = .{ .name = "<ROOT>" };
+    rv.root.data.init(a, "<ROOT>");
 
     rv.phony = try rv.tree.addChild(null);
-    rv.phony.data.* = .{ .name = "<PHONY>" };
+    rv.phony.data.init(a, "<PHONY>");
     return rv;
 }
 pub fn deinit(self: *Self) void {
-    for (self.tree.nodes.items) |*node| {
-        self.a.free(node.data.locations);
-        node.data.dependencies.deinit(self.a);
-    }
+    for (self.tree.nodes.items) |*node|
+        node.data.deinit();
     self.tree.deinit();
 }
 
@@ -60,10 +59,11 @@ fn addAbsolute_(self: *Self, node_id: usize, ap: Path, grove_id: usize, dto_id: 
         } else {
             // No match found: insert new node
             const entry = try self.tree.addChild(parent);
+            entry.data.init(self.a, part.content);
+
             parent = entry.id;
-            const locations = try self.a.alloc(Node.Location, 1);
-            locations[0] = .{ .path = filepath, .pos = pos, .dto_id = dto_id };
-            entry.data.* = .{ .name = part.content, .locations = locations };
+
+            try entry.data.appendLocation(filepath, pos, dto_id);
         }
     }
 
@@ -74,9 +74,10 @@ pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, dto_id: usize, filepath:
     const parent_id = maybe_parent_id orelse self.root.id;
 
     const entry = try self.tree.addChild(parent_id);
-    const locations = try self.a.alloc(Node.Location, 1);
-    locations[0] = .{ .path = filepath, .pos = pos, .dto_id = dto_id };
-    entry.data.* = .{ .locations = locations };
+    entry.data.init(self.a, null);
+
+    try entry.data.appendLocation(filepath, pos, dto_id);
+
     return entry.id;
 }
 
@@ -120,17 +121,17 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
     return cb.found_id;
 }
 
-pub fn addDependency(self: *Self, from: usize, to: usize) !bool {
-    if (from == to)
-        // No self-dependencies
+pub fn addAncestralDependency(self: *Self, node: usize, parent: usize) !bool {
+    if (node == parent)
+        // No self-ancestors
+
         return false;
 
-    const node = self.tree.ptr(from);
-    var deps = &node.dependencies;
-    for (deps.items) |dep|
-        if (dep == to)
+    var ancestors = &self.tree.ptr(node).ancestors;
+    for (ancestors.items) |ancestor|
+        if (ancestor == parent)
             return false;
-    try deps.append(self.a, to);
+    try ancestors.append(self.a, parent);
     return true;
 }
 
@@ -142,7 +143,9 @@ pub fn addAncestralDependencies(self: *Self) !void {
             if (!before)
                 return;
             if (try my.outer.tree.parent(entry.id)) |parent|
-                _ = try my.outer.addDependency(parent.id, entry.id);
+                _ = try my.outer.addAncestralDependency(entry.id, parent.id);
+            entry.data.direct_ancestor_count = entry.data.ancestors
+                .items.len;
         }
     }{ .outer = self };
     try self.tree.dfsAll(&cb);
@@ -157,11 +160,16 @@ pub fn aggregateDependencies(self: *Self) !void {
             if (!before)
                 return;
 
-            // Do not directly iterate on items since addDependencies() might reallocate that
-            for (0..entry.data.dependencies.items.len) |ix0| {
-                const dep = entry.data.dependencies.items[ix0];
-                for (my.outer.tree.cptr(dep).dependencies.items) |depp| {
-                    if (try my.outer.addDependency(entry.id, depp))
+            // Do not directly iterate on items since addAncestralDependency() might reallocate that
+            for (0..entry.data.ancestors
+                .items.len) |ix0|
+            {
+                const ancestor = entry.data.ancestors
+                    .items[ix0];
+                for (my.outer.tree.cptr(ancestor).ancestors
+                    .items) |ancestor2|
+                {
+                    if (try my.outer.addAncestralDependency(entry.id, ancestor2))
                         my.new_dep_count += 1;
                 }
             }
@@ -173,8 +181,28 @@ pub fn aggregateDependencies(self: *Self) !void {
         try self.tree.dfsAll(&cb);
         if (cb.new_dep_count == 0)
             break;
-        std.log.info("Found {} new dependencies, aggregating again", .{cb.new_dep_count});
+        std.log.info("Found {} new ancestors, aggregating again", .{cb.new_dep_count});
     }
+}
+
+pub fn aggregateMeta(self: *Self) !void {
+    var cb = struct {
+        const My = @This();
+        outer: *Self,
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+            if (!before)
+                return;
+            for (entry.data.ancestors.items) |ancestor| {
+                if (my.outer.tree.ptr(ancestor).meta) |meta|
+                    try entry.data.updateMeta(meta);
+            }
+        }
+    }{ .outer = self };
+    try self.tree.dfsAll(&cb);
+}
+
+pub fn updateMeta(self: *Self, node: usize, meta: Meta) !void {
+    try self.tree.ptr(node).updateMeta(meta);
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
@@ -194,9 +222,11 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
     const node = self.tree.cptr(id).*;
     if (node.name) |name|
         n.attr("name", name);
-    for (node.dependencies.items) |dep|
-        n.attr("dep", dep);
-    for (node.locations) |location|
+    for (node.ancestors.items) |ancestor|
+        n.attr("ancestor", ancestor);
+    if (node.meta) |meta|
+        meta.write(&n);
+    for (node.locations.items) |location|
         location.write(&n);
 
     for (self.tree.childIds(id)) |child_id| {
@@ -214,9 +244,9 @@ test "amp.Tree" {
     var tree = try Self.init(ut.allocator);
     defer tree.deinit();
 
-    (try tree.tree.addChild(tree.root.id)).data.* = .{ .name = "A" };
-    (try tree.tree.addChild(tree.root.id)).data.* = .{ .name = "B" };
-    (try tree.tree.addChild(tree.root.id)).data.* = .{ .name = "C" };
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "A");
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "B");
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "C");
 
     std.debug.print("{f}", .{tree});
 

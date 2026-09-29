@@ -73,9 +73,10 @@ end
 
 desc('Clean')
 task :clean do
-    sh('xmake clean')
-    FileUtils.rm_rf('target')
-    FileUtils.rm_rf('zig-out')
+    FileUtils.rm_rf('.zig-cache')
+    # FileUtils.rm_rf('target')
+    # FileUtils.rm_rf('zig-out')
+    # sh('xmake clean')
 end
 
 desc('Generate .clangd file')
@@ -91,13 +92,13 @@ task :clangd do
     end
 end
 
-desc('Run e2e tests')
-task :e2e do
+desc('Run ee tests')
+task :ee do
     sh("rake install[debug]")
 
-    e2e_dir = File.join(here_dir, 'e2e')
+    ee_dir = File.join(here_dir, 'ee')
 
-    tmp_dir = File.join(e2e_dir, 'tmp')
+    tmp_dir = File.join(ee_dir, 'tmp')
     FileUtils.rm_rf(tmp_dir)
     FileUtils.mkdir(tmp_dir)
 
@@ -110,7 +111,7 @@ task :e2e do
     fps.each do |fp|
         my_dir = File.join(tmp_dir, File.basename(fp, '.*'))
 
-        sh("naft -u #{File.join(e2e_dir, fp)} #{my_dir}")
+        sh("naft -u #{File.join(ee_dir, fp)} #{my_dir}")
 
         config_fp = File.join(my_dir, 'config.zon')
         config = <<~EOS

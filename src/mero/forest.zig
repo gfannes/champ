@@ -99,7 +99,7 @@ pub const Forest = struct {
         try s.mark(.{ .ix = 4, .name = "createChores" });
         try self.createChores();
 
-        try s.mark(.{ .ix = 5, .name = "comptuChores" });
+        try s.mark(.{ .ix = 5, .name = "computeChores" });
         try self.computeChores();
 
         try s.stop();
@@ -261,7 +261,7 @@ pub const Forest = struct {
 
     // Distribute parent org_amps and agg_amps from root to leaf into agg_amps
     fn aggregateAmps(self: *Self) !void {
-        // try self.amp_tree.addAncestralDependencies();
+        try self.amp_tree.addAncestralDependencies();
         try self.amp_tree.aggregateDependencies();
 
         var cb = struct {
@@ -382,6 +382,8 @@ pub const Forest = struct {
     }
 
     fn computeChores(self: *Self) !void {
+        try self.amp_tree.aggregateMeta();
+
         for (self.defmgr.defs.items) |def| {
             if (def.location) |location| {
                 const node = self.dto_tree.cptr(location.node_id);
@@ -453,13 +455,13 @@ pub const Forest = struct {
                                         if (!ap.is_definition) {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
-                                            std.log.info("Resolving {f}", .{ap.*});
+                                            std.log.debug("Resolving {f}", .{ap.*});
                                             const amp_node = (try my.amp_tree.resolve(ap.*)) orelse (try my.amp_tree.addPhony(ap.*, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols }));
                                             if (n.amp_node) |n_amp_node| {
                                                 if (ap.is_dependency) {
-                                                    _ = try my.amp_tree.addDependency(amp_node, n_amp_node);
+                                                    _ = try my.amp_tree.addAncestralDependency(amp_node, n_amp_node);
                                                 } else {
-                                                    _ = try my.amp_tree.addDependency(n_amp_node, amp_node);
+                                                    _ = try my.amp_tree.addAncestralDependency(n_amp_node, amp_node);
                                                 }
                                             }
 
@@ -522,6 +524,8 @@ pub const Forest = struct {
             do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
+            amp_node: ?usize = null,
+
             path: std.ArrayList(?usize) = .empty,
 
             fn deinit(my: *My) void {
@@ -535,6 +539,7 @@ pub const Forest = struct {
                 }
 
                 try my.path.append(my.env.a, null);
+                my.amp_node = null;
 
                 const n = entry.data;
 
@@ -601,6 +606,9 @@ pub const Forest = struct {
                         if (n.def) |ref| {
                             var def = ref.ix.ptr(my.defmgr.defs.items);
                             try def.meta.update(meta);
+                        }
+                        if (my.amp_node) |amp_node| {
+                            try my.amp_tree.updateMeta(amp_node, meta);
                         }
                     },
                     .text => |text| {
@@ -723,6 +731,10 @@ pub const Forest = struct {
                     try def.meta.update(meta);
                 }
 
+                if (my.amp_node) |amp_node| {
+                    try my.amp_tree.updateMeta(amp_node, meta);
+                }
+
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
                     // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
                     // If the file is '&.md', it is copied to the Folder as well
@@ -748,19 +760,20 @@ pub const Forest = struct {
                 const n = entry.data;
 
                 n.amp_node = amp_node;
+                my.amp_node = amp_node;
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
-                    if (my.path.items[my.path.items.len - 2]) |id| {
-                        try my.amp_tree.tree.ptr(amp_node).dependencies.append(my.env.a, id);
-                    }
+                    if (my.path.items[my.path.items.len - 2]) |file_id|
+                        // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
+                        _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
                     // We use amp_node instead of the any pre-existing File amp.Node
                     my.path.items[my.path.items.len - 2] = amp_node;
 
                     const file = try my.dto_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
                     if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                        if (my.path.items[my.path.items.len - 3]) |id| {
-                            try my.amp_tree.tree.ptr(amp_node).dependencies.append(my.env.a, id);
-                        }
+                        if (my.path.items[my.path.items.len - 3]) |folder_id|
+                            // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
+                            _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
                         // We use amp_node instead of the any pre-existing Folder amp.Node
                         my.path.items[my.path.items.len - 3] = amp_node;
                     }
