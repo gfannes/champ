@@ -20,8 +20,11 @@ pub fn call(self: *Self) !void {
     var root = rubr.naft.Node.root(self.env.stdout);
     defer root.deinit();
 
-    for (self.forest.chores.list.items) |chore| {
-        if (chore.meta.wbs) |wbs| {
+    for (self.forest.amp_tree.tree.nodes.items) |entry| {
+        const node = entry.data;
+        const meta = node.meta orelse continue;
+
+        if (meta.wbs) |wbs| {
             wbs.write(&root);
         }
     }

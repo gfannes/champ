@@ -32,7 +32,7 @@ pub const Forest = struct {
     env: Env,
     aral: std.heap.ArenaAllocator = undefined,
     valid: bool = false,
-    dto_tree: dto.Tree = undefined,
+    mero_tree: mero.Tree = undefined,
     amp_tree: amp.Tree = undefined,
     defmgr: amp.DefMgr = undefined,
     chores: chorex.Chores = undefined,
@@ -48,19 +48,19 @@ pub const Forest = struct {
         //     }
         // }
         self.aral = std.heap.ArenaAllocator.init(self.env.a);
-        self.dto_tree = dto.Tree.init(self.env.a);
+        self.mero_tree = mero.Tree.init(self.env.a);
         self.amp_tree = try amp.Tree.init(self.env.a);
         self.defmgr = amp.DefMgr.init(self.env, "?");
         self.chores = chorex.Chores.init(self.env);
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
-            pub fn call(_: *@This(), entry: dto.Tree.Entry) !void {
+            pub fn call(_: *@This(), entry: mero.Tree.Entry) !void {
                 entry.data.deinit();
             }
         }{};
-        self.dto_tree.each(&cb) catch {};
-        self.dto_tree.deinit();
+        self.mero_tree.each(&cb) catch {};
+        self.mero_tree.deinit();
         self.amp_tree.deinit();
         self.chores.deinit();
         self.defmgr.deinit();
@@ -109,8 +109,8 @@ pub const Forest = struct {
         self.valid = true;
     }
 
-    pub fn findFile(self: *Self, name: []const u8) ?dto.Tree.Entry {
-        for (self.dto_tree.root_ids.items) |root_id| {
+    pub fn findFile(self: *Self, name: []const u8) ?mero.Tree.Entry {
+        for (self.mero_tree.root_ids.items) |root_id| {
             if (self.findFile_(name, root_id)) |file|
                 return file;
         }
@@ -125,7 +125,7 @@ pub const Forest = struct {
             env: Env,
             aa: std.mem.Allocator,
             cfg_grove: *const cfg.file.Grove,
-            tree: *dto.Tree,
+            tree: *mero.Tree,
 
             node_stack: Stack = .empty,
             file_count: usize = 0,
@@ -138,7 +138,7 @@ pub const Forest = struct {
                 switch (kind) {
                     .Enter => {
                         var name: []const u8 = undefined;
-                        var node_type: dto.Node.Type = undefined;
+                        var node_type: mero.Node.Type = undefined;
                         if (maybe_offsets) |offsets| {
                             name = filepath[offsets.name..];
                             node_type = .folder;
@@ -149,7 +149,7 @@ pub const Forest = struct {
 
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                         const n = entry.data;
-                        n.* = dto.Node{ .a = my.env.a };
+                        n.* = mero.Node{ .a = my.env.a };
                         n.type = node_type;
                         n.filepath = try my.aa.dupe(u8, filepath);
 
@@ -161,13 +161,13 @@ pub const Forest = struct {
                             if (sort_files) {
                                 const file_ids = my.tree.childIdsMut(folder_id);
                                 const Ftor = struct {
-                                    pub fn lt(m: *const My, a: dto.Tree.Id, b: dto.Tree.Id) bool {
+                                    pub fn lt(m: *const My, a: mero.Tree.Id, b: mero.Tree.Id) bool {
                                         // &perf: this uses the full filepath while we know that only the filename itself differs
                                         return std.mem.lessThan(u8, m.tree.cptr(a).filepath, m.tree.cptr(b).filepath);
                                     }
                                 };
                                 std.sort.block(
-                                    dto.Tree.Id,
+                                    mero.Tree.Id,
                                     file_ids,
                                     my,
                                     Ftor.lt,
@@ -206,7 +206,7 @@ pub const Forest = struct {
                                 const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
                                 file_nid = entry.id;
                                 const n = entry.data;
-                                n.* = dto.Node{
+                                n.* = mero.Node{
                                     .a = my.env.a,
                                     .type = .{ .file = .{ .language = language } },
                                     .filepath = try my.aa.dupe(u8, filepath),
@@ -224,8 +224,8 @@ pub const Forest = struct {
 
                             // Switch from Text.ixr to Text.terms
                             const cb2 = struct {
-                                terms: []const dto.Term,
-                                pub fn call(my2: @This(), e: dto.Tree.Entry, before: bool) !void {
+                                terms: []const mero.Term,
+                                pub fn call(my2: @This(), e: mero.Tree.Entry, before: bool) !void {
                                     if (!before)
                                         return;
                                     var n2 = e.data;
@@ -245,7 +245,7 @@ pub const Forest = struct {
                     },
                 }
             }
-        }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.dto_tree };
+        }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.mero_tree };
         defer cb.deinit();
 
         var dir = std.Io.Dir.openDirAbsolute(self.env.io, cfg_grove.filepath, .{}) catch |err| {
@@ -268,12 +268,12 @@ pub const Forest = struct {
             const My = @This();
 
             env: Env,
-            tree: *dto.Tree,
+            tree: *mero.Tree,
             defmgr: *const amp.DefMgr,
 
             update_count: u64 = 0,
 
-            pub fn call(my: *My, entry: dto.Tree.Entry, before: bool) !void {
+            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
 
@@ -316,7 +316,7 @@ pub const Forest = struct {
                 }
             }
 
-            fn injectAmps(my: *My, src: *const dto.Node, dst: *dto.Node) !void {
+            fn injectAmps(my: *My, src: *const mero.Node, dst: *mero.Node) !void {
                 // Inject src.orgs into dst.aggs
                 for (src.org_amps.items) |src_org| {
                     if (!is_present(dst, src_org.ix)) {
@@ -334,7 +334,7 @@ pub const Forest = struct {
                 }
             }
 
-            fn is_present(node: *const dto.Node, needle: dto.Node.DefIx) bool {
+            fn is_present(node: *const mero.Node, needle: mero.Node.DefIx) bool {
                 for (node.org_amps.items) |org| {
                     if (org.ix.ix == needle.ix)
                         return true;
@@ -346,7 +346,7 @@ pub const Forest = struct {
                 return false;
             }
 
-            fn parent(my: My, child_id: usize) ?dto.Tree.Entry {
+            fn parent(my: My, child_id: usize) ?mero.Tree.Entry {
                 var id = child_id;
                 while (my.tree.parent(id) catch unreachable) |pentry| {
                     if (!rubr.slc.isEmpty(pentry.data.org_amps.items)) {
@@ -356,13 +356,13 @@ pub const Forest = struct {
                 }
                 return null;
             }
-        }{ .env = self.env, .tree = &self.dto_tree, .defmgr = &self.defmgr };
+        }{ .env = self.env, .tree = &self.mero_tree, .defmgr = &self.defmgr };
 
         // We aggregate data several times to allow non-tree-based dependencies to reach all reachable nodes
         const n = 10;
         for (0..n) |ix| {
             cb.update_count = 0;
-            try self.dto_tree.dfsAll(&cb);
+            try self.mero_tree.dfsAll(&cb);
             if (cb.update_count == 0)
                 // Nothing changed: we are done
                 break;
@@ -376,7 +376,7 @@ pub const Forest = struct {
     fn createChores(self: *Self) !void {
         for (self.defmgr.defs.items) |*def| {
             if (def.location) |location| {
-                def.chore_id = try self.chores.create(def, location.node_id, &self.dto_tree);
+                def.chore_id = try self.chores.create(def, location.node_id, &self.mero_tree);
             }
         }
     }
@@ -386,7 +386,7 @@ pub const Forest = struct {
 
         for (self.defmgr.defs.items) |def| {
             if (def.location) |location| {
-                const node = self.dto_tree.cptr(location.node_id);
+                const node = self.mero_tree.cptr(location.node_id);
                 if (def.chore_id) |chore_id| {
                     for (node.org_amps.items) |org| {
                         const org_def = org.ix.cptr(self.defmgr.defs.items);
@@ -408,7 +408,7 @@ pub const Forest = struct {
 
             env: Env,
             aa: std.mem.Allocator,
-            dto_tree: *const dto.Tree,
+            mero_tree: *const mero.Tree,
             amp_tree: *amp.Tree,
             defmgr: *amp.DefMgr,
 
@@ -416,7 +416,7 @@ pub const Forest = struct {
             grove_id: ?usize = null,
             is_new_file: bool = false,
 
-            pub fn call(my: *My, entry: dto.Tree.Entry, before: bool) !void {
+            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before)
                     return;
 
@@ -468,16 +468,16 @@ pub const Forest = struct {
                                             try my.amp_tree.addReference(amp_node, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols });
 
                                             if (try my.defmgr.resolve(ap, grove_id)) |defix| {
-                                                const def = dto.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
+                                                const def = mero.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
                                                 try n.org_amps.append(my.env.a, def);
 
                                                 if (my.is_new_file and n.type.isText(.Paragraph)) {
                                                     // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
-                                                    if (try my.dto_tree.parent(entry.id)) |file| {
+                                                    if (try my.mero_tree.parent(entry.id)) |file| {
                                                         try file.data.org_amps.append(my.env.a, def);
 
                                                         if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                                                            if (try my.dto_tree.parent(file.id)) |folder| {
+                                                            if (try my.mero_tree.parent(file.id)) |folder| {
                                                                 try folder.data.org_amps.append(my.env.a, def);
                                                             }
                                                         }
@@ -503,11 +503,11 @@ pub const Forest = struct {
         }{
             .env = self.env,
             .aa = self.aral.allocator(),
-            .dto_tree = &self.dto_tree,
+            .mero_tree = &self.mero_tree,
             .amp_tree = &self.amp_tree,
             .defmgr = &self.defmgr,
         };
-        try self.dto_tree.dfsAll(&cb);
+        try self.mero_tree.dfsAll(&cb);
     }
 
     fn createDefs(self: *Self) !void {
@@ -516,7 +516,7 @@ pub const Forest = struct {
             const My = @This();
 
             env: Env,
-            dto_tree: *dto.Tree,
+            mero_tree: *mero.Tree,
             amp_tree: *amp.Tree,
             defmgr: *amp.DefMgr,
 
@@ -534,7 +534,7 @@ pub const Forest = struct {
                 my.path.deinit(my.env.a);
             }
 
-            pub fn call(my: *My, entry: dto.Tree.Entry, before: bool) !void {
+            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before) {
                     _ = my.path.pop();
                     return;
@@ -551,12 +551,12 @@ pub const Forest = struct {
                         // Process '&.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
-                        for (my.dto_tree.childIds(entry.id)) |child_id| {
-                            const child = my.dto_tree.ptr(child_id);
+                        for (my.mero_tree.childIds(entry.id)) |child_id| {
+                            const child = my.mero_tree.ptr(child_id);
                             if (amp.is_folder_metadata_fp(child.filepath)) {
                                 // Allow processing '&.md'
                                 my.do_process_amp_md = true;
-                                try my.dto_tree.dfs(child_id, my);
+                                try my.mero_tree.dfs(child_id, my);
                                 my.do_process_amp_md = false;
                             }
                         }
@@ -610,7 +610,7 @@ pub const Forest = struct {
                             try def.meta.update(meta);
                         }
                         if (my.amp_node) |amp_node| {
-                            try my.amp_tree.updateMeta(amp_node, meta);
+                            try my.amp_tree.setMeta(amp_node, meta);
                         }
                     },
                     .text => |text| {
@@ -620,7 +620,7 @@ pub const Forest = struct {
                 }
             }
 
-            fn processText(my: *My, entry: dto.Tree.Entry, text: dto.Text) !void {
+            fn processText(my: *My, entry: mero.Tree.Entry, text: dto.Text) !void {
                 const n = entry.data;
                 std.debug.assert(n.org_amps.items.len == 0);
                 std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
@@ -662,7 +662,7 @@ pub const Forest = struct {
                                         var child_id = entry.id;
                                         // Try to find parent def
                                         const maybe_parent_def: ?amp.Path = block: while (true) {
-                                            if (try my.dto_tree.parent(child_id)) |parent| {
+                                            if (try my.mero_tree.parent(child_id)) |parent| {
                                                 if (parent.data.def) |d| {
                                                     const pdef = d.ix.cptr(my.defmgr.defs.items);
                                                     break :block pdef.path;
@@ -735,19 +735,19 @@ pub const Forest = struct {
                 }
 
                 if (my.amp_node) |amp_node| {
-                    try my.amp_tree.updateMeta(amp_node, meta);
+                    try my.amp_tree.setMeta(amp_node, meta);
                 }
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
                     // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
                     // If the file is '&.md', it is copied to the Folder as well
-                    if (try my.dto_tree.parent(entry.id)) |file| {
+                    if (try my.mero_tree.parent(entry.id)) |file| {
                         if (file.data.def == null)
                             file.data.def = n.def;
                         try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
 
                         if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                            if (try my.dto_tree.parent(file.id)) |folder| {
+                            if (try my.mero_tree.parent(file.id)) |folder| {
                                 if (folder.data.def == null)
                                     folder.data.def = n.def;
                                 try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
@@ -757,7 +757,7 @@ pub const Forest = struct {
                 }
             }
 
-            fn setAmpNode(my: *My, entry: dto.Tree.Entry, amp_node: usize) !void {
+            fn setAmpNode(my: *My, entry: mero.Tree.Entry, amp_node: usize) !void {
                 my.path.items[my.path.items.len - 1] = amp_node;
 
                 const n = entry.data;
@@ -772,7 +772,7 @@ pub const Forest = struct {
                     // We use amp_node instead of the any pre-existing File amp.Node
                     my.path.items[my.path.items.len - 2] = amp_node;
 
-                    const file = try my.dto_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
+                    const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
                     if (amp.is_folder_metadata_fp(file.data.filepath)) {
                         if (my.path.items[my.path.items.len - 3]) |folder_id|
                             // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
@@ -791,20 +791,20 @@ pub const Forest = struct {
                 }
                 return null;
             }
-        }{ .env = self.env, .dto_tree = &self.dto_tree, .amp_tree = &self.amp_tree, .defmgr = &self.defmgr };
+        }{ .env = self.env, .mero_tree = &self.mero_tree, .amp_tree = &self.amp_tree, .defmgr = &self.defmgr };
         defer cb.deinit();
-        try self.dto_tree.dfsAll(&cb);
+        try self.mero_tree.dfsAll(&cb);
     }
 
-    fn findFile_(self: *Self, name: []const u8, id: dto.Tree.Id) ?dto.Tree.Entry {
-        const n = self.dto_tree.ptr(id);
+    fn findFile_(self: *Self, name: []const u8, id: mero.Tree.Id) ?mero.Tree.Entry {
+        const n = self.mero_tree.ptr(id);
         switch (n.type) {
             .file => {
                 if (std.mem.endsWith(u8, n.filepath, name))
-                    return dto.Tree.Entry{ .id = id, .data = n };
+                    return mero.Tree.Entry{ .id = id, .data = n };
             },
             .folder, .frove => {
-                for (self.dto_tree.childIds(id)) |child_id| {
+                for (self.mero_tree.childIds(id)) |child_id| {
                     if (self.findFile_(name, child_id)) |file|
                         return file;
                 }

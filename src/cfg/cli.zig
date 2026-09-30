@@ -144,7 +144,7 @@ pub const Args = struct {
             "    se/search            Search\n" ++
             "    ex/export            Export\n" ++
             "    pl/plan              Plan\n" ++
-            "    ch/check             Check [tree|defs|chores]\n" ++
+            "    ch/check             Check [mero|amp|defs]\n" ++
             "    perf                 Performance tests\n" ++
             "    wbs                  Work breakdown structure\n" ++
             "    test                 Test\n" ++

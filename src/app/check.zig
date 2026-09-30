@@ -21,13 +21,13 @@ const Segment = struct {
     entries: []const Entry,
 };
 const Details = struct {
-    tree: bool = false,
+    mero_tree: bool = false,
+    amp_tree: bool = false,
     defs: bool = false,
-    chores: bool = false,
     fn setAll(self: *@This(), b: bool) void {
-        self.tree = b;
+        self.mero_tree = b;
         self.defs = b;
-        self.chores = b;
+        self.amp_tree = b;
     }
 };
 
@@ -48,18 +48,16 @@ pub fn call(self: *Self, what: [][]const u8, details: u8) !void {
     if (details > 0)
         self.details.setAll(true);
     for (what) |str| {
-        if (std.mem.eql(u8, str, "tree"))
-            self.details.tree = true;
+        if (std.mem.eql(u8, str, "mero"))
+            self.details.mero_tree = true;
+        if (std.mem.eql(u8, str, "amp"))
+            self.details.amp_tree = true;
         if (std.mem.eql(u8, str, "defs"))
             self.details.defs = true;
-        if (std.mem.eql(u8, str, "chores"))
-            self.details.chores = true;
     }
 }
 
 pub fn show(self: *Self) !void {
-    try self.env.stdout.print("{f}", .{self.forest.amp_tree});
-
     var root = rubr.naft.Node.root(self.env.stdout);
     defer root.deinit();
 
@@ -68,10 +66,10 @@ pub fn show(self: *Self) !void {
     }
 
     {
-        var n = root.node("Tree");
+        var n = root.node("mero.Tree");
         defer n.deinit();
 
-        if (self.details.tree) {
+        if (self.details.mero_tree) {
             const Cb = struct {
                 env: rubr.Env,
                 n: *rubr.naft.Node,
@@ -83,7 +81,7 @@ pub fn show(self: *Self) !void {
                 }
             };
             const cb = Cb{ .env = self.env, .n = &n };
-            try self.forest.dto_tree.dfsAll(&cb);
+            try self.forest.mero_tree.dfsAll(&cb);
         } else {
             const Cb = struct {
                 env: rubr.Env,
@@ -101,7 +99,7 @@ pub fn show(self: *Self) !void {
                 }
             };
             var cb = Cb{ .env = self.env };
-            try self.forest.dto_tree.dfsAll(&cb);
+            try self.forest.mero_tree.dfsAll(&cb);
             n.attr("node_count", cb.node_count);
             n.attr("term_count", cb.term_count);
         }
@@ -130,11 +128,11 @@ pub fn show(self: *Self) !void {
         }
     }
 
-    if (self.details.chores) {
-        self.forest.chores.write(&root);
+    if (self.details.amp_tree) {
+        self.forest.amp_tree.write(&root);
     } else {
-        var n = root.node("Chores");
+        var n = root.node("amp.Tree");
         defer n.deinit();
-        n.attr("count", self.forest.chores.list.items.len);
+        n.attr("node_count", self.forest.amp_tree.tree.nodes.items.len);
     }
 }

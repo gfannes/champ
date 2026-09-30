@@ -75,13 +75,13 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             if (filepath.len == 0)
                 filepath = location.path;
 
-            const dto_node = self.forest.dto_tree.cptr(location.dto_id);
+            const mero_node = self.forest.mero_tree.cptr(location.mero_id);
             if (content.len == 0)
-                content = dto_node.content;
+                content = mero_node.content;
             if (rows.empty())
-                rows = dto_node.content_rows;
+                rows = mero_node.content_rows;
             if (cols.empty())
-                cols = dto_node.content_cols;
+                cols = mero_node.content_cols;
 
             try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, id));
             for (node.ancestors.items) |ancestor|

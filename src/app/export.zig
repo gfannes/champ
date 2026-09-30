@@ -43,29 +43,26 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
     const Cb = struct {
         const Mode = enum { Search, Write };
-        const BoolStack = std.ArrayList(bool);
         const Section = struct {
             id: usize,
             wbs: ?amp.Wbs.Kind = null,
         };
-        const SectionStack = std.ArrayList(Section);
-        const SectionChoreIds = std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize));
 
         env: rubr.Env,
-        tree: *mero.Tree,
+        mero_tree: *mero.Tree,
         defmgr: *const amp.DefMgr,
-        chores: *const chorex.Chores,
+        amp_tree: *const amp.Tree,
         output_dir: *std.Io.Dir,
         output: *std.Io.Writer,
 
         needle: ?[]const u8 = null,
 
         // Indicates if a folder has a metadata file '&.md' with a section in it. If so, this will be used to nest the sections from other files.
-        has_section_stack: BoolStack = .empty,
+        has_section_stack: std.ArrayList(bool) = .empty,
 
-        section_chores: SectionChoreIds = .empty,
+        section_nodes: std.AutoArrayHashMapUnmanaged(usize, std.ArrayList(usize)) = .empty,
         section_level: usize = 0,
-        section_stack: SectionStack = .empty,
+        section_stack: std.ArrayList(Section) = .empty,
         add_newline_before_bullet: bool = false,
         write_section_id_on_newline: bool = false,
         mode: Mode = .Search,
@@ -75,10 +72,10 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
             my.has_section_stack.deinit(my.env.a);
             my.section_stack.deinit(my.env.a);
             {
-                var it = my.section_chores.iterator();
+                var it = my.section_nodes.iterator();
                 while (it.next()) |e|
                     e.value_ptr.deinit(my.env.a);
-                my.section_chores.deinit(my.env.a);
+                my.section_nodes.deinit(my.env.a);
             }
         }
 
@@ -109,8 +106,8 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
                                     my.mode = .Write;
                                     my.first_section = null;
-                                    for (my.tree.childIds(entry.id)) |child_id| {
-                                        try my.tree.dfs(child_id, my);
+                                    for (my.mero_tree.childIds(entry.id)) |child_id| {
+                                        try my.mero_tree.dfs(child_id, my);
                                     }
                                     try my.output.print("\n", .{});
                                     my.mode = .Search;
@@ -138,18 +135,6 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         if (before) {
                             my.section_level += 1;
                             var section = Section{ .id = entry.id };
-                            if (n.def) |def_ref| {
-                                const def = def_ref.ix.cptr(my.defmgr.defs.items);
-                                if (def.chore_id) |chore_id| {
-                                    _ = chore_id;
-                                    // if (my.chores.list.items[chore_id].value("wbs", .Org)) |wbs_value| {
-                                    //     _ = wbs_value;
-                                    // &meta &todo
-                                    // const wbs = wbs_value.wbs orelse return error.ExpectedWbs;
-                                    // section.wbs = wbs.kind;
-                                    // }
-                                }
-                            }
                             if (maybe_section) |s| {
                                 if (s.wbs == .Epic)
                                     // We do not go deeper than an epic
@@ -168,11 +153,11 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                         return;
 
                     var status_str: ?[]const u8 = null;
-                    if (n.def) |def_ref| {
-                        const def = def_ref.ix.cptr(my.defmgr.defs.items);
-                        if (def.chore_id) |chore_id| {
-                            const chore = my.chores.list.items[chore_id];
-                            if (chore.meta.status) |status| {
+                    if (n.amp_node) |id| {
+                        const node = my.amp_tree.tree.cptr(id);
+
+                        if (node.meta) |meta| {
+                            if (meta.status) |status| {
                                 status_str = switch (status.kind) {
                                     .Todo, .Go, .Question => "_TODO_ ",
                                     .Wip => "_IN PROGRESS_ ",
@@ -183,15 +168,15 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                                 switch (status.kind) {
                                     .Todo, .Wip, .Go, .Blocked, .Question => {
                                         const section = maybe_section orelse {
-                                            std.log.err("Chore {} has no parent section", .{chore_id});
+                                            std.log.err("amp.Node {} has no parent section", .{id});
                                             return error.ExpectedSection;
                                         };
 
-                                        // Keep track of the chores per section
-                                        const res = try my.section_chores.getOrPut(my.env.a, section.id);
+                                        // Keep track of the amp.Nodes per section
+                                        const res = try my.section_nodes.getOrPut(my.env.a, section.id);
                                         if (!res.found_existing)
                                             res.value_ptr.* = .empty;
-                                        try res.value_ptr.append(my.env.a, chore_id);
+                                        try res.value_ptr.append(my.env.a, id);
                                     },
                                     else => {},
                                 }
@@ -267,9 +252,9 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
     var cb = Cb{
         .env = self.env,
-        .tree = &self.forest.dto_tree,
+        .mero_tree = &self.forest.mero_tree,
         .defmgr = &self.forest.defmgr,
-        .chores = &self.forest.chores,
+        .amp_tree = &self.forest.amp_tree,
         .output_dir = &output_dir,
         .output = &output_w.interface,
     };
@@ -277,7 +262,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
     for (needles) |needle| {
         cb.needle = needle;
-        try self.forest.dto_tree.dfsAll(&cb);
+        try self.forest.mero_tree.dfsAll(&cb);
     }
 
     {
@@ -285,42 +270,42 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
         try w.print("\n# Tasks\n\n", .{});
         try w.print("This section provides on overview of the open and closed tasks per section in above document.\n", .{});
 
-        var it = cb.section_chores.iterator();
+        var it = cb.section_nodes.iterator();
         while (it.next()) |e| {
             const section_id = e.key_ptr.*;
 
-            const Status_ChoreIds = std.AutoArrayHashMapUnmanaged(amp.Status.Kind, std.ArrayList(usize));
-            var status_choreids = Status_ChoreIds{};
+            var status_nodeids: std.AutoArrayHashMapUnmanaged(amp.Status.Kind, std.ArrayList(usize)) = .empty;
             defer {
-                var it_ = status_choreids.iterator();
-                while (it_.next()) |*e_| {
+                var it_ = status_nodeids.iterator();
+                while (it_.next()) |*e_|
                     e_.value_ptr.deinit(self.env.a);
-                }
-                status_choreids.deinit(self.env.a);
+                status_nodeids.deinit(self.env.a);
             }
-            {
-                const chore_ids = e.value_ptr.items;
-                for (chore_ids) |chore_id| {
-                    const chore = &self.forest.chores.list.items[chore_id];
 
-                    var status = (chore.meta.status orelse continue).kind;
+            {
+                const node_ids = e.value_ptr.items;
+                for (node_ids) |node_id| {
+                    const node = self.forest.amp_tree.tree.cptr(node_id);
+                    const meta = node.meta orelse continue;
+
+                    var status = (meta.status orelse continue).kind;
                     switch (status) {
                         .Blocked, .Todo, .Wip, .Done => {},
                         .Go, .Question => status = .Todo,
                         else => continue,
                     }
 
-                    var gop = try status_choreids.getOrPut(self.env.a, status);
+                    var gop = try status_nodeids.getOrPut(self.env.a, status);
                     if (!gop.found_existing)
                         gop.value_ptr.* = .empty;
-                    try gop.value_ptr.append(self.env.a, chore_id);
+                    try gop.value_ptr.append(self.env.a, node_id);
                 }
             }
 
-            if (status_choreids.entries.len > 0) {
+            if (status_nodeids.entries.len > 0) {
                 // Write title
                 {
-                    const section = try self.forest.dto_tree.cget(section_id);
+                    const section = try self.forest.mero_tree.cget(section_id);
 
                     try w.print("\n### ", .{});
                     var trim: []const u8 = " ";
@@ -343,8 +328,8 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                 }
 
                 for (&[_]amp.Status.Kind{ .Blocked, .Todo, .Wip, .Done }) |status| {
-                    const chore_ids = (status_choreids.getPtr(status) orelse continue).items;
-                    if (rubr.slc.isEmpty(chore_ids))
+                    const node_ids = (status_nodeids.getPtr(status) orelse continue).items;
+                    if (rubr.slc.isEmpty(node_ids))
                         continue;
 
                     const str = switch (status) {
@@ -356,13 +341,13 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                     };
                     try w.print("\n#### {s}\n\n", .{str});
 
-                    for (chore_ids) |chore_id| {
-                        const ch = &self.forest.chores.list.items[chore_id];
+                    for (node_ids) |node_id| {
+                        const node = self.forest.amp_tree.tree.cptr(node_id);
 
-                        {
+                        if (rubr.slc.first(node.locations.items)) |location| {
                             var first: bool = true;
-                            const n = self.forest.dto_tree.cptr(ch.node_id);
-                            for (n.type.text.terms.slice) |term| {
+                            const mero_node = self.forest.mero_tree.cptr(location.mero_id);
+                            for (mero_node.type.text.terms.slice) |term| {
                                 switch (term.kind) {
                                     .Section, .Bullet, .Checkbox, .Amp, .Capital, .Newline => {},
                                     else => {

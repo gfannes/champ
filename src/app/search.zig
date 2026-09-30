@@ -53,39 +53,43 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
     defer query.deinit();
     try query.setup(query_input);
 
-    for (self.forest.chores.list.items) |chore| {
-        // std.debug.print("{f}", .{chore});
+    for (self.forest.amp_tree.tree.nodes.items) |entry| {
+        const node = entry.data;
+        const meta = node.meta orelse continue;
 
-        try query.prepare(chore.meta, self.config.default_worker);
-        const node = self.forest.dto_tree.cptr(chore.node_id);
-        for (node.org_amps.items) |ref| {
-            const def = ref.ix.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.path);
+        var aps: std.ArrayList(amp.Path) = .empty;
+        defer {
+            for (aps.items) |*ap|
+                ap.deinit();
+            aps.deinit(self.env.a);
         }
-        for (node.agg_amps.items) |ref| {
-            const def = ref.cptr(self.forest.defmgr.defs.items);
-            try query.add(&def.path);
+
+        for (node.ancestors.items) |ancestor| {
+            try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
+        }
+
+        try query.prepare(meta, self.config.default_worker);
+
+        for (aps.items) |*ap| {
+            try query.add(ap);
         }
 
         if (query.distance()) |distance| {
-            // std.debug.print("  distance {}\n", .{distance});
-            const n = try self.forest.dto_tree.cget(chore.node_id);
-            if (n.type == .file)
-                continue;
-            try self.all_entries.append(
-                self.env.a,
-                Entry{
-                    .filepath = n.filepath,
-                    .content = n.content,
-                    .amps = node.content,
-                    .score = distance,
-                    .rows = n.content_rows,
-                    .cols = n.content_cols,
-                },
-            );
-            self.max.update(node.content.len, chore.filepath.len);
-        } else {
-            // std.debug.print("  no distance\n", .{});
+            if (rubr.slc.first(node.locations.items)) |location| {
+                const mero_node = self.forest.mero_tree.cptr(location.mero_id);
+                try self.all_entries.append(
+                    self.env.a,
+                    .{
+                        .filepath = location.path,
+                        .content = mero_node.content,
+                        .amps = mero_node.content,
+                        .score = distance,
+                        .rows = mero_node.content_rows,
+                        .cols = mero_node.content_cols,
+                    },
+                );
+                self.max.update(mero_node.content.len, location.path.len);
+            }
         }
     }
 

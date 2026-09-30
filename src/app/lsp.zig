@@ -293,7 +293,7 @@ pub const Lsp = struct {
                                 .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
                             };
                             try document_symbols.append(aaa, dto.DocumentSymbol{
-                                .name = forest.dto_tree.cptr(location.dto_id).content,
+                                .name = forest.mero_tree.cptr(location.mero_id).content,
                                 .range = range,
                                 .selectionRange = range,
                             });
@@ -360,7 +360,7 @@ pub const Lsp = struct {
                                     .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
                                 };
                                 try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
-                                    .name = forest.dto_tree.cptr(location.dto_id).content,
+                                    .name = forest.mero_tree.cptr(location.mero_id).content,
                                     .location = dto.Location{
                                         .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", location.path }),
                                         .range = range,
@@ -372,12 +372,12 @@ pub const Lsp = struct {
                     }
 
                     // for (forest.chores.list.items) |chore| {
-                    //     if (forest.dto_tree.cptr(chore.node_id).type != .text)
+                    //     if (forest.mero_tree.cptr(chore.node_id).type != .text)
                     //         // We only take text chores into account
                     //         continue;
 
                     //     try q.prepare(chore.meta, self.config.default_worker);
-                    //     const node = forest.dto_tree.cptr(chore.node_id);
+                    //     const node = forest.mero_tree.cptr(chore.node_id);
                     //     for (node.org_amps.items) |ref| {
                     //         const def = ref.ix.cptr(forest.defmgr.defs.items);
                     //         if (def.path.is_definition)

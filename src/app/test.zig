@@ -32,5 +32,5 @@ pub fn call(self: *Self) !void {
     var root = naft.Node{ .w = self.env.log.writer() };
     defer root.deinit();
 
-    self.forest.chores.write(&root);
+    self.forest.amp_tree.write(&root);
 }

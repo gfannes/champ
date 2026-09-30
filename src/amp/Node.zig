@@ -15,7 +15,7 @@ pub const Error = error{
 pub const Location = struct {
     path: []const u8 = &.{},
     pos: filex.Pos,
-    dto_id: usize,
+    mero_id: usize,
     grove_id: usize,
 
     pub fn write(self: @This(), parent: *rubr.naft.Node, typ: []const u8) void {
@@ -24,7 +24,7 @@ pub const Location = struct {
         n.attr("type", typ);
         n.attr("grove_id", self.grove_id);
         n.attr("row", self.pos.row);
-        n.attr("dto_id", self.dto_id);
+        n.attr("mero_id", self.mero_id);
         n.attr("path", self.path);
     }
 };
@@ -69,13 +69,13 @@ pub fn order(self: Self) i32 {
 }
 
 pub const Where = enum { Definition, Reference };
-pub fn appendLocation(self: *Self, where: Where, grove_id: usize, filepath: []const u8, pos: filex.Pos, dto_id: usize) !void {
+pub fn appendLocation(self: *Self, where: Where, grove_id: usize, filepath: []const u8, pos: filex.Pos, mero_id: usize) !void {
     if (where == .Definition) {
         if (self.def_count != self.locations.items.len)
             return error.FoundDefinitionAfterReference;
         self.def_count += 1;
     }
-    try self.locations.append(self.a, .{ .path = filepath, .pos = pos, .dto_id = dto_id, .grove_id = grove_id });
+    try self.locations.append(self.a, .{ .path = filepath, .pos = pos, .mero_id = mero_id, .grove_id = grove_id });
 }
 
 pub fn aggregate(self: *Self, other: *Self) !void {
@@ -120,13 +120,19 @@ pub fn aggregate(self: *Self, other: *Self) !void {
     }
 }
 
-pub fn updateMeta(self: *Self, meta: Meta) !void {
+pub fn setMeta(self: *Self, meta: Meta) !void {
     if (!meta.hasData())
         return;
-    if (self.meta) |*m| {
-        try m.update(meta);
-    } else {
-        self.meta = try meta.copy(self.a);
+    self.meta = try meta.copy(self.a);
+
+    if (self.meta) |self_meta| {
+        if (self_meta.cost) |cost|
+            self.my_cost = cost.value;
+        if (self_meta.order) |ordr| {
+            self.order_min = ordr.value;
+            self.order_min_locked = ordr.is_exclusive;
+        }
+        self.date_min = self_meta.date;
     }
 }
 

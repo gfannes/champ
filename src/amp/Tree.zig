@@ -48,9 +48,9 @@ fn ampPath_(self: Self, ap: *Path, id: usize) !void {
     }
 }
 
-pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     const id = try self.addAbsolute_(self.root.id, ap);
-    try self.tree.ptr(id).appendLocation(.Definition, grove_id, filepath, pos, dto_id);
+    try self.tree.ptr(id).appendLocation(.Definition, grove_id, filepath, pos, mero_id);
     return id;
 }
 
@@ -84,19 +84,19 @@ fn addAbsolute_(self: *Self, root_node_id: usize, ap: Path) !usize {
     return parent;
 }
 
-pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
     const parent_id = maybe_parent_id orelse self.root.id;
 
     const entry = try self.tree.addChild(parent_id);
     entry.data.init(self.a, null);
 
-    try entry.data.appendLocation(.Definition, grove_id, filepath, pos, dto_id);
+    try entry.data.appendLocation(.Definition, grove_id, filepath, pos, mero_id);
 
     return entry.id;
 }
 
-pub fn addReference(self: *Self, id: usize, grove_id: usize, dto_id: usize, filepath: []const u8, pos: filex.Pos) !void {
-    try self.tree.ptr(id).appendLocation(.Reference, grove_id, filepath, pos, dto_id);
+pub fn addReference(self: *Self, id: usize, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !void {
+    try self.tree.ptr(id).appendLocation(.Reference, grove_id, filepath, pos, mero_id);
 }
 
 pub fn resolve(self: *Self, ap: Path) !?usize {
@@ -211,8 +211,8 @@ pub fn aggregateData(self: *Self) !void {
     }
 }
 
-pub fn updateMeta(self: *Self, node: usize, meta: Meta) !void {
-    try self.tree.ptr(node).updateMeta(meta);
+pub fn setMeta(self: *Self, node: usize, meta: Meta) !void {
+    try self.tree.ptr(node).setMeta(meta);
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
