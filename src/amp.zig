@@ -5,8 +5,6 @@ pub const Meta = @import("amp/Meta.zig");
 pub const Status = @import("amp/Status.zig");
 pub const Date = @import("amp/Date.zig");
 pub const Wbs = @import("amp/Wbs.zig");
-pub const Def = @import("amp/Def.zig");
-pub const DefMgr = @import("amp/DefMgr.zig");
 pub const parse = @import("amp/parse.zig").parse;
 pub const Tree = @import("amp/Tree.zig");
 
@@ -22,7 +20,5 @@ test {
     ut.refAllDecls(Status);
     ut.refAllDecls(Date);
     ut.refAllDecls(Wbs);
-    ut.refAllDecls(Def);
-    ut.refAllDecls(DefMgr);
     ut.refAllDecls(Tree);
 }

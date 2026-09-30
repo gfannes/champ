@@ -10,7 +10,6 @@ const mero = @import("../mero.zig");
 const qry = @import("../qry.zig");
 const amp = @import("../amp.zig");
 const markdown = @import("../markdown.zig");
-const chorex = @import("../chorex.zig");
 
 pub const Error = error{
     UnexpectedEmptyStack,
@@ -50,7 +49,6 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
 
         env: rubr.Env,
         mero_tree: *mero.Tree,
-        defmgr: *const amp.DefMgr,
         amp_tree: *const amp.Tree,
         output_dir: *std.Io.Dir,
         output: *std.Io.Writer,
@@ -253,7 +251,6 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
     var cb = Cb{
         .env = self.env,
         .mero_tree = &self.forest.mero_tree,
-        .defmgr = &self.forest.defmgr,
         .amp_tree = &self.forest.amp_tree,
         .output_dir = &output_dir,
         .output = &output_w.interface,

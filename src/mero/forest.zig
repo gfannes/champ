@@ -4,7 +4,6 @@ const dto = @import("dto.zig");
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
-const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
 const rubr = @import("../rubr.zig");
@@ -18,7 +17,6 @@ pub const Error = error{
     ExpectedAtLeastOneGrove,
     CouldNotParseAmp,
     ExpectedGroveId,
-    TooManyIterations,
     ExpectedConfigDefault,
     TextMustHaveParent,
     ParagraphMustHaveParent,
@@ -34,8 +32,6 @@ pub const Forest = struct {
     valid: bool = false,
     mero_tree: mero.Tree = undefined,
     amp_tree: amp.Tree = undefined,
-    defmgr: amp.DefMgr = undefined,
-    chores: chorex.Chores = undefined,
 
     pub fn init(self: *Self) !void {
         // &perf: Using a FBA works a bit faster.
@@ -50,8 +46,6 @@ pub const Forest = struct {
         self.aral = std.heap.ArenaAllocator.init(self.env.a);
         self.mero_tree = mero.Tree.init(self.env.a);
         self.amp_tree = try amp.Tree.init(self.env.a);
-        self.defmgr = amp.DefMgr.init(self.env, "?");
-        self.chores = chorex.Chores.init(self.env);
     }
     pub fn deinit(self: *Self) void {
         var cb = struct {
@@ -62,8 +56,6 @@ pub const Forest = struct {
         self.mero_tree.each(&cb) catch {};
         self.mero_tree.deinit();
         self.amp_tree.deinit();
-        self.chores.deinit();
-        self.defmgr.deinit();
         self.aral.deinit();
     }
     pub fn reinit(self: *Self) !void {
@@ -96,11 +88,8 @@ pub const Forest = struct {
         try s.mark(.{ .ix = 3, .name = "aggregateAmps" });
         try self.aggregateAmps();
 
-        try s.mark(.{ .ix = 4, .name = "createChores" });
-        try self.createChores();
-
-        try s.mark(.{ .ix = 5, .name = "computeChores" });
-        try self.computeChores();
+        try s.mark(.{ .ix = 4, .name = "aggregateData" });
+        try self.amp_tree.aggregateData();
 
         try s.stop();
 
@@ -259,149 +248,12 @@ pub const Forest = struct {
         try w.walk(dir, &cb);
     }
 
-    // Distribute parent org_amps and agg_amps from root to leaf into agg_amps
+    // Distribute the dependencies and aggregate the metadata
     fn aggregateAmps(self: *Self) !void {
         try self.amp_tree.addAncestralDependencies();
         try self.amp_tree.aggregateDependencies();
-
-        var cb = struct {
-            const My = @This();
-
-            env: Env,
-            tree: *mero.Tree,
-            defmgr: *const amp.DefMgr,
-
-            update_count: u64 = 0,
-
-            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
-                if (!before)
-                    return;
-
-                const n = entry.data;
-
-                if (rubr.slc.isEmpty(n.org_amps.items)) {
-                    // std.log.debug("No orgs for {}", .{entry.id});
-                    return;
-                }
-                // Tree-based inheritance between Nodes
-                if (my.parent(entry.id)) |parent_entry| {
-                    // std.log.debug("Injecting from {?} to {?}", .{ parent_entry.data.def, n.def });
-                    try my.injectAmps(parent_entry.data, n);
-                }
-
-                // For orgs that resolve to a named Def, inherit Tags.
-                // The direction of inheritance depends on org.is_dependency.
-                for (n.org_amps.items) |org| {
-                    const def = org.ix.cptr(my.defmgr.defs.items);
-                    if (def.location) |location| {
-                        if (org.is_dependency) {
-                            // Inject our Tags into org node
-                            const def_node = my.tree.get(location.node_id) catch continue;
-                            try my.injectAmps(n, def_node);
-                        } else {
-                            // Inject Tags from org node into us
-                            const def_node = my.tree.cget(location.node_id) catch continue;
-                            try my.injectAmps(def_node, n);
-                        }
-                    }
-                }
-
-                // Inherit Tags from aggs that resolve to a named Def.
-                for (n.agg_amps.items) |agg| {
-                    const def = agg.cptr(my.defmgr.defs.items);
-                    if (def.location) |location| {
-                        const def_node = my.tree.cget(location.node_id) catch continue;
-                        try my.injectAmps(def_node, n);
-                    }
-                }
-            }
-
-            fn injectAmps(my: *My, src: *const mero.Node, dst: *mero.Node) !void {
-                // Inject src.orgs into dst.aggs
-                for (src.org_amps.items) |src_org| {
-                    if (!is_present(dst, src_org.ix)) {
-                        try dst.agg_amps.append(my.env.a, src_org.ix);
-                        my.update_count += 1;
-                    }
-                }
-
-                // Inject src.aggs into dst.aggs
-                for (src.agg_amps.items) |src_agg_ix| {
-                    if (!is_present(dst, src_agg_ix)) {
-                        try dst.agg_amps.append(my.env.a, src_agg_ix);
-                        my.update_count += 1;
-                    }
-                }
-            }
-
-            fn is_present(node: *const mero.Node, needle: mero.Node.DefIx) bool {
-                for (node.org_amps.items) |org| {
-                    if (org.ix.ix == needle.ix)
-                        return true;
-                }
-                for (node.agg_amps.items) |agg| {
-                    if (agg.ix == needle.ix)
-                        return true;
-                }
-                return false;
-            }
-
-            fn parent(my: My, child_id: usize) ?mero.Tree.Entry {
-                var id = child_id;
-                while (my.tree.parent(id) catch unreachable) |pentry| {
-                    if (!rubr.slc.isEmpty(pentry.data.org_amps.items)) {
-                        return pentry;
-                    }
-                    id = pentry.id;
-                }
-                return null;
-            }
-        }{ .env = self.env, .tree = &self.mero_tree, .defmgr = &self.defmgr };
-
-        // We aggregate data several times to allow non-tree-based dependencies to reach all reachable nodes
-        const n = 10;
-        for (0..n) |ix| {
-            cb.update_count = 0;
-            try self.mero_tree.dfsAll(&cb);
-            if (cb.update_count == 0)
-                // Nothing changed: we are done
-                break;
-            if (ix + 1 == n) {
-                try self.env.stderr.print("Did not converge after {} iterations\n", .{n});
-                return error.TooManyIterations;
-            }
-        }
     }
 
-    fn createChores(self: *Self) !void {
-        for (self.defmgr.defs.items) |*def| {
-            if (def.location) |location| {
-                def.chore_id = try self.chores.create(def, location.node_id, &self.mero_tree);
-            }
-        }
-    }
-
-    fn computeChores(self: *Self) !void {
-        try self.amp_tree.aggregateData();
-
-        for (self.defmgr.defs.items) |def| {
-            if (def.location) |location| {
-                const node = self.mero_tree.cptr(location.node_id);
-                if (def.chore_id) |chore_id| {
-                    for (node.org_amps.items) |org| {
-                        const org_def = org.ix.cptr(self.defmgr.defs.items);
-                        try self.chores.update(chore_id, org_def);
-                    }
-                    for (node.agg_amps.items) |agg| {
-                        const agg_def = agg.cptr(self.defmgr.defs.items);
-                        try self.chores.update(chore_id, agg_def);
-                    }
-                }
-            }
-        }
-    }
-
-    // Setup Node.org_amps and amp.DefMgr for data found in Node.line.terms
     fn resolveAmps(self: *Self) !void {
         var cb = struct {
             const My = @This();
@@ -410,7 +262,6 @@ pub const Forest = struct {
             aa: std.mem.Allocator,
             mero_tree: *const mero.Tree,
             amp_tree: *amp.Tree,
-            defmgr: *amp.DefMgr,
 
             filepath: []const u8 = &.{},
             grove_id: ?usize = null,
@@ -466,26 +317,6 @@ pub const Forest = struct {
                                             }
 
                                             try my.amp_tree.addReference(amp_node, grove_id, entry.id, my.filepath, .{ .row = line, .cols = cols });
-
-                                            if (try my.defmgr.resolve(ap, grove_id)) |defix| {
-                                                const def = mero.Node.Def{ .ix = defix, .pos = .{ .row = line, .cols = cols }, .is_dependency = ap.is_dependency };
-                                                try n.org_amps.append(my.env.a, def);
-
-                                                if (my.is_new_file and n.type.isText(.Paragraph)) {
-                                                    // Push org amps on the first (non-title) line to the file level. For &.md, also to the folder level.
-                                                    if (try my.mero_tree.parent(entry.id)) |file| {
-                                                        try file.data.org_amps.append(my.env.a, def);
-
-                                                        if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                                                            if (try my.mero_tree.parent(file.id)) |folder| {
-                                                                try folder.data.org_amps.append(my.env.a, def);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                std.log.warn("Could not resolve amp '{f}' in '{s}'", .{ ap, my.filepath });
-                                            }
                                         }
                                     }
                                 } else |err| {
@@ -505,20 +336,17 @@ pub const Forest = struct {
             .aa = self.aral.allocator(),
             .mero_tree = &self.mero_tree,
             .amp_tree = &self.amp_tree,
-            .defmgr = &self.defmgr,
         };
         try self.mero_tree.dfsAll(&cb);
     }
 
     fn createDefs(self: *Self) !void {
-        // Expects Node.org_amps to still be empty
         var cb = struct {
             const My = @This();
 
             env: Env,
             mero_tree: *mero.Tree,
             amp_tree: *amp.Tree,
-            defmgr: *amp.DefMgr,
 
             filepath: []const u8 = &.{},
             is_new_file: bool = false,
@@ -528,19 +356,19 @@ pub const Forest = struct {
 
             amp_node: ?usize = null,
 
-            path: std.ArrayList(?usize) = .empty,
+            amp_node_path: std.ArrayList(?usize) = .empty,
 
             fn deinit(my: *My) void {
-                my.path.deinit(my.env.a);
+                my.amp_node_path.deinit(my.env.a);
             }
 
             pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before) {
-                    _ = my.path.pop();
+                    _ = my.amp_node_path.pop();
                     return;
                 }
 
-                try my.path.append(my.env.a, null);
+                try my.amp_node_path.append(my.env.a, null);
                 my.amp_node = null;
 
                 const n = entry.data;
@@ -577,7 +405,6 @@ pub const Forest = struct {
                             if (std.mem.endsWith(u8, n.filepath, ".md")) {
                                 var wiki_ap = amp.Path{ .a = my.env.a };
                                 try wiki_ap.parts.append(wiki_ap.a, amp.Path.Part{ .content = n.filepath });
-                                _ = try my.defmgr.appendDef(wiki_ap, n.grove_id.?, n.filepath, entry.id, .{});
                             }
                         }
 
@@ -594,21 +421,13 @@ pub const Forest = struct {
                         if (meta.hasData())
                             needs_def = true;
 
-                        if (n.def == null and needs_def) {
+                        if (n.amp_node == null and needs_def) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{};
-                            n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, n.filepath, entry.id, pos), .pos = pos };
-                            // We add this Def to the org_amps as well to ensure aggregation picks it up
-                            try n.org_amps.append(my.env.a, n.def.?);
-
                             const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
                             try my.setAmpNode(entry, amp_node);
                         }
 
-                        if (n.def) |ref| {
-                            var def = ref.ix.ptr(my.defmgr.defs.items);
-                            try def.meta.update(meta);
-                        }
                         if (my.amp_node) |amp_node| {
                             try my.amp_tree.setMeta(amp_node, meta);
                         }
@@ -622,7 +441,6 @@ pub const Forest = struct {
 
             fn processText(my: *My, entry: mero.Tree.Entry, text: dto.Text) !void {
                 const n = entry.data;
-                std.debug.assert(n.org_amps.items.len == 0);
                 std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
 
                 defer my.is_new_file = false;
@@ -652,30 +470,12 @@ pub const Forest = struct {
                             if (maybe_ap) |*ap| {
                                 defer ap.deinit();
                                 if (ap.is_definition) {
-                                    if (n.def != null) {
-                                        try my.env.stderr.print("Found more than one def in '{s}': {f} and {f}\n", .{ my.filepath, my.defmgr.get(n.def.?.ix).?.path, ap });
-                                        return error.OnlyOneDefAllowed;
-                                    }
-
-                                    // Make the def amp absolute, if necessary
+                                    // Make the amp.Path absolute if necessary
                                     if (!ap.is_absolute) {
-                                        var child_id = entry.id;
-                                        // Try to find parent def
-                                        const maybe_parent_def: ?amp.Path = block: while (true) {
-                                            if (try my.mero_tree.parent(child_id)) |parent| {
-                                                if (parent.data.def) |d| {
-                                                    const pdef = d.ix.cptr(my.defmgr.defs.items);
-                                                    break :block pdef.path;
-                                                } else {
-                                                    child_id = parent.id;
-                                                }
-                                            } else {
-                                                break :block null;
-                                            }
-                                        };
-
-                                        if (maybe_parent_def) |parent_def| {
-                                            try ap.prepend(parent_def);
+                                        if (my.parentAmpNode()) |parent_id| {
+                                            var parent_ap = try my.amp_tree.ampPath(my.env.a, parent_id);
+                                            defer parent_ap.deinit();
+                                            try ap.prepend(parent_ap);
                                             ap.is_definition = true;
                                         } else {
                                             std.log.warn("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is", .{ ap, my.filepath });
@@ -683,16 +483,9 @@ pub const Forest = struct {
                                         }
                                     }
 
-                                    // Collect all defs in a separate struct
+                                    // Create an amp.Node in the amp.Tree for this mero.Node
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                     const pos = filex.Pos{ .row = line, .cols = cols };
-                                    if (try my.defmgr.appendDef(ap.*, grove_id, my.filepath, entry.id, pos)) |amp_ix| {
-                                        n.def = .{ .ix = amp_ix, .pos = pos };
-                                        try n.org_amps.append(my.env.a, n.def.?);
-                                    } else {
-                                        std.log.warn("Illegal or duplicate definition found in '{s}'", .{my.filepath});
-                                    }
-
                                     const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
                                     try my.setAmpNode(entry, amp_node);
                                 } else {
@@ -718,47 +511,13 @@ pub const Forest = struct {
                     try my.setAmpNode(entry, amp_node);
                 }
 
-                if (meta.hasData())
-                    needs_def = true;
-
-                if (n.def == null and needs_def) {
-                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                    const pos = filex.Pos{ .row = n.content_rows.begin };
-                    n.def = .{ .ix = try my.defmgr.appendUnnamedDef(grove_id, my.filepath, entry.id, pos), .pos = pos };
-                    // We add this Def to the org_amps as well to ensure aggregation picks it up
-                    try n.org_amps.append(my.env.a, n.def.?);
-                }
-
-                if (n.def) |ref| {
-                    var def = ref.ix.ptr(my.defmgr.defs.items);
-                    try def.meta.update(meta);
-                }
-
                 if (my.amp_node) |amp_node| {
                     try my.amp_tree.setMeta(amp_node, meta);
-                }
-
-                if (my.is_new_file and n.type.isText(.Paragraph)) {
-                    // A def on the first line is copied to the File as well to ensure all Nodes in this subtree can find it as a parent
-                    // If the file is '&.md', it is copied to the Folder as well
-                    if (try my.mero_tree.parent(entry.id)) |file| {
-                        if (file.data.def == null)
-                            file.data.def = n.def;
-                        try file.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
-
-                        if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                            if (try my.mero_tree.parent(file.id)) |folder| {
-                                if (folder.data.def == null)
-                                    folder.data.def = n.def;
-                                try folder.data.org_amps.insertSlice(my.env.a, 0, n.org_amps.items);
-                            }
-                        }
-                    }
                 }
             }
 
             fn setAmpNode(my: *My, entry: mero.Tree.Entry, amp_node: usize) !void {
-                my.path.items[my.path.items.len - 1] = amp_node;
+                my.amp_node_path.items[my.amp_node_path.items.len - 1] = amp_node;
 
                 const n = entry.data;
 
@@ -766,32 +525,32 @@ pub const Forest = struct {
                 my.amp_node = amp_node;
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
-                    if (my.path.items[my.path.items.len - 2]) |file_id|
+                    if (my.amp_node_path.items[my.amp_node_path.items.len - 2]) |file_id|
                         // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
                         _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
                     // We use amp_node instead of the any pre-existing File amp.Node
-                    my.path.items[my.path.items.len - 2] = amp_node;
+                    my.amp_node_path.items[my.amp_node_path.items.len - 2] = amp_node;
 
                     const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
                     if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                        if (my.path.items[my.path.items.len - 3]) |folder_id|
+                        if (my.amp_node_path.items[my.amp_node_path.items.len - 3]) |folder_id|
                             // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
                             _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
                         // We use amp_node instead of the any pre-existing Folder amp.Node
-                        my.path.items[my.path.items.len - 3] = amp_node;
+                        my.amp_node_path.items[my.amp_node_path.items.len - 3] = amp_node;
                     }
                 }
             }
 
             fn parentAmpNode(my: My) ?usize {
-                var rit = std.mem.reverseIterator(my.path.items);
+                var rit = std.mem.reverseIterator(my.amp_node_path.items);
                 while (rit.next()) |maybe_amp_node| {
                     if (maybe_amp_node) |amp_node|
                         return amp_node;
                 }
                 return null;
             }
-        }{ .env = self.env, .mero_tree = &self.mero_tree, .amp_tree = &self.amp_tree, .defmgr = &self.defmgr };
+        }{ .env = self.env, .mero_tree = &self.mero_tree, .amp_tree = &self.amp_tree };
         defer cb.deinit();
         try self.mero_tree.dfsAll(&cb);
     }

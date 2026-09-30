@@ -311,14 +311,18 @@ pub const Lsp = struct {
 
                     var completions: std.ArrayList(dto.CompletionItem) = .empty;
 
-                    for (forest.defmgr.defs.items) |item| {
-                        if (rubr.slc.lastPtr(item.path.parts.items)) |part| {
-                            if (context.triggerCharacter) |_| {
-                                try completions.append(aaa, dto.CompletionItem{
-                                    .label = part.content,
-                                    .kind = 14,
-                                });
-                            }
+                    for (forest.amp_tree.tree.nodes.items) |entry| {
+                        if (entry.child_ids.items.len > 0)
+                            continue;
+
+                        const node = entry.data;
+                        const name = node.name orelse continue;
+
+                        if (context.triggerCharacter) |_| {
+                            try completions.append(aaa, dto.CompletionItem{
+                                .label = name,
+                                .kind = 14,
+                            });
                         }
                     }
 
@@ -370,37 +374,6 @@ pub const Lsp = struct {
                             }
                         }
                     }
-
-                    // for (forest.chores.list.items) |chore| {
-                    //     if (forest.mero_tree.cptr(chore.node_id).type != .text)
-                    //         // We only take text chores into account
-                    //         continue;
-
-                    //     try q.prepare(chore.meta, self.config.default_worker);
-                    //     const node = forest.mero_tree.cptr(chore.node_id);
-                    //     for (node.org_amps.items) |ref| {
-                    //         const def = ref.ix.cptr(forest.defmgr.defs.items);
-                    //         if (def.path.is_definition)
-                    //             try q.add(&def.path);
-                    //     }
-
-                    //     if (q.distance()) |distance| {
-                    //         const first_amp = rubr.slc.firstPtrUnsafe(node.org_amps.items);
-                    //         const last_amp = rubr.slc.lastPtrUnsafe(node.org_amps.items);
-                    //         const range = dto.Range{
-                    //             .start = dto.Position{ .line = @intCast(first_amp.pos.row), .character = @intCast(first_amp.pos.cols.begin) },
-                    //             .end = dto.Position{ .line = @intCast(last_amp.pos.row), .character = @intCast(last_amp.pos.cols.end) },
-                    //         };
-                    //         try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
-                    //             .name = node.content,
-                    //             .location = dto.Location{
-                    //                 .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", chore.filepath }),
-                    //                 .range = range,
-                    //             },
-                    //             .score = @floatCast(distance),
-                    //         });
-                    //     }
-                    // }
 
                     const ByScore = struct {
                         fn call(_: void, x: dto.WorkspaceSymbol, y: dto.WorkspaceSymbol) bool {

@@ -5,7 +5,6 @@ const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
 const amp = @import("../amp.zig");
 const Parser = @import("Parser.zig");
-const chorex = @import("../chorex.zig");
 const filex = @import("../filex.zig");
 
 const rubr = @import("../rubr.zig");
@@ -93,14 +92,6 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-    pub const DefIx = amp.Def.Ix;
-    pub const DefIxs = std.ArrayList(DefIx);
-    pub const Def = struct {
-        ix: DefIx,
-        pos: filex.Pos,
-        is_dependency: bool = false, // We cannot store this data in amp.Def since that is shared between different resolved amps
-    };
-    pub const Defs = std.ArrayList(Def);
 
     pub const File = struct {
         language: Language,
@@ -129,17 +120,6 @@ pub const Node = struct {
     // &todo &amp_node:remove
     amp_node: ?usize = null,
 
-    // Ref to a definition that is directly present in this Node
-    // Is also added to org_amps
-    def: ?Def = null,
-    // Refs to resolved AMPs that are directly present in this Node
-    // Only the first can be a def
-    org_amps: Defs = .empty,
-    // Refs to resolved AMPs that are inherited
-    // Move to Chore to gain 250MB memory
-    // Maybe replace with a set. Do take into account that in Chore.value, the order currently influences ~status
-    agg_amps: DefIxs = .empty,
-
     // &perf: Only activate relevant fields depending on type
     filepath: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times
     content: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: subslices are present many times
@@ -150,8 +130,6 @@ pub const Node = struct {
     grove_id: ?usize = null,
 
     pub fn deinit(self: *Self) void {
-        self.org_amps.deinit(self.a);
-        self.agg_amps.deinit(self.a);
         switch (self.type) {
             .file => |*file| {
                 for (file.terms.items) |*item|
@@ -179,12 +157,6 @@ pub const Node = struct {
         }
         if (self.amp_node) |amp_node|
             n.attr("amp_node", amp_node);
-        if (self.def) |def|
-            n.attr("def", def.ix);
-        for (self.org_amps.items) |org|
-            n.attr("org", org.ix);
-        for (self.agg_amps.items) |agg|
-            n.attr("agg", agg);
         n.attr("content", self.content);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");

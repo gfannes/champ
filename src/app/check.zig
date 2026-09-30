@@ -105,29 +105,6 @@ pub fn show(self: *Self) !void {
         }
     }
 
-    {
-        var n = root.node("DefMgr");
-        defer n.deinit();
-        if (self.details.defs) {
-            for (self.forest.defmgr.defs.items, 0..) |def, ix| {
-                def.write(&n, ix);
-            }
-        } else {
-            n.attr("count", self.forest.defmgr.defs.items.len);
-
-            var named_count: u64 = 0;
-            var unnamed_count: u64 = 0;
-            for (self.forest.defmgr.defs.items) |def| {
-                if (std.mem.eql(u8, def.path.parts.items[0].content, "_unnamed"))
-                    unnamed_count += 1
-                else
-                    named_count += 1;
-            }
-            n.attr("named_count", named_count);
-            n.attr("unnamed_count", unnamed_count);
-        }
-    }
-
     if (self.details.amp_tree) {
         self.forest.amp_tree.write(&root);
     } else {
