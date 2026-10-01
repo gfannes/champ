@@ -1,4 +1,4 @@
-&& concept
+&&concept
 
 # Grove
 - A named filesystem folder that is will become part of the Tree
@@ -20,8 +20,6 @@
 - The definition of an amp annotation
 	- Can be absolute or relative
 	- Can occur only once
-# Chore
-- A Tree Node that contains amp.Path info
 # Amp
 ## Path
 - A full amp tag
@@ -31,4 +29,5 @@
 	- Each part
 		- Exclusive
 		- Template: status, date, prio, wbs
-
+## Node
+- Node of the content AST that contains amp information

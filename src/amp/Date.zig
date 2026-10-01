@@ -91,7 +91,7 @@ pub fn parse(str: []const u8, options: Options) ?Self {
                 if (month < 1 or month > 12)
                     return null;
                 for (1..month) |m|
-                    days += std.time.epoch.getDaysInMonth(@intCast(year), @enumFromInt(m));
+                    days += std.time.epoch.getDaysInMonth(@intCast(year), @fromBackingInt(@intCast(m)));
 
                 if (sep_minus) {
                     _ = strange.popChar('-');
@@ -168,7 +168,7 @@ pub fn order(maybe_a: ?Self, maybe_b: ?Self) std.math.Order {
             return .gt;
         }
     } else {
-        // &chore:sort: null comes first: that is consistent with 'unscheduled' is shown first
+        // &node:sort: null comes first: that is consistent with 'unscheduled is shown first'
         return if (maybe_b) |_| .lt else .eq;
     }
 }

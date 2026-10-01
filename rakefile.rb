@@ -129,7 +129,7 @@ task :ee do
         File.write(config_fp, config)
 
         sh("champ -u #{config_fp} pl")
-        # sh("champ -u #{config_fp} ch -d")
-        sh("champ -u #{config_fp} ch")
+        sh("champ -u #{config_fp} ch amp")
+        # sh("champ -u #{config_fp} ch")
     end
 end

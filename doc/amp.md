@@ -1,6 +1,8 @@
 &&amp
 
-# AMP DSL &&dsl
+# AMP &&dsl
+
+- Alias: extra name for a definition. All non-first definitions in an amp.Node are aliasses for that Node.
 
 ```
 PATH: &&:PARENT:NAME&

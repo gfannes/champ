@@ -1,12 +1,12 @@
 [folder](name:grove1){
 	[file](name:&.md)(content:&&:toy)
-	[file](name:a.md)(content:&&a &alias_a^
+	[file](name:a.md)(content:&&a &&alias_a
 - [ ] Do this
 - &&b &c
 - &&:c
 	)
 }
 [folder](name:grove2){
-	[file](name:&.md)(content:&&:toy^)
+	[file](name:&.md)(content:&&:toy)
 	[file](name:20260926.md)(content:&&:date_task &a:b &e)
 }

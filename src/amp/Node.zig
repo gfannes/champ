@@ -100,14 +100,14 @@ pub fn aggregate(self: *Self, other: *Self) !void {
                     try self_meta.appendWorker(worker);
                 }
 
-                // &chore:sort: We track the smallest date when present since this has highest prio
-                if (other_meta.date) |date| {
+                // &node:sort: We track the smallest date when present since this has highest prio
+                if (other_meta.date) |other_date| {
                     if (self.date_min) |date_min| {
-                        if (date.date.epoch_day.day < date_min.date.epoch_day.day)
-                            self.date_min = date;
+                        if (other_date.date.epoch_day.day < date_min.date.epoch_day.day)
+                            self.date_min = other_date;
                     } else {
-                        // This Chore has no date yet: inherit from def
-                        self.date_min = date;
+                        // This Node has no date yet: inherit from other
+                        self.date_min = other_date;
                     }
                 }
             }
@@ -120,19 +120,31 @@ pub fn aggregate(self: *Self, other: *Self) !void {
     }
 }
 
-pub fn setMeta(self: *Self, meta: Meta) !void {
+pub fn updateMeta(self: *Self, meta: Meta) !void {
     if (!meta.hasData())
         return;
-    self.meta = try meta.copy(self.a);
 
-    if (self.meta) |self_meta| {
-        if (self_meta.cost) |cost|
-            self.my_cost = cost.value;
-        if (self_meta.order) |ordr| {
-            self.order_min = ordr.value;
-            self.order_min_locked = ordr.is_exclusive;
+    if (self.meta) |*my_meta| {
+        try my_meta.update(meta);
+    } else {
+        self.meta = try meta.copy(self.a);
+    }
+
+    if (meta.cost) |cost|
+        self.my_cost += cost.value;
+    if (meta.order) |ordr| {
+        self.order_min = @min(self.order_min, ordr.value);
+        if (ordr.is_exclusive)
+            self.order_min_locked = true;
+    }
+    if (meta.date) |meta_date| {
+        if (self.date_min) |date_min| {
+            if (meta_date.date.epoch_day.day < date_min.date.epoch_day.day)
+                self.date_min = meta_date;
+        } else {
+            // This Node has no date yet: inherit from other
+            self.date_min = meta_date;
         }
-        self.date_min = self_meta.date;
     }
 }
 

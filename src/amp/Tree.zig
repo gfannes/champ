@@ -210,8 +210,8 @@ pub fn aggregateData(self: *Self) !void {
     }
 }
 
-pub fn setMeta(self: *Self, node: usize, meta: Meta) !void {
-    try self.tree.ptr(node).setMeta(meta);
+pub fn updateMeta(self: *Self, node: usize, meta: Meta) !void {
+    try self.tree.ptr(node).updateMeta(meta);
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {

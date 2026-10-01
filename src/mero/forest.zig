@@ -22,6 +22,8 @@ pub const Error = error{
     ParagraphMustHaveParent,
     FileMustHaveParent,
     ExpectedAmpNode,
+
+    DoubleDef,
 };
 
 pub const Forest = struct {
@@ -354,8 +356,6 @@ pub const Forest = struct {
             do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
-            amp_node: ?usize = null,
-
             amp_node_path: std.ArrayList(?usize) = .empty,
 
             fn deinit(my: *My) void {
@@ -369,7 +369,6 @@ pub const Forest = struct {
                 }
 
                 try my.amp_node_path.append(my.env.a, null);
-                my.amp_node = null;
 
                 const n = entry.data;
 
@@ -396,7 +395,7 @@ pub const Forest = struct {
 
                         my.do_process_other = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
 
-                        var needs_def: bool = false;
+                        var create_amp_node: bool = false;
                         var meta = amp.Meta{ .a = my.env.a };
                         defer meta.deinit();
 
@@ -419,17 +418,18 @@ pub const Forest = struct {
                         // - use folder path as amp path
 
                         if (meta.hasData())
-                            needs_def = true;
+                            create_amp_node = true;
 
-                        if (n.amp_node == null and needs_def) {
+                        if (n.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{};
-                            const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
-                            try my.setAmpNode(entry, amp_node);
+                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
                         }
 
-                        if (my.amp_node) |amp_node| {
-                            try my.amp_tree.setMeta(amp_node, meta);
+                        if (n.amp_node) |amp_node| {
+                            try my.setAmpNode(entry, amp_node);
+                            // When the same definition occurs in several places, this will be an actual _update_
+                            try my.amp_tree.updateMeta(amp_node, meta);
                         }
                     },
                     .text => |text| {
@@ -442,6 +442,7 @@ pub const Forest = struct {
             fn processText(my: *My, entry: mero.Tree.Entry, text: dto.Text) !void {
                 const n = entry.data;
                 std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
+                std.debug.assert(n.amp_node == null);
 
                 defer my.is_new_file = false;
 
@@ -449,9 +450,7 @@ pub const Forest = struct {
                 var line: usize = n.content_rows.begin;
                 var cols: rubr.idx.Range = .{};
 
-                var is_node: bool = false;
-
-                var needs_def: bool = false;
+                var create_amp_node: bool = false;
                 var meta = amp.Meta{ .a = my.env.a };
                 defer meta.deinit();
                 for (text.terms.slice) |term| {
@@ -459,7 +458,7 @@ pub const Forest = struct {
                     cols.end += term.word.len;
 
                     if (term.kind == .Amp or term.kind == .Checkbox or term.kind == .Capital) {
-                        is_node = true;
+                        create_amp_node = true;
 
                         var strange = rubr.strng.Strange{ .content = term.word };
 
@@ -487,12 +486,10 @@ pub const Forest = struct {
                                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                     const pos = filex.Pos{ .row = line, .cols = cols };
                                     const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
-                                    try my.setAmpNode(entry, amp_node);
-                                } else {
-                                    needs_def = true;
+                                    if (n.amp_node == null)
+                                        // The first definition is added no amp_node_path, see under via setAmpNode()
+                                        n.amp_node = amp_node;
                                 }
-                            } else {
-                                // std.debug.print("Found metadata\n", .{});
                             }
                         } else |err| {
                             std.log.warn("Could not parse amp in '{s}':{} {}", .{ my.filepath, line, err });
@@ -504,15 +501,16 @@ pub const Forest = struct {
                     }
                 }
 
-                if (n.amp_node == null and is_node) {
+                if (n.amp_node == null and create_amp_node) {
                     const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                     const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                    const amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
-                    try my.setAmpNode(entry, amp_node);
+                    n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
                 }
 
-                if (my.amp_node) |amp_node| {
-                    try my.amp_tree.setMeta(amp_node, meta);
+                if (n.amp_node) |amp_node| {
+                    try my.setAmpNode(entry, amp_node);
+                    // When the same definition occurs in several places, this will be an actual _update_
+                    try my.amp_tree.updateMeta(amp_node, meta);
                 }
             }
 
@@ -520,9 +518,6 @@ pub const Forest = struct {
                 my.amp_node_path.items[my.amp_node_path.items.len - 1] = amp_node;
 
                 const n = entry.data;
-
-                n.amp_node = amp_node;
-                my.amp_node = amp_node;
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
                     if (my.amp_node_path.items[my.amp_node_path.items.len - 2]) |file_id|

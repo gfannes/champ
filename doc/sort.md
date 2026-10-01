@@ -1,4 +1,4 @@
-# Sorting Chores works as follows &&chore:sort:
+# Sorting amp.Nodes works as follows &&node:sort:
 - Remove Chores with dates into the future
 - Use order information when present
 - When the order is the same

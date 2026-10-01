@@ -92,12 +92,10 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-
     pub const File = struct {
         language: Language,
         terms: Terms = .empty,
     };
-
     pub const Type = union(enum) {
         grove: void,
         folder: void,
@@ -117,7 +115,6 @@ pub const Node = struct {
     type: Type = undefined,
 
     // Node id into amp.Tree.tree
-    // &todo &amp_node:remove
     amp_node: ?usize = null,
 
     // &perf: Only activate relevant fields depending on type

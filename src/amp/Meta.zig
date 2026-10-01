@@ -58,15 +58,18 @@ pub fn copy(self: Self, a: std.mem.Allocator) !Self {
 }
 
 pub fn update(self: *Self, src: Self) !void {
-    self.cost = src.cost;
-    self.order = src.order;
-    self.wbs = src.wbs;
-    self.status = src.status;
-    self.date = src.date;
-    try self.workers.resize(self.a, 0);
-    for (src.workers.items) |worker| {
+    if (self.cost == null)
+        self.cost = src.cost;
+    if (self.order == null)
+        self.order = src.order;
+    if (self.wbs == null)
+        self.wbs = src.wbs;
+    if (self.status == null)
+        self.status = src.status;
+    if (self.date == null)
+        self.date = src.date;
+    for (src.workers.items) |worker|
         try self.appendWorker(worker);
-    }
 }
 
 pub fn hasWorker(self: Self, worker: Worker) bool {
