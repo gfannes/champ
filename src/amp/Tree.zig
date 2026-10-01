@@ -102,15 +102,30 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
     var cb = struct {
         const My = @This();
         ap: Path,
-        tree: *Tree,
         depth: usize = 0,
         found_id: ?usize = null,
+        outer: *Self,
         pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (before) {
                 my.depth += 1;
                 if (my.isFit(entry)) {
-                    // &todo: handle ambiguous matches
-                    my.found_id = entry.id;
+                    if (my.found_id) |found_id| {
+                        var found_ap = try my.outer.ampPath(my.outer.a, found_id);
+                        defer found_ap.deinit();
+                        var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
+                        defer new_ap.deinit();
+                        std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}\nsticking with old node {} at {f}{f}", .{
+                            my.ap,
+                            entry.id,
+                            new_ap,
+                            entry.data,
+                            found_id,
+                            found_ap,
+                            my.outer.tree.nodes.items[found_id].data,
+                        });
+                    } else {
+                        my.found_id = entry.id;
+                    }
                 }
             } else {
                 my.depth -= 1;
@@ -125,15 +140,19 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
             var entry = leaf;
             for (0..part_count) |ix0| {
                 const part = my.ap.parts.items[part_count - 1 - ix0];
-                const name = entry.data.name orelse return false;
-                // std.log.debug("Comparing {s} with {s}", .{ part.content, name });
-                if (!std.mem.eql(u8, part.content, name))
-                    return false;
-                entry = (my.tree.parent(entry.id) catch return false) orelse return false;
+                while (true) {
+                    const name = entry.data.name orelse return false;
+                    if (std.mem.eql(u8, part.content, name))
+                        break;
+                    if (ix0 == 0)
+                        // We expect the tail of my.ap to match immediately. Other parts can match after dropping layers from this path to leaf.
+                        return false;
+                    entry = (my.outer.tree.parent(entry.id) catch return false) orelse return false;
+                }
             }
             return true;
         }
-    }{ .ap = ap, .tree = &self.tree };
+    }{ .ap = ap, .outer = self };
     try self.tree.dfs(self.root.id, &cb);
     return cb.found_id;
 }

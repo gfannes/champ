@@ -155,7 +155,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
     if (self.name) |name|
         n.attr("name", name);
 
-    self.meta.write(&n);
+    if (self.meta) |meta|
+        meta.write(&n);
     for (self.locations.items, 0..) |location, ix0| {
         location.write(&n, if (ix0 < self.def_count) "def" else "ref");
     }
