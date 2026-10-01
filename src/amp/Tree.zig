@@ -40,11 +40,10 @@ pub fn ampPath(self: Self, a: std.mem.Allocator, id: usize) !Path {
 }
 fn ampPath_(self: Self, ap: *Path, id: usize) !void {
     if (try self.tree.parent(id)) |parent| {
-        if (parent.id != self.root.id and parent.id != self.phony.id) {
+        if (parent.id != self.root.id and parent.id != self.phony.id)
             try self.ampPath_(ap, parent.id);
-            if (self.tree.cptr(id).name) |name|
-                try ap.parts.append(ap.a, .{ .content = name });
-        }
+        if (self.tree.cptr(id).name) |name|
+            try ap.parts.append(ap.a, .{ .content = name });
     }
 }
 

@@ -29,6 +29,10 @@ wbs: ?Wbs = null,
 status: ?Status = null,
 date: ?Date = null,
 
+pub fn init(a: std.mem.Allocator) Self {
+    return .{ .a = a };
+}
+
 pub fn deinit(self: *Self) void {
     for (self.workers.items) |worker| {
         self.a.free(worker.name);

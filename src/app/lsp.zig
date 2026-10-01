@@ -336,13 +336,13 @@ pub const Lsp = struct {
                     const aaa = aa.allocator();
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
-                    var q = qry.Query{ .a = self.env.a };
+                    var q: qry.Query = .init(self.env.a);
                     defer q.deinit();
+
                     try q.setup(&[_][]const u8{query});
 
                     for (forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
                         const node = entry.data;
-                        const meta = node.meta orelse continue;
 
                         var aps: std.ArrayList(amp.Path) = .empty;
 
@@ -351,7 +351,7 @@ pub const Lsp = struct {
                             try aps.append(aaa, try forest.amp_tree.ampPath(aaa, ancestor));
                         }
 
-                        try q.prepare(meta, self.config.default_worker);
+                        try q.prepare(node.meta, self.config.default_worker);
                         for (aps.items) |*ap| {
                             try q.add(ap);
                         }

@@ -40,8 +40,9 @@ pub fn deinit(self: *Self) void {
 pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, reverse: bool) !void {
     const today = try rubr.datex.Date.today(self.env.io);
 
-    var query = qry.Query{ .a = self.env.a };
+    var query: qry.Query = .init(self.env.a);
     defer query.deinit();
+
     try query.setup(query_input);
 
     // Collect all chores

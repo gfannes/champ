@@ -49,13 +49,13 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
-    var query = qry.Query{ .a = self.env.a };
+    var query: qry.Query = .init(self.env.a);
     defer query.deinit();
+
     try query.setup(query_input);
 
-    for (self.forest.amp_tree.tree.nodes.items) |entry| {
+    for (self.forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
         const node = entry.data;
-        const meta = node.meta orelse continue;
 
         var aps: std.ArrayList(amp.Path) = .empty;
         defer {
@@ -64,17 +64,20 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
             aps.deinit(self.env.a);
         }
 
+        try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, id));
         for (node.ancestors.items) |ancestor| {
             try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
         }
 
-        try query.prepare(meta, self.config.default_worker);
+        try query.prepare(node.meta, self.config.default_worker);
 
         for (aps.items) |*ap| {
+            // std.debug.print("{f} ", .{ap.*});
             try query.add(ap);
         }
 
         if (query.distance()) |distance| {
+            // std.debug.print(" => {}\n", .{distance});
             if (rubr.slc.first(node.locations.items)) |location| {
                 const mero_node = self.forest.mero_tree.cptr(location.mero_id);
                 try self.all_entries.append(
@@ -90,6 +93,8 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
                 );
                 self.max.update(mero_node.content.len, location.path.len);
             }
+        } else {
+            // std.debug.print(" => NO DISTANCE\n", .{});
         }
     }
 
