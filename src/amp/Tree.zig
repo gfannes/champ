@@ -114,7 +114,7 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
                         defer found_ap.deinit();
                         var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
                         defer new_ap.deinit();
-                        std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}\nsticking with old node {} at {f}{f}", .{
+                        std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
                             my.ap,
                             entry.id,
                             new_ap,
