@@ -105,8 +105,9 @@ task :ee do
     fps = %w[
         date_in_filename.naft
         toy.naft
+        defref.naft
     ]
-    fps = fps[1...2]
+    # fps = fps[1...2]
 
     fps.each do |fp|
         my_dir = File.join(tmp_dir, File.basename(fp, '.*'))

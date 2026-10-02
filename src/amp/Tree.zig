@@ -3,6 +3,7 @@ const std = @import("std");
 const Node = @import("Node.zig");
 const Path = @import("Path.zig");
 const Meta = @import("Meta.zig");
+const mero = @import("../mero.zig");
 
 const rubr = @import("../rubr.zig");
 const filex = @import("../filex.zig");
@@ -33,12 +34,12 @@ pub fn deinit(self: *Self) void {
     self.tree.deinit();
 }
 
-pub fn ampPath(self: Self, a: std.mem.Allocator, id: usize) !Path {
+pub fn ampPath(self: Self, a: std.mem.Allocator, id: Tree.Id) !Path {
     var rv = Path.init(a);
     try self.ampPath_(&rv, id);
     return rv;
 }
-fn ampPath_(self: Self, ap: *Path, id: usize) !void {
+fn ampPath_(self: Self, ap: *Path, id: Tree.Id) !void {
     if (try self.tree.parent(id)) |parent| {
         if (parent.id != self.root.id and parent.id != self.phony.id)
             try self.ampPath_(ap, parent.id);
@@ -47,20 +48,33 @@ fn ampPath_(self: Self, ap: *Path, id: usize) !void {
     }
 }
 
-pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
-    const id = try self.addAbsolute_(self.root.id, ap);
-    try self.tree.ptr(id).appendLocation(.Definition, grove_id, filepath, pos, mero_id);
-    return id;
+pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !Tree.Id {
+    const leaf_id = try self.addAbsolute_(self.root.id, ap);
+
+    var location: Node.Location = .{ .kind = .Definition, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos };
+
+    try self.tree.ptr(leaf_id).appendLocation(location);
+
+    location.kind = .Implicit;
+    var id = leaf_id;
+    while (try self.tree.parent(id)) |parent| {
+        id = parent.id;
+        const n = self.tree.ptr(id);
+        if (n.locations.items.len == 0)
+            try n.appendLocation(location);
+    }
+
+    return leaf_id;
 }
 
-pub fn addPhony(self: *Self, ap: Path) !usize {
+pub fn addPhony(self: *Self, ap: Path) !Tree.Id {
     return try self.addAbsolute_(self.phony.id, ap);
 }
 
-fn addAbsolute_(self: *Self, root_node_id: usize, ap: Path) !usize {
+fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path) !Tree.Id {
     var parent = root_node_id;
     for (ap.parts.items) |part| {
-        var maybe_child_id: ?usize = null;
+        var maybe_child_id: ?Tree.Id = null;
         for (self.tree.childIds(parent)) |child_id| {
             const n = self.tree.cptr(child_id);
             if (std.mem.eql(u8, part.content, n.name orelse "")) {
@@ -83,48 +97,52 @@ fn addAbsolute_(self: *Self, root_node_id: usize, ap: Path) !usize {
     return parent;
 }
 
-pub fn addUnnamed(self: *Self, maybe_parent_id: ?usize, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !usize {
+pub fn addUnnamed(self: *Self, maybe_parent_id: ?Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !Tree.Id {
     const parent_id = maybe_parent_id orelse self.root.id;
 
     const entry = try self.tree.addChild(parent_id);
     entry.data.init(self.a, null);
 
-    try entry.data.appendLocation(.Definition, grove_id, filepath, pos, mero_id);
+    try entry.data.appendLocation(.{ .kind = .Definition, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos });
 
     return entry.id;
 }
 
-pub fn addReference(self: *Self, id: usize, grove_id: usize, mero_id: usize, filepath: []const u8, pos: filex.Pos) !void {
-    try self.tree.ptr(id).appendLocation(.Reference, grove_id, filepath, pos, mero_id);
+pub fn addReference(self: *Self, id: Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !void {
+    try self.tree.ptr(id).appendLocation(.{ .kind = .Reference, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos });
 }
 
-pub fn resolve(self: *Self, ap: Path) !?usize {
+pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
     var cb = struct {
         const My = @This();
         ap: Path,
         depth: usize = 0,
-        found_id: ?usize = null,
+        found_entry: ?Tree.Entry = null,
         outer: *Self,
         pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (before) {
                 my.depth += 1;
                 if (my.isFit(entry)) {
-                    if (my.found_id) |found_id| {
-                        var found_ap = try my.outer.ampPath(my.outer.a, found_id);
-                        defer found_ap.deinit();
-                        var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
-                        defer new_ap.deinit();
-                        std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
-                            my.ap,
-                            entry.id,
-                            new_ap,
-                            entry.data,
-                            found_id,
-                            found_ap,
-                            my.outer.tree.nodes.items[found_id].data,
-                        });
+                    if (my.found_entry) |found_entry| {
+                        if (found_entry.data.isKind(.Implicit) and entry.data.isKind(.Definition)) {
+                            my.found_entry = entry;
+                        } else {
+                            var found_ap = try my.outer.ampPath(my.outer.a, found_entry.id);
+                            defer found_ap.deinit();
+                            var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
+                            defer new_ap.deinit();
+                            std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
+                                my.ap,
+                                entry.id,
+                                new_ap,
+                                entry.data,
+                                found_entry.id,
+                                found_ap,
+                                found_entry.data,
+                            });
+                        }
                     } else {
-                        my.found_id = entry.id;
+                        my.found_entry = entry;
                     }
                 }
             } else {
@@ -154,10 +172,11 @@ pub fn resolve(self: *Self, ap: Path) !?usize {
         }
     }{ .ap = ap, .outer = self };
     try self.tree.dfs(self.root.id, &cb);
-    return cb.found_id;
+
+    return if (cb.found_entry) |entry| entry.id else null;
 }
 
-pub fn addAncestralDependency(self: *Self, node: usize, parent: usize) !bool {
+pub fn addAncestralDependency(self: *Self, node: Tree.Id, parent: Tree.Id) !bool {
     if (node == parent)
         // No self-ancestors
 
@@ -229,7 +248,7 @@ pub fn aggregateData(self: *Self) !void {
     }
 }
 
-pub fn updateMeta(self: *Self, node: usize, meta: Meta) !void {
+pub fn updateMeta(self: *Self, node: Tree.Id, meta: Meta) !void {
     try self.tree.ptr(node).updateMeta(meta);
 }
 
@@ -241,7 +260,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
         try self.write_(&n, root_id);
     }
 }
-fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
+fn write_(self: Self, parent: *rubr.naft.Node, id: Tree.Id) !void {
     var n = parent.node("Node");
     defer n.deinit();
 
@@ -254,8 +273,8 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: usize) !void {
         n.attr("ancestor", ancestor);
     if (node.meta) |meta|
         meta.write(&n);
-    for (node.locations.items, 0..) |location, ix0|
-        location.write(&n, if (ix0 < node.def_count) "def" else "ref");
+    for (node.locations.items) |location|
+        location.write(&n);
 
     for (self.tree.childIds(id)) |child_id| {
         try self.write_(&n, child_id);

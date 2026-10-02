@@ -13,15 +13,27 @@ pub const Error = error{
 };
 
 pub const Location = struct {
+    pub const Kind = enum {
+        Definition,
+        Implicit,
+        Reference,
+    };
+
+    kind: Kind,
     path: []const u8 = &.{},
     pos: filex.Pos,
     mero_id: usize,
     grove_id: usize,
 
-    pub fn write(self: @This(), parent: *rubr.naft.Node, typ: []const u8) void {
+    pub fn write(self: @This(), parent: *rubr.naft.Node) void {
         var n = parent.node("Location");
         defer n.deinit();
-        n.attr("type", typ);
+        const kind = switch (self.kind) {
+            .Definition => "def",
+            .Implicit => "implicit",
+            .Reference => "ref",
+        };
+        n.attr("kind", kind);
         n.attr("grove_id", self.grove_id);
         n.attr("row", self.pos.row);
         n.attr("mero_id", self.mero_id);
@@ -68,14 +80,26 @@ pub fn order(self: Self) i32 {
     return self.order_offset + self.order_min;
 }
 
-pub const Where = enum { Definition, Reference };
-pub fn appendLocation(self: *Self, where: Where, grove_id: usize, filepath: []const u8, pos: filex.Pos, mero_id: usize) !void {
-    if (where == .Definition) {
-        if (self.def_count != self.locations.items.len)
-            return error.FoundDefinitionAfterReference;
-        self.def_count += 1;
+// Checks the first location kind
+pub fn isKind(self: Self, kind: Location.Kind) bool {
+    if (rubr.slc.first(self.locations.items)) |loc|
+        return loc.kind == kind;
+    return false;
+}
+
+pub fn appendLocation(self: *Self, location: Location) !void {
+    if (location.kind == .Definition and self.locations.items.len > 0 and self.locations.items[0].kind == .Implicit) {
+        // This location is already present as an Implicit one (created as part of the base of a path).
+        // We _replace_ it with this Definition.
+        self.locations.items[0] = location;
+    } else {
+        if (location.kind == .Definition or location.kind == .Implicit) {
+            if (self.def_count != self.locations.items.len)
+                return error.FoundDefinitionAfterReference;
+            self.def_count += 1;
+        }
+        try self.locations.append(self.a, location);
     }
-    try self.locations.append(self.a, .{ .path = filepath, .pos = pos, .mero_id = mero_id, .grove_id = grove_id });
 }
 
 pub fn aggregate(self: *Self, other: *Self) !void {
@@ -157,8 +181,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
 
     if (self.meta) |meta|
         meta.write(&n);
-    for (self.locations.items, 0..) |location, ix0| {
-        location.write(&n, if (ix0 < self.def_count) "def" else "ref");
+    for (self.locations.items) |location| {
+        location.write(&n);
     }
 }
 

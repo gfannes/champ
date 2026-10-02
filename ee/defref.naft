@@ -1,0 +1,7 @@
+[folder](name:grove){
+	[file](name:file.md)(content:
+# &&a:b
+# &&a
+# &&c &a
+)
+}
