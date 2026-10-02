@@ -1,0 +1,36 @@
+DONE &#0
+- amp.Node (previously Chore) is
+	- Conceptually a location into the mero.Tree where amp data is found
+		- Might be a _list_ of locations in practice to support duplicate definitions (more than one) and unresolved dependencies (zero)
+			- First line, file and folder
+		- Main location is first
+	- All dependency and aggregated metadata for that Node
+	- Optional name to support Nodes with a `&&` definition and once without (eg todo)
+- amp.Tree will hold all amp.Nodes
+	- A tree according to amp.Path
+		- Resolved definitions go into `<ROOT>`
+		- Unresolved dependencies go into `<PHONY>` to ensure they are not dangling?
+	- Leaf-based lookup to support fast resolving
+- [x] Create a toy problem with
+	- [x] duplicate definition
+	- [x] an alias: crashes champ
+	- [x] unnamed node
+	- [x] relative and absolute definition path
+	- [x] amp data in the first line
+	- [x] amp data in a `&.md` folder meta file
+- [x] Collect all amp.Nodes in amp.Tree.root
+	- [x] Use metadata from first line iso File metadata
+	- [x] Use metadata from `&.md` iso Folder metadata
+- [x] Resolve references with middle part missing to support stable references without version info: eg `&atp:ui` iso `&atp:v1.0:ui`
+- [x] Support ambiguous reference matches during resolve
+- [x] Resolve all dependencies
+	- [x] Create phony amp.Nodes in amp.Tree.phony when not found
+- [x] Fix Exoplayer.md once implemented
+- [x] Support metadata in File.filepath
+- [ ] Replace `usize` with amp.Tree.Id
+- [x] Enable part-whole dependency on definition parent via addAncestralDependencies()
+- [x] Goto reference only works on definition and not on reference
+- [x] Remove dto.Node.org_amps and agg_amps
+- [x] Remove defmgr
+- [x] Rename dto.tree into mero.tree
+- [x] `champ pl auro` only shows dashboard items

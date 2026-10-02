@@ -113,6 +113,9 @@ pub fn addReference(self: *Self, id: Tree.Id, grove_id: usize, mero_id: mero.Tre
 }
 
 pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
+    // &resolve: keep track of all matches and choose the best
+    // - Least dropped parts
+    // - No implicit location
     var cb = struct {
         const My = @This();
         ap: Path,

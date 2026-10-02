@@ -61,6 +61,7 @@ pub const Query = struct {
         for (parts) |part| {
             if (self.do_log)
                 std.debug.print("part: '{s}'\n", .{part});
+
             var strange = rubr.strng.Strange{ .content = part };
 
             while (!strange.empty()) {

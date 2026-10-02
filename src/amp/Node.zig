@@ -107,7 +107,8 @@ pub fn aggregate(self: *Self, other: *Self) !void {
     if (other.meta) |other_meta| {
         if (other_meta.hasData()) {
             if (self.meta == null)
-                self.meta = try other_meta.copy(self.a);
+                // Do not inherit metadata here, inheritance works via the ancestor dependencies
+                self.meta = Meta.init(self.a);
 
             if (self.meta) |*self_meta| {
                 if (other_meta.order) |ordr| {

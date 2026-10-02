@@ -45,72 +45,70 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
 
     try query.setup(query_input);
 
-    // Collect all chores
+    // Collect all amp.Nodes
     for (self.forest.amp_tree.tree.nodes.items, 0..) |entry_, id| {
         const node = entry_.data;
-        const meta = node.meta orelse continue;
 
-        const status = meta.status orelse continue;
-        switch (status.kind) {
-            .Todo, .Wip, .Go, .Blocked, .Question => {},
-            else => continue,
+        // Check if this Node is part of the plan
+        {
+            const meta = node.meta orelse continue;
+
+            const status = meta.status orelse continue;
+            switch (status.kind) {
+                .Todo, .Wip, .Go, .Blocked, .Question => {},
+                else => continue,
+            }
+
+            if (node.order() > max_order)
+                continue;
+
+            var aps: std.ArrayList(amp.Path) = .empty;
+            defer {
+                for (aps.items) |*ap|
+                    ap.deinit();
+                aps.deinit(self.env.a);
+            }
+
+            try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, id));
+            for (node.ancestors.items) |ancestor|
+                try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
+
+            try query.prepare(meta, self.config.default_worker);
+            for (aps.items) |*ap|
+                try query.add(ap);
+
+            // Check correspondence with provided query
+            const distance = query.distance() orelse continue;
+            if (distance > 1.0)
+                continue;
+
+            // Check that its start date is before today, if any
+            // &todo &meta Add date to chore and re-enable this check
+            if (node.date_min) |date|
+                if (date.date.epoch_day.day > today.epoch_day.day)
+                    continue;
         }
-
-        const myorder = node.order();
-        if (myorder > max_order)
-            continue;
 
         var filepath: []const u8 = &.{};
         var content: []const u8 = &.{};
         var rows: rubr.idx.Range = .{};
         var cols: rubr.idx.Range = .{};
+        const date: ?amp.Date = node.date_min orelse null;
 
-        var aps: std.ArrayList(amp.Path) = .empty;
-        defer {
-            for (aps.items) |*ap|
-                ap.deinit();
-            aps.deinit(self.env.a);
-        }
-
-        for (node.locations.items) |location| {
-            if (filepath.len == 0)
-                filepath = location.path;
+        if (rubr.slc.first(node.locations.items)) |location| {
+            filepath = location.path;
 
             const mero_node = self.forest.mero_tree.cptr(location.mero_id);
-            if (content.len == 0)
-                content = mero_node.content;
-            if (rows.empty())
-                rows = mero_node.content_rows;
-            if (cols.empty())
-                cols = mero_node.content_cols;
-
-            try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, id));
-            for (node.ancestors.items) |ancestor|
-                try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
+            content = mero_node.content;
+            rows = mero_node.content_rows;
+            cols = mero_node.content_cols;
         }
-
-        try query.prepare(meta, self.config.default_worker);
-        for (aps.items) |*ap|
-            try query.add(ap);
-
-        // Check correspondence with provided query
-        const distance = query.distance() orelse continue;
-        if (distance > 1.0)
-            continue;
-
-        // Check that its start date is before today, if any
-        // &todo &meta Add date to chore and re-enable this check
-        const date = if (node.date_min) |date| ret: {
-            if (date.date.epoch_day.day > today.epoch_day.day)
-                continue;
-            break :ret date;
-        } else null;
 
         const entry = Entry{
             .filepath = filepath,
             .content = content,
             .date = date,
-            .order = myorder,
+            .order = node.order(),
             .rows = rows,
             .cols = cols,
         };
@@ -184,8 +182,10 @@ pub fn show(self: Self, all: bool, details: bool) !void {
         try self.env.stdout.print("\n{f}{s}{f}\n", .{ filename_style, segment.filepath, reset_style });
 
         for (segment.entries) |entry| {
-            try self.env.stdout.print("  {f}{s}{f} (&#{} {?})", .{ style(entry.order), entry.content, reset_style, entry.order, entry.date });
-            try self.env.stdout.print("\n", .{});
+            try self.env.stdout.print("  {f}{s}{f} (&#{}", .{ style(entry.order), entry.content, reset_style, entry.order });
+            if (entry.date) |date|
+                try self.env.stdout.print(" {f}", .{date});
+            try self.env.stdout.print(")\n", .{});
         }
     }
 }
