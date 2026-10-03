@@ -90,7 +90,7 @@ pub const Loader = struct {
 
     tmp_content: ?[:0]u8 = null,
 
-    // For some reason, std.zon.parse.fromSliceAlloc() expects a sentinel string
+    // For some reason, std.zon.parse.fromSlice() expects a sentinel string
     // Returns true if the loaded config is different from before
     pub fn loadFromContent(self: *Self, content: [:0]const u8, what: What) !bool {
         var my_hash: Hash = undefined;
@@ -102,7 +102,8 @@ pub const Loader = struct {
                     if (std.mem.eql(u8, &hash, &my_hash))
                         return false;
                 }
-                self.config = try std.zon.parse.fromSliceAlloc(Config, self.env.aa, content, null, .{});
+                var diagnostics: std.zon.parse.Diagnostics = undefined;
+                self.config = try std.zon.parse.fromSlice(Config, .{ .gpa = self.env.aa, .arena = self.env.aa, .source = content, .diagnostics = &diagnostics });
                 self.config_hash = my_hash;
 
                 try self.normalize();
@@ -118,7 +119,8 @@ pub const Loader = struct {
                     if (std.mem.eql(u8, &hash, &my_hash))
                         return false;
                 }
-                self.fui = try std.zon.parse.fromSliceAlloc(Fui, self.env.aa, content, null, .{});
+                var diagnostics: std.zon.parse.Diagnostics = undefined;
+                self.fui = try std.zon.parse.fromSlice(Fui, .{ .gpa = self.env.aa, .arena = self.env.aa, .source = content, .diagnostics = &diagnostics });
                 self.fui_hash = my_hash;
             },
         }

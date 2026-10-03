@@ -41,7 +41,7 @@ pub const Query = struct {
     worker: ?[]const u8 = null,
     default_worker: ?[]const u8 = null,
     parts: Parts = .empty,
-    paths: std.ArrayList(*const amp.Path) = .empty,
+    amp_paths: std.ArrayList(*const amp.Path) = .empty,
 
     do_log: bool = false,
 
@@ -53,7 +53,7 @@ pub const Query = struct {
         for (self.parts.items) |part|
             self.a.free(part);
         self.parts.deinit(self.a);
-        self.paths.deinit(self.a);
+        self.amp_paths.deinit(self.a);
         self.meta.deinit();
     }
 
@@ -114,7 +114,7 @@ pub const Query = struct {
 
     // Call this to reset this Query instance to start the computation of a match with a new Meta
     pub fn prepare(self: *Self, maybe_meta: ?amp.Meta, default_worker: ?[]const u8) !void {
-        try self.paths.resize(self.a, 0);
+        try self.amp_paths.resize(self.a, 0);
 
         self.meta.deinit();
         self.meta = if (maybe_meta) |meta| try meta.copy(self.a) else amp.Meta.init(self.a);
@@ -124,7 +124,7 @@ pub const Query = struct {
 
     // Add all relevant amp.Paths that you want to consider for matching
     pub fn add(self: *Self, path: *const amp.Path) !void {
-        try self.paths.append(self.a, path);
+        try self.amp_paths.append(self.a, path);
     }
 
     // Compute the match itself
@@ -204,7 +204,7 @@ pub const Query = struct {
             if (self.do_log)
                 std.debug.print("Matching '{s}'\n", .{q_part});
             var maybe_min_distance: ?f64 = null;
-            for (self.paths.items) |path| {
+            for (self.amp_paths.items) |path| {
                 for (path.parts.items) |a_part| {
                     var skip_count: usize = undefined;
                     const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
