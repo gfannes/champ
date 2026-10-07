@@ -87,6 +87,14 @@ pub fn isKind(self: Self, kind: Location.Kind) bool {
     return false;
 }
 
+pub fn definedInGrove(self: Self, grove_id: usize) bool {
+    for (self.locations.items[0..self.def_count]) |location| {
+        if (location.grove_id == grove_id)
+            return true;
+    }
+    return false;
+}
+
 pub fn appendLocation(self: *Self, location: Location) !void {
     if (location.kind == .Definition and self.locations.items.len > 0 and self.locations.items[0].kind == .Implicit) {
         // This location is already present as an Implicit one (created as part of the base of a path).

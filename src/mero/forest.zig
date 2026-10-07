@@ -308,7 +308,7 @@ pub const Forest = struct {
                                         if (!ap.is_definition) {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
-                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse rv: {
+                                            const amp_node = (try my.amp_tree.resolve(ap.*, my.grove_id, my.filepath)) orelse rv: {
                                                 std.log.debug("Could not resolve {f}", .{ap.*});
                                                 break :rv try my.amp_tree.addPhony(ap.*);
                                             };

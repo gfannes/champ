@@ -119,19 +119,27 @@ pub fn addReference(self: *Self, id: Tree.Id, grove_id: usize, mero_id: mero.Tre
     try self.tree.ptr(id).appendLocation(.{ .kind = .Reference, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos });
 }
 
-pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
+pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?Tree.Id {
     // &resolve: keep track of all matches and choose the best
     // - Least dropped parts
     // - No implicit location
     var cb = struct {
         const My = @This();
         ap: Path,
+        grove_id: ?usize,
+        filepath: []const u8,
+
         depth: usize = 0,
         found_entry: ?Tree.Entry = null,
         outer: *Self,
         pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (before) {
                 my.depth += 1;
+
+                if (my.grove_id) |id|
+                    if (!entry.data.definedInGrove(id))
+                        return;
+
                 if (my.isFit(entry)) {
                     if (my.found_entry) |found_entry| {
                         if (found_entry.data.isKind(.Implicit) and entry.data.isKind(.Definition)) {
@@ -141,8 +149,10 @@ pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
                             defer found_ap.deinit();
                             var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
                             defer new_ap.deinit();
-                            std.log.warn("Found ambiguous match for {f}\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
+                            std.log.warn("Found ambiguous match for {f} {?} file '{s}'\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
                                 my.ap,
+                                my.grove_id,
+                                my.filepath,
                                 entry.id,
                                 new_ap,
                                 entry.data,
@@ -180,7 +190,15 @@ pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
             }
             return true;
         }
-    }{ .ap = ap, .outer = self };
+    }{ .ap = ap, .filepath = filepath, .grove_id = grove_id, .outer = self };
+
+    // Search for a matching grove_id
+    try self.tree.dfs(self.root.id, &cb);
+    if (cb.found_entry) |entry|
+        return entry.id;
+
+    // Allow any grove_id
+    cb.grove_id = null;
     try self.tree.dfs(self.root.id, &cb);
 
     return if (cb.found_entry) |entry| entry.id else null;
