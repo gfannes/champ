@@ -106,6 +106,7 @@ task :ee do
         date_in_filename.naft
         toy.naft
         defref.naft
+        case.naft
     ]
     # fps = fps[1...2]
 

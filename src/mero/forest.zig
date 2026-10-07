@@ -308,8 +308,10 @@ pub const Forest = struct {
                                         if (!ap.is_definition) {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
-                                            std.log.debug("Resolving {f}", .{ap.*});
-                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse (try my.amp_tree.addPhony(ap.*));
+                                            const amp_node = (try my.amp_tree.resolve(ap.*)) orelse rv: {
+                                                std.log.debug("Could not resolve {f}", .{ap.*});
+                                                break :rv try my.amp_tree.addPhony(ap.*);
+                                            };
                                             if (n.amp_node) |n_amp_node| {
                                                 if (ap.is_dependency) {
                                                     _ = try my.amp_tree.addAncestralDependency(amp_node, n_amp_node);

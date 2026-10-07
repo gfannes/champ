@@ -16,6 +16,8 @@ tree: Tree,
 root: Tree.Entry = undefined,
 phony: Tree.Entry = undefined,
 
+names: std.ArrayList([]const u8) = .empty,
+
 pub fn init(a: std.mem.Allocator) !Self {
     var rv: Self = .{
         .a = a,
@@ -29,6 +31,9 @@ pub fn init(a: std.mem.Allocator) !Self {
     return rv;
 }
 pub fn deinit(self: *Self) void {
+    for (self.names.items) |name|
+        self.a.free(name);
+    self.names.deinit(self.a);
     for (self.tree.nodes.items) |*node|
         node.data.deinit();
     self.tree.deinit();
@@ -77,7 +82,7 @@ fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path) !Tree.Id {
         var maybe_child_id: ?Tree.Id = null;
         for (self.tree.childIds(parent)) |child_id| {
             const n = self.tree.cptr(child_id);
-            if (std.mem.eql(u8, part.content, n.name orelse "")) {
+            if (std.ascii.eqlIgnoreCase(part.content, n.name orelse "")) {
                 maybe_child_id = child_id;
             }
         }
@@ -88,7 +93,9 @@ fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path) !Tree.Id {
         } else {
             // No match found: insert new node
             const entry = try self.tree.addChild(parent);
-            entry.data.init(self.a, part.content);
+            const name = try std.ascii.allocLowerString(self.a, part.content);
+            try self.names.append(self.a, name);
+            entry.data.init(self.a, name);
 
             parent = entry.id;
         }
@@ -163,7 +170,7 @@ pub fn resolve(self: *Self, ap: Path) !?Tree.Id {
                 const part = my.ap.parts.items[part_count - 1 - ix0];
                 while (true) {
                     const name = entry.data.name orelse return false;
-                    if (std.mem.eql(u8, part.content, name))
+                    if (std.ascii.eqlIgnoreCase(part.content, name))
                         break;
                     if (ix0 == 0)
                         // We expect the tail of my.ap to match immediately. Other parts can match after dropping layers from this path to leaf.
@@ -294,9 +301,9 @@ test "amp.Tree" {
     var tree = try Self.init(ut.allocator);
     defer tree.deinit();
 
-    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "A");
-    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "B");
-    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "C");
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "a");
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "b");
+    (try tree.tree.addChild(tree.root.id)).data.init(ut.allocator, "c");
 
     std.debug.print("{f}", .{tree});
 
