@@ -125,12 +125,16 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
     // - No implicit location
     var cb = struct {
         const My = @This();
+        const Gem = struct {
+            entry: Tree.Entry,
+            cost: usize,
+        };
         ap: Path,
         grove_id: ?usize,
         filepath: []const u8,
 
         depth: usize = 0,
-        found_entry: ?Tree.Entry = null,
+        maybe_gem: ?Gem = null,
         outer: *Self,
         pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (before) {
@@ -140,29 +144,36 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
                     if (!entry.data.definedInGrove(id))
                         return;
 
-                if (my.isFit(entry)) {
-                    if (my.found_entry) |found_entry| {
-                        if (found_entry.data.isKind(.Implicit) and entry.data.isKind(.Definition)) {
-                            my.found_entry = entry;
+                if (my.fitCost(entry)) |cost| {
+                    if (my.maybe_gem) |*gem| {
+                        if (gem.entry.data.isKind(.Implicit) and entry.data.isKind(.Definition)) {
+                            gem.entry = entry;
+                            gem.cost = cost;
                         } else {
-                            var found_ap = try my.outer.ampPath(my.outer.a, found_entry.id);
-                            defer found_ap.deinit();
+                            var gem_ap = try my.outer.ampPath(my.outer.a, gem.entry.id);
+                            defer gem_ap.deinit();
                             var new_ap = try my.outer.ampPath(my.outer.a, entry.id);
                             defer new_ap.deinit();
-                            std.log.warn("Found ambiguous match for {f} {?} file '{s}'\nnew node {} at {f}{f}sticking with old node {} at {f}{f}", .{
+                            std.log.warn("Found ambiguous match for {f} {?} file '{s}'\nnew node {} at {f}{f}old node {} at {f}{f}", .{
                                 my.ap,
                                 my.grove_id,
                                 my.filepath,
                                 entry.id,
                                 new_ap,
                                 entry.data,
-                                found_entry.id,
-                                found_ap,
-                                found_entry.data,
+                                gem.entry.id,
+                                gem_ap,
+                                gem.entry.data,
                             });
+                            if (cost < gem.cost) {
+                                gem.entry = entry;
+                                gem.cost = cost;
+                            } else if (cost == gem.cost) {
+                                std.log.warn("Cannot decide: same cost\n", .{});
+                            }
                         }
                     } else {
-                        my.found_entry = entry;
+                        my.maybe_gem = Gem{ .entry = entry, .cost = cost };
                     }
                 }
             } else {
@@ -170,38 +181,42 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
             }
         }
 
-        fn isFit(my: My, leaf: Tree.Entry) bool {
+        fn fitCost(my: My, leaf: Tree.Entry) ?usize {
             const part_count = my.ap.parts.items.len;
             if (my.depth < part_count)
-                return false;
+                return null;
 
+            var cost: usize = 0;
             var entry = leaf;
             for (0..part_count) |ix0| {
                 const part = my.ap.parts.items[part_count - 1 - ix0];
                 while (true) {
-                    const name = entry.data.name orelse return false;
+                    const name = entry.data.name orelse return null;
+                    entry = (my.outer.tree.parent(entry.id) catch return null) orelse return null;
+
                     if (std.ascii.eqlIgnoreCase(part.content, name))
                         break;
                     if (ix0 == 0)
                         // We expect the tail of my.ap to match immediately. Other parts can match after dropping layers from this path to leaf.
-                        return false;
-                    entry = (my.outer.tree.parent(entry.id) catch return false) orelse return false;
+                        return null;
+                    cost += 1;
                 }
             }
-            return true;
+
+            return cost;
         }
     }{ .ap = ap, .filepath = filepath, .grove_id = grove_id, .outer = self };
 
     // Search for a matching grove_id
     try self.tree.dfs(self.root.id, &cb);
-    if (cb.found_entry) |entry|
-        return entry.id;
+    if (cb.maybe_gem) |gem|
+        return gem.entry.id;
 
     // Allow any grove_id
     cb.grove_id = null;
     try self.tree.dfs(self.root.id, &cb);
 
-    return if (cb.found_entry) |entry| entry.id else null;
+    return if (cb.maybe_gem) |gem| gem.entry.id else null;
 }
 
 pub fn addAncestralDependency(self: *Self, node: Tree.Id, parent: Tree.Id) !bool {
