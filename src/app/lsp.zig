@@ -331,30 +331,40 @@ pub const Lsp = struct {
                     const params = request.params orelse return error.ExpectedParams;
                     const query = params.query orelse return error.ExpectedQuery;
 
-                    var aa = std.heap.ArenaAllocator.init(self.env.a);
-                    defer aa.deinit();
-                    const aaa = aa.allocator();
+                    var aa_ = std.heap.ArenaAllocator.init(self.env.a);
+                    defer aa_.deinit();
+                    const aa = aa_.allocator();
+
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
-                    var q: qry.Query = .init(self.env.a);
+                    var q: qry.Query = .init(aa);
                     defer q.deinit();
 
                     try q.setup(&[_][]const u8{query});
 
+                    var aa_loop_ = std.heap.ArenaAllocator.init(self.env.a);
+                    defer aa_loop_.deinit();
+                    const aa_loop = aa_loop_.allocator();
+
+                    var aps: std.ArrayList(amp.Path) = .empty;
+
                     for (forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
                         const node = entry.data;
+                        if (!node.isKind(.Definition))
+                            // We only search in actual definitions
+                            continue;
 
-                        var aps: std.ArrayList(amp.Path) = .empty;
+                        // _ = aa_loop_.reset(.retain_capacity);
 
-                        try aps.append(aaa, try forest.amp_tree.ampPath(aaa, id));
+                        aps.clearRetainingCapacity();
+                        try aps.append(aa_loop, try forest.amp_tree.ampPath(aa_loop, id));
                         for (node.ancestors.items[0..node.direct_ancestor_count]) |ancestor| {
-                            try aps.append(aaa, try forest.amp_tree.ampPath(aaa, ancestor));
+                            try aps.append(aa_loop, try forest.amp_tree.ampPath(aa_loop, ancestor));
                         }
 
                         try q.prepare(node.meta, self.config.default_worker);
-                        for (aps.items) |*ap| {
+                        for (aps.items) |*ap|
                             try q.add(ap);
-                        }
 
                         if (q.distance()) |distance| {
                             if (rubr.slc.first(node.locations.items)) |location| {
@@ -363,10 +373,10 @@ pub const Lsp = struct {
                                     .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
                                     .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
                                 };
-                                try workspace_symbols.append(aaa, dto.WorkspaceSymbol{
+                                try workspace_symbols.append(aa, dto.WorkspaceSymbol{
                                     .name = forest.mero_tree.cptr(location.mero_id).content,
                                     .location = dto.Location{
-                                        .uri = try std.mem.concat(aaa, u8, &[_][]const u8{ "file://", "/", location.path }),
+                                        .uri = try std.mem.concat(aa, u8, &[_][]const u8{ "file://", "/", location.path }),
                                         .range = range,
                                     },
                                     .score = @floatCast(distance),
