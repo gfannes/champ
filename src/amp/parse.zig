@@ -47,6 +47,7 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             errdefer path.deinit();
             path.is_definition = strange.popChar('&');
             path.is_absolute = strange.popChar(':');
+            path.is_config = strange.popChar('.');
 
             while (strange.popCharBack(':')) {}
             path.is_dependency = strange.popCharBack('&');

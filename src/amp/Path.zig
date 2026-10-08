@@ -30,6 +30,7 @@ a: std.mem.Allocator,
 is_definition: bool = false, // `&&name`
 is_absolute: bool = false, // `&&:name`
 is_dependency: bool = false, // `&name&`
+is_config: bool = false, // `&.name`
 parts: Parts = .empty,
 
 pub fn init(a: std.mem.Allocator) Self {
