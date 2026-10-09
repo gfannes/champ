@@ -96,11 +96,11 @@ pub fn show(self: *Self) !void {
                     else => {},
                 }
             }
-            nn.attr("count", count);
-            nn.attr("fs_read", fs_read);
-            nn.attr("terms", terms);
-            nn.attr("filepath", filepath);
-            nn.attr("other", other);
+            nn.attr("count", rubr.fmt.iso(count, false));
+            nn.attr("fs_read", rubr.fmt.iso(fs_read, false));
+            nn.attr("terms", rubr.fmt.iso(terms, false));
+            nn.attr("filepath", rubr.fmt.iso(filepath, false));
+            nn.attr("other", rubr.fmt.iso(other, false));
             nn.attr("Node", @sizeOf(mero.Node));
         }
 
@@ -118,8 +118,8 @@ pub fn show(self: *Self) !void {
                 other += node.locations.items.len * @sizeOf(amp.Node.Location);
                 other += node.ancestors.items.len * @sizeOf(usize);
             }
-            nn.attr("count", count);
-            nn.attr("other", other);
+            nn.attr("count", rubr.fmt.iso(count, false));
+            nn.attr("other", rubr.fmt.iso(other, false));
             nn.attr("Node", @sizeOf(amp.Node));
         }
     }

@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile]` from https://github.com/gfannes/rubr from 2026-09-22
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-10-09
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -2352,5 +2352,53 @@ pub const profile = struct {
             }
         }
     };
+    
+};
+
+// Export from 'src/fmt.zig'
+pub const fmt = struct {
+    pub const Iso = struct {
+        const T = u128;
+    
+        v: T,
+        nano: bool = false,
+    
+        pub fn format(self: @This(), w: *std.Io.Writer) !void {
+            if (self.nano)
+                try self.format_(w, 1_000_000_000_000_000_000, &[_][]const u8{ "G", "M", "k", "_", "m", "u", "n" })
+            else
+                try self.format_(w, 1_000_000_000_000, &[_][]const u8{ "T", "G", "M", "k", "" });
+        }
+        pub fn format_(self: @This(), w: *std.Io.Writer, dd: T, postfixes: []const []const u8) !void {
+            var d = dd;
+    
+            var v = self.v;
+            var first: bool = true;
+            for (postfixes, 0..) |postfix, ix0| {
+                const last = ix0 + 1 == postfixes.len;
+    
+                const n = v / d;
+                const r = v % d;
+    
+                if (n > 0 or !first or last) {
+                    if (first)
+                        try w.print("{}{s}", .{ n, postfix })
+                    else
+                        try w.print("{:0>3}{s}", .{ n, postfix });
+                    first = false;
+                }
+    
+                v = r;
+                d /= 1000;
+            }
+        }
+    };
+    
+    pub fn iso(v: anytype, nano: bool) Iso {
+        return .{
+            .v = @intCast(v),
+            .nano = nano,
+        };
+    }
     
 };
