@@ -6,6 +6,7 @@ const strings = rubr.strings;
 
 const cfg = @import("../cfg.zig");
 const mero = @import("../mero.zig");
+const amp = @import("../amp.zig");
 const qry = @import("../qry.zig");
 
 const Self = @This();
@@ -21,6 +22,7 @@ const Segment = struct {
     entries: []const Entry,
 };
 const Details = struct {
+    mem: bool = false,
     mero_tree: bool = false,
     amp_tree: bool = false,
     defs: bool = false,
@@ -48,6 +50,8 @@ pub fn call(self: *Self, what: [][]const u8, details: u8) !void {
     if (details > 0)
         self.details.setAll(true);
     for (what) |str| {
+        if (std.mem.eql(u8, str, "mem"))
+            self.details.mem = true;
         if (std.mem.eql(u8, str, "mero"))
             self.details.mero_tree = true;
         if (std.mem.eql(u8, str, "amp"))
@@ -63,6 +67,61 @@ pub fn show(self: *Self) !void {
 
     {
         self.config.write(&root);
+    }
+
+    if (self.details.mem) {
+        var n = root.node("Memory");
+        defer n.deinit();
+
+        {
+            var nn = n.node("Mero");
+            defer nn.deinit();
+
+            var count: usize = 0;
+            var fs_read: usize = 0;
+            var terms: usize = 0;
+            var filepath: usize = 0;
+            var other: usize = 0;
+
+            for (self.forest.mero_tree.nodes.items) |entry| {
+                const node = entry.data;
+                count += 1;
+                other += @sizeOf(mero.Node);
+                switch (node.type) {
+                    .file => |file| {
+                        fs_read += entry.data.content.len;
+                        terms += file.terms.items.len * @sizeOf(mero.Term);
+                        filepath += entry.data.filepath.len;
+                    },
+                    else => {},
+                }
+            }
+            nn.attr("count", count);
+            nn.attr("fs_read", fs_read);
+            nn.attr("terms", terms);
+            nn.attr("filepath", filepath);
+            nn.attr("other", other);
+            nn.attr("Node", @sizeOf(mero.Node));
+        }
+
+        {
+            var nn = n.node("Amp");
+            defer nn.deinit();
+
+            var count: usize = 0;
+            var other: usize = 0;
+
+            for (self.forest.amp_tree.tree.nodes.items) |entry| {
+                const node = entry.data;
+                count += 1;
+                other += @sizeOf(amp.Node);
+                other += node.locations.items.len * @sizeOf(amp.Node.Location);
+                other += node.ancestors.items.len * @sizeOf(usize);
+            }
+            nn.attr("count", count);
+            nn.attr("other", other);
+            nn.attr("Node", @sizeOf(amp.Node));
+        }
     }
 
     {
