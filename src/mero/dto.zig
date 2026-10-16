@@ -154,7 +154,8 @@ pub const Node = struct {
         }
         if (self.amp_node) |amp_node|
             n.attr("amp_node", amp_node);
-        n.attr("content", self.content);
+        if (self.content.len > 0)
+            n.attr("content", self.content);
         self.content_rows.write(&n, "rows");
         self.content_cols.write(&n, "cols");
         switch (self.type) {

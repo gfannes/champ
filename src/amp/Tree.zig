@@ -296,7 +296,7 @@ pub fn updateMeta(self: *Self, node: Tree.Id, meta: Meta) !void {
 }
 
 pub fn write(self: Self, parent: *rubr.naft.Node) void {
-    var n = parent.node("Tree");
+    var n = parent.node("amp.Tree");
     defer n.deinit();
 
     for (self.tree.root_ids.items) |root_id| {

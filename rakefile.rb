@@ -107,6 +107,7 @@ task :ee do
         toy.naft
         defref.naft
         case.naft
+        autodef.naft
     ]
     # fps = fps[1...2]
 
@@ -131,7 +132,6 @@ task :ee do
         File.write(config_fp, config)
 
         sh("champ -u #{config_fp} pl")
-        sh("champ -u #{config_fp} ch amp")
-        # sh("champ -u #{config_fp} ch")
+        sh("champ -u #{config_fp} ch mem mero amp")
     end
 end

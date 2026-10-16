@@ -22,6 +22,7 @@ pub const Error = error{
     ParagraphMustHaveParent,
     FileMustHaveParent,
     ExpectedAmpNode,
+    UnknownConfigurationData,
 
     DoubleDef,
 };
@@ -347,6 +348,12 @@ pub const Forest = struct {
     fn createDefs(self: *Self) !void {
         var cb = struct {
             const My = @This();
+            const Info = struct {
+                amp_node: ?usize = null,
+                autodef_from_folder: bool = false,
+                autodef_from_file: bool = false,
+                autodef_from_acronym: bool = false,
+            };
 
             env: Env,
             mero_tree: *mero.Tree,
@@ -358,19 +365,22 @@ pub const Forest = struct {
             do_process_amp_md: bool = false,
             do_process_other: bool = true,
 
-            amp_node_path: std.ArrayList(?usize) = .empty,
+            info_path: std.ArrayList(Info) = .empty,
 
             fn deinit(my: *My) void {
-                my.amp_node_path.deinit(my.env.a);
+                my.info_path.deinit(my.env.a);
             }
 
             pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before) {
-                    _ = my.amp_node_path.pop();
+                    _ = my.info_path.pop();
                     return;
                 }
 
-                try my.amp_node_path.append(my.env.a, null);
+                // Inherit all Info data except amp_node
+                var info: Info = rubr.slc.last(my.info_path.items) orelse .{};
+                info.amp_node = null;
+                try my.info_path.append(my.env.a, info);
 
                 const n = entry.data;
 
@@ -470,7 +480,11 @@ pub const Forest = struct {
                             var maybe_ap = maybe_ap_;
                             if (maybe_ap) |*ap| {
                                 defer ap.deinit();
-                                if (ap.is_definition) {
+                                if (ap.is_config) {
+                                    // &. contains configuration data
+                                    std.log.info("Found configuration data {f}", .{ap.*});
+                                    try my.setConfigurationData(entry, ap.*);
+                                } else if (ap.is_definition) {
                                     // Make the amp.Path absolute if necessary
                                     if (!ap.is_absolute) {
                                         if (my.parentAmpNode()) |parent_id| {
@@ -489,7 +503,7 @@ pub const Forest = struct {
                                     const pos = filex.Pos{ .row = line, .cols = cols };
                                     const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
                                     if (n.amp_node == null)
-                                        // The first definition is added no amp_node_path, see under via setAmpNode()
+                                        // The first definition is added to info_path, see hereunder via setAmpNode()
                                         n.amp_node = amp_node;
                                 }
                             }
@@ -517,35 +531,95 @@ pub const Forest = struct {
             }
 
             fn setAmpNode(my: *My, entry: mero.Tree.Entry, amp_node: usize) !void {
-                my.amp_node_path.items[my.amp_node_path.items.len - 1] = amp_node;
+                my.info_path.items[my.info_path.items.len - 1].amp_node = amp_node;
 
                 const n = entry.data;
 
                 if (my.is_new_file and n.type.isText(.Paragraph)) {
-                    if (my.amp_node_path.items[my.amp_node_path.items.len - 2]) |file_id|
+                    if (my.info_path.items[my.info_path.items.len - 2].amp_node) |file_id|
                         // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
                         _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
                     // We use amp_node instead of the any pre-existing File amp.Node
-                    my.amp_node_path.items[my.amp_node_path.items.len - 2] = amp_node;
+                    my.info_path.items[my.info_path.items.len - 2].amp_node = amp_node;
 
                     const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
                     if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                        if (my.amp_node_path.items[my.amp_node_path.items.len - 3]) |folder_id|
+                        if (my.info_path.items[my.info_path.items.len - 3].amp_node) |folder_id|
                             // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
                             _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
                         // We use amp_node instead of the any pre-existing Folder amp.Node
-                        my.amp_node_path.items[my.amp_node_path.items.len - 3] = amp_node;
+                        my.info_path.items[my.info_path.items.len - 3].amp_node = amp_node;
                     }
                 }
             }
 
             fn parentAmpNode(my: My) ?usize {
-                var rit = std.mem.reverseIterator(my.amp_node_path.items);
-                while (rit.next()) |maybe_amp_node| {
-                    if (maybe_amp_node) |amp_node|
+                var rit = std.mem.reverseIterator(my.info_path.items);
+                while (rit.next()) |info| {
+                    if (info.amp_node) |amp_node|
                         return amp_node;
                 }
                 return null;
+            }
+
+            fn partIs(str: []const u8, ap: amp.Path, ix: usize) bool {
+                if (ix >= ap.parts.items.len)
+                    return false;
+                return std.mem.eql(u8, ap.parts.items[ix].content, str);
+            }
+
+            fn setConfigurationData(my: *My, entry: mero.Tree.Entry, ap: amp.Path) !void {
+                var from_folder: ?bool = null;
+                var from_file: ?bool = null;
+                var from_acronym: ?bool = null;
+
+                if (partIs("autodef", ap, 0)) {
+                    if (partIs("from_folder", ap, 1)) {
+                        from_folder = partIs("true", ap, 3);
+                    } else if (partIs("from_file", ap, 1)) {
+                        from_file = partIs("true", ap, 3);
+                    } else if (partIs("from_acronym", ap, 1)) {
+                        from_acronym = partIs("true", ap, 3);
+                    } else {
+                        return error.UnknownConfigurationData;
+                    }
+                } else {
+                    return error.UnknownConfigurationData;
+                }
+
+                var info = &my.info_path.items[my.info_path.items.len - 1];
+
+                if (from_folder) |b|
+                    info.autodef_from_folder = b;
+                if (from_file) |b|
+                    info.autodef_from_file = b;
+                if (from_acronym) |b|
+                    info.autodef_from_acronym = b;
+
+                const n = entry.data;
+
+                if (my.is_new_file and n.type.isText(.Paragraph)) {
+                    info = &my.info_path.items[my.info_path.items.len - 2];
+
+                    if (from_folder) |b|
+                        info.autodef_from_folder = b;
+                    if (from_file) |b|
+                        info.autodef_from_file = b;
+                    if (from_acronym) |b|
+                        info.autodef_from_acronym = b;
+
+                    const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
+                    if (amp.is_folder_metadata_fp(file.data.filepath)) {
+                        info = &my.info_path.items[my.info_path.items.len - 3];
+
+                        if (from_folder) |b|
+                            info.autodef_from_folder = b;
+                        if (from_file) |b|
+                            info.autodef_from_file = b;
+                        if (from_acronym) |b|
+                            info.autodef_from_acronym = b;
+                    }
+                }
             }
         }{ .env = self.env, .mero_tree = &self.mero_tree, .amp_tree = &self.amp_tree };
         defer cb.deinit();
@@ -559,7 +633,7 @@ pub const Forest = struct {
                 if (std.mem.endsWith(u8, n.filepath, name))
                     return mero.Tree.Entry{ .id = id, .data = n };
             },
-            .folder, .frove => {
+            .folder, .grove => {
                 for (self.mero_tree.childIds(id)) |child_id| {
                     if (self.findFile_(name, child_id)) |file|
                         return file;

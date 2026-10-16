@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-10-09
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-10-16
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -892,6 +892,10 @@ pub const slc = struct {
     }
     pub fn lastPtrUnsafe(slice: anytype) @TypeOf(&slice[0]) {
         return &slice[slice.len - 1];
+    }
+    
+    pub fn get(slice: anytype, ix: usize) ?@TypeOf(slice[0]) {
+        return if (slice.len > ix) slice[ix] else null;
     }
     
 };
