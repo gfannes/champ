@@ -4,4 +4,5 @@ DONE
 - `auro` in root-all and gatenkaas &auro
 # Support multiple definitions in one Location
 - The first definition will be used for relative path building &syntax
+	- [x] Do add dependency on second def
 - [x] Fix Exoplayer.md once implemented

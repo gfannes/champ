@@ -295,6 +295,9 @@ pub const Forest = struct {
 
                         var meta = amp.Meta{ .a = my.env.a };
                         defer meta.deinit();
+
+                        var is_first_definition: bool = true;
+
                         for (text.terms.slice) |term| {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
@@ -306,7 +309,11 @@ pub const Forest = struct {
                                     var maybe_ap = maybe_ap_;
                                     if (maybe_ap) |*ap| {
                                         defer ap.deinit();
-                                        if (!ap.is_definition) {
+
+                                        if (ap.is_definition and is_first_definition) {
+                                            // All non-first definitions will be treated as regular dependencies
+                                            is_first_definition = false;
+                                        } else {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
                                             const amp_node = (try my.amp_tree.resolve(ap.*, my.grove_id, my.filepath)) orelse rv: {
