@@ -23,8 +23,7 @@ pub const Error = error{
     FileMustHaveParent,
     ExpectedAmpNode,
     UnknownConfigurationData,
-
-    DoubleDef,
+    FoundConfigurationDataOutsideMetadataFile,
 };
 
 pub const Forest = struct {
@@ -313,6 +312,8 @@ pub const Forest = struct {
                                         if (ap.is_definition and is_first_definition) {
                                             // All non-first definitions will be treated as regular dependencies
                                             is_first_definition = false;
+                                        } else if (ap.is_config) {
+                                            // Nothing todo for configuration data here
                                         } else {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
@@ -356,6 +357,9 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
             const Info = struct {
+                const Kind = enum { Folder, File, Text };
+                kind: Kind,
+                is_metadata_file: bool = false,
                 amp_node: ?usize = null,
                 autodef_from_folder: bool = false,
                 autodef_from_file: bool = false,
@@ -385,15 +389,38 @@ pub const Forest = struct {
                 }
 
                 // Inherit all Info data except amp_node
-                var info: Info = rubr.slc.last(my.info_path.items) orelse .{};
-                info.amp_node = null;
-                try my.info_path.append(my.env.a, info);
+                {
+                    var info: Info = rubr.slc.last(my.info_path.items) orelse .{ .kind = .Text };
+                    info.amp_node = null;
+                    try my.info_path.append(my.env.a, info);
+                }
+                const info: *Info = rubr.slc.lastPtrUnsafe(my.info_path.items);
 
                 const n = entry.data;
 
                 switch (n.type) {
                     .grove, .folder => {
+                        info.kind = .Folder;
+
+                        if (info.autodef_from_folder) {
+                            var ap: amp.Path = if (my.parentAmpNode()) |parent_id|
+                                try my.amp_tree.ampPath(my.env.a, parent_id)
+                            else
+                                amp.Path.init(my.env.a);
+                            defer ap.deinit();
+                            try ap.parts.append(ap.a, ampPartFromFilepath(n.filepath));
+                            ap.is_definition = true;
+                            ap.is_absolute = true;
+
+                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                            const pos = filex.Pos{};
+                            const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, entry.id, n.filepath, pos);
+                            n.amp_node = amp_node;
+                            try my.setAmpNode(entry, amp_node);
+                        }
+
                         my.filepath = n.filepath;
+
                         // Process '&.md' before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
@@ -408,6 +435,9 @@ pub const Forest = struct {
                         }
                     },
                     .file => {
+                        info.kind = .File;
+                        info.is_metadata_file = amp.is_folder_metadata_fp(n.filepath);
+
                         defer my.filepath = n.filepath;
                         my.is_new_file = true;
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
@@ -438,6 +468,22 @@ pub const Forest = struct {
 
                         if (meta.hasData())
                             create_amp_node = true;
+
+                        if (info.autodef_from_file) {
+                            var ap: amp.Path = if (my.parentAmpNode()) |parent_id|
+                                try my.amp_tree.ampPath(my.env.a, parent_id)
+                            else
+                                amp.Path.init(my.env.a);
+                            defer ap.deinit();
+                            try ap.parts.append(ap.a, ampPartFromFilepath(n.filepath));
+                            ap.is_definition = true;
+                            ap.is_absolute = true;
+
+                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                            const pos = filex.Pos{};
+                            const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, entry.id, n.filepath, pos);
+                            n.amp_node = amp_node;
+                        }
 
                         if (n.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
@@ -490,7 +536,7 @@ pub const Forest = struct {
                                 if (ap.is_config) {
                                     // &. contains configuration data
                                     std.log.info("Found configuration data {f}", .{ap.*});
-                                    try my.setConfigurationData(entry, ap.*);
+                                    try my.setConfigurationData(ap.*);
                                 } else if (ap.is_definition) {
                                     // Make the amp.Path absolute if necessary
                                     if (!ap.is_absolute) {
@@ -575,58 +621,41 @@ pub const Forest = struct {
                 return std.mem.eql(u8, ap.parts.items[ix].content, str);
             }
 
-            fn setConfigurationData(my: *My, entry: mero.Tree.Entry, ap: amp.Path) !void {
-                var from_folder: ?bool = null;
-                var from_file: ?bool = null;
-                var from_acronym: ?bool = null;
+            fn setConfigurationData(my: *My, ap: amp.Path) !void {
+                // We will directly store the configuration data into the Folder Info
+                var maybe_folder_info: ?*Info = null;
+                var rit = std.mem.reverseIterator(my.info_path.items);
+                while (rit.nextPtr()) |info| {
+                    if (info.kind == .File and !info.is_metadata_file)
+                        // We only consider configuration data from a metadata file
+                        break;
+                    if (info.kind == .Folder) {
+                        maybe_folder_info = info;
+                        break;
+                    }
+                }
+
+                const folder_info = maybe_folder_info orelse return error.FoundConfigurationDataOutsideMetadataFile;
 
                 if (partIs("autodef", ap, 0)) {
                     if (partIs("from_folder", ap, 1)) {
-                        from_folder = partIs("true", ap, 3);
+                        folder_info.autodef_from_folder = true;
                     } else if (partIs("from_file", ap, 1)) {
-                        from_file = partIs("true", ap, 3);
+                        folder_info.autodef_from_file = true;
                     } else if (partIs("from_acronym", ap, 1)) {
-                        from_acronym = partIs("true", ap, 3);
+                        folder_info.autodef_from_acronym = true;
                     } else {
                         return error.UnknownConfigurationData;
                     }
                 } else {
                     return error.UnknownConfigurationData;
                 }
+            }
 
-                var info = &my.info_path.items[my.info_path.items.len - 1];
-
-                if (from_folder) |b|
-                    info.autodef_from_folder = b;
-                if (from_file) |b|
-                    info.autodef_from_file = b;
-                if (from_acronym) |b|
-                    info.autodef_from_acronym = b;
-
-                const n = entry.data;
-
-                if (my.is_new_file and n.type.isText(.Paragraph)) {
-                    info = &my.info_path.items[my.info_path.items.len - 2];
-
-                    if (from_folder) |b|
-                        info.autodef_from_folder = b;
-                    if (from_file) |b|
-                        info.autodef_from_file = b;
-                    if (from_acronym) |b|
-                        info.autodef_from_acronym = b;
-
-                    const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
-                    if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                        info = &my.info_path.items[my.info_path.items.len - 3];
-
-                        if (from_folder) |b|
-                            info.autodef_from_folder = b;
-                        if (from_file) |b|
-                            info.autodef_from_file = b;
-                        if (from_acronym) |b|
-                            info.autodef_from_acronym = b;
-                    }
-                }
+            fn ampPartFromFilepath(filepath: []const u8) amp.Path.Part {
+                const start_ix = if (std.mem.findLast(u8, filepath, "/")) |ix| ix + 1 else 0;
+                const end_ix = std.mem.find(u8, filepath, ".md") orelse filepath.len;
+                return .{ .content = filepath[start_ix..end_ix] };
             }
         }{ .env = self.env, .mero_tree = &self.mero_tree, .amp_tree = &self.amp_tree };
         defer cb.deinit();

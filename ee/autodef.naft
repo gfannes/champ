@@ -1,8 +1,10 @@
 [folder](name:grove){
+	[file](name:&.md)(content:&.autodef:from_folder &.autodef:from_file)
 	[folder](name:a){
-		[file](name:&.md)(content:&.autodef:from_folder:true)
+		[file](name:aa.md)(content:)
 	}
 	[folder](name:b){
-		[file](name:&.md)(content:)
+		[folder](name:c){
+		}
 	}
 }
