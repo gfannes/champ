@@ -371,10 +371,10 @@ pub const Forest = struct {
             amp_tree: *amp.Tree,
 
             filepath: []const u8 = &.{},
-            is_new_file: bool = false,
+            is_file_metadata: bool = false,
             grove_id: ?usize = null,
             do_process_amp_md: bool = false,
-            do_process_other: bool = true,
+            do_process_text: bool = true,
 
             info_path: std.ArrayList(Info) = .empty,
 
@@ -403,7 +403,7 @@ pub const Forest = struct {
                         info.kind = .Folder;
 
                         if (info.autodef_from_folder) {
-                            var ap: amp.Path = if (my.parentAmpNode()) |parent_id|
+                            var ap: amp.Path = if (my.parentAmpNode(false)) |parent_id|
                                 try my.amp_tree.ampPath(my.env.a, parent_id)
                             else
                                 amp.Path.init(my.env.a);
@@ -439,10 +439,14 @@ pub const Forest = struct {
                         info.is_metadata_file = amp.is_folder_metadata_fp(n.filepath);
 
                         defer my.filepath = n.filepath;
-                        my.is_new_file = true;
+
+                        // Set is_file_metadata to true when we start processing the text
+                        defer my.is_file_metadata = true;
+                        my.is_file_metadata = false;
+
                         my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
-                        my.do_process_other = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
+                        my.do_process_text = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
 
                         var create_amp_node: bool = false;
                         var meta = amp.Meta{ .a = my.env.a };
@@ -470,7 +474,7 @@ pub const Forest = struct {
                             create_amp_node = true;
 
                         if (info.autodef_from_file) {
-                            var ap: amp.Path = if (my.parentAmpNode()) |parent_id|
+                            var ap: amp.Path = if (my.parentAmpNode(false)) |parent_id|
                                 try my.amp_tree.ampPath(my.env.a, parent_id)
                             else
                                 amp.Path.init(my.env.a);
@@ -488,7 +492,7 @@ pub const Forest = struct {
                         if (n.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{};
-                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
+                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(false), grove_id, entry.id, n.filepath, pos);
                         }
 
                         if (n.amp_node) |amp_node| {
@@ -498,97 +502,94 @@ pub const Forest = struct {
                         }
                     },
                     .text => |text| {
-                        if (my.do_process_other)
-                            try my.processText(entry, text);
-                    },
-                }
-            }
+                        if (!my.do_process_text)
+                            return;
 
-            fn processText(my: *My, entry: mero.Tree.Entry, text: dto.Text) !void {
-                const n = entry.data;
-                std.debug.assert(n.type != .grove and n.type != .folder and n.type != .file);
-                std.debug.assert(n.amp_node == null);
+                        if (my.is_file_metadata)
+                            // Metadata in the first paragraph of a file is for that file
+                            my.is_file_metadata = n.type.isText(.Paragraph);
+                        defer my.is_file_metadata = false;
 
-                defer my.is_new_file = false;
+                        // Search n.line for a def AMP
+                        var line: usize = n.content_rows.begin;
+                        var cols: rubr.idx.Range = .{};
 
-                // Search n.line for a def AMP
-                var line: usize = n.content_rows.begin;
-                var cols: rubr.idx.Range = .{};
+                        var create_amp_node: bool = false;
+                        var meta = amp.Meta{ .a = my.env.a };
+                        defer meta.deinit();
+                        for (text.terms.slice) |term| {
+                            cols.begin = cols.end;
+                            cols.end += term.word.len;
 
-                var create_amp_node: bool = false;
-                var meta = amp.Meta{ .a = my.env.a };
-                defer meta.deinit();
-                for (text.terms.slice) |term| {
-                    cols.begin = cols.end;
-                    cols.end += term.word.len;
+                            if (term.kind == .Amp or term.kind == .Checkbox or term.kind == .Capital) {
+                                create_amp_node = true;
 
-                    if (term.kind == .Amp or term.kind == .Checkbox or term.kind == .Capital) {
-                        create_amp_node = true;
+                                var strange = rubr.strng.Strange{ .content = term.word };
 
-                        var strange = rubr.strng.Strange{ .content = term.word };
+                                // &meta Parse both amp.Path and amp.Meta
+                                // Also check other terms: captials, checkbox, ...
+                                if (amp.parse(&strange, &meta)) |maybe_ap_| {
+                                    var maybe_ap = maybe_ap_;
+                                    if (maybe_ap) |*ap| {
+                                        defer ap.deinit();
+                                        if (ap.is_config) {
+                                            // &. contains configuration data
+                                            std.log.info("Found configuration data {f}", .{ap.*});
+                                            try my.setConfigurationData(ap.*);
+                                        } else if (ap.is_definition) {
+                                            // Make the amp.Path absolute if necessary
+                                            if (!ap.is_absolute) {
+                                                // If autodef_from_file is enabled and this is file metadata, we have to skip the first match since that is the filename that we want to override here.
+                                                const skip_first = my.is_file_metadata and info.autodef_from_file;
+                                                if (my.parentAmpNode(skip_first)) |parent_id| {
+                                                    var parent_ap = try my.amp_tree.ampPath(my.env.a, parent_id);
+                                                    defer parent_ap.deinit();
+                                                    try ap.prepend(parent_ap);
+                                                    ap.is_definition = true;
+                                                } else {
+                                                    std.log.warn("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is", .{ ap, my.filepath });
+                                                    ap.is_absolute = true;
+                                                }
+                                            }
 
-                        // &meta Parse both amp.Path and amp.Meta
-                        // Also check other terms: captials, checkbox, ...
-                        if (amp.parse(&strange, &meta)) |maybe_ap_| {
-                            var maybe_ap = maybe_ap_;
-                            if (maybe_ap) |*ap| {
-                                defer ap.deinit();
-                                if (ap.is_config) {
-                                    // &. contains configuration data
-                                    std.log.info("Found configuration data {f}", .{ap.*});
-                                    try my.setConfigurationData(ap.*);
-                                } else if (ap.is_definition) {
-                                    // Make the amp.Path absolute if necessary
-                                    if (!ap.is_absolute) {
-                                        if (my.parentAmpNode()) |parent_id| {
-                                            var parent_ap = try my.amp_tree.ampPath(my.env.a, parent_id);
-                                            defer parent_ap.deinit();
-                                            try ap.prepend(parent_ap);
-                                            ap.is_definition = true;
-                                        } else {
-                                            std.log.warn("Could not find parent def for non-absolute '{f}' in '{s}', making it absolute as it is", .{ ap, my.filepath });
-                                            ap.is_absolute = true;
+                                            // Create an amp.Node in the amp.Tree for this mero.Node
+                                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                                            const pos = filex.Pos{ .row = line, .cols = cols };
+                                            const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
+                                            if (n.amp_node == null)
+                                                // The first definition is added to info_path, see hereunder via setAmpNode()
+                                                n.amp_node = amp_node;
                                         }
                                     }
-
-                                    // Create an amp.Node in the amp.Tree for this mero.Node
-                                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                                    const pos = filex.Pos{ .row = line, .cols = cols };
-                                    const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
-                                    if (n.amp_node == null)
-                                        // The first definition is added to info_path, see hereunder via setAmpNode()
-                                        n.amp_node = amp_node;
+                                } else |err| {
+                                    std.log.warn("Could not parse amp in '{s}':{} {}", .{ my.filepath, line, err });
+                                    continue;
                                 }
+                            } else if (term.kind == .Newline) {
+                                line += term.word.len;
+                                cols = .{};
                             }
-                        } else |err| {
-                            std.log.warn("Could not parse amp in '{s}':{} {}", .{ my.filepath, line, err });
-                            continue;
                         }
-                    } else if (term.kind == .Newline) {
-                        line += term.word.len;
-                        cols = .{};
-                    }
-                }
 
-                if (n.amp_node == null and create_amp_node) {
-                    const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                    const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                    n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
-                }
+                        if (n.amp_node == null and create_amp_node) {
+                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                            const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
+                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(false), grove_id, entry.id, my.filepath, pos);
+                        }
 
-                if (n.amp_node) |amp_node| {
-                    try my.setAmpNode(entry, amp_node);
-                    // When the same definition occurs in several places, this will be an actual _update_
-                    try my.amp_tree.updateMeta(amp_node, meta);
+                        if (n.amp_node) |amp_node| {
+                            try my.setAmpNode(entry, amp_node);
+                            // When the same definition occurs in several places, this will be an actual _update_
+                            try my.amp_tree.updateMeta(amp_node, meta);
+                        }
+                    },
                 }
             }
 
             fn setAmpNode(my: *My, entry: mero.Tree.Entry, amp_node: usize) !void {
                 my.info_path.items[my.info_path.items.len - 1].amp_node = amp_node;
 
-                const n = entry.data;
-
-                if (my.is_new_file and n.type.isText(.Paragraph)) {
+                if (my.is_file_metadata) {
                     if (my.info_path.items[my.info_path.items.len - 2].amp_node) |file_id|
                         // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
                         _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
@@ -606,11 +607,15 @@ pub const Forest = struct {
                 }
             }
 
-            fn parentAmpNode(my: My) ?usize {
+            fn parentAmpNode(my: My, skip_first: bool) ?usize {
+                var skip = skip_first;
                 var rit = std.mem.reverseIterator(my.info_path.items);
                 while (rit.next()) |info| {
-                    if (info.amp_node) |amp_node|
-                        return amp_node;
+                    if (info.amp_node) |amp_node| {
+                        if (!skip)
+                            return amp_node;
+                        skip = false;
+                    }
                 }
                 return null;
             }

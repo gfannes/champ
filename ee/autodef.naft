@@ -2,6 +2,7 @@
 	[file](name:&.md)(content:&.autodef:from_folder &.autodef:from_file)
 	[folder](name:a){
 		[file](name:aa.md)(content:)
+		[file](name:bb.md)(content:&&bbb)
 	}
 	[folder](name:b){
 		[folder](name:c){
