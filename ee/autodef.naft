@@ -4,8 +4,9 @@
 		[file](name:aa.md)(content:)
 		[file](name:bb.md)(content:&&bbb)
 	}
-	[folder](name:b){
-		[folder](name:c){
+	[folder](name:c){
+		[file](name:&.md)(content:&&cc)
+		[folder](name:d){
 		}
 	}
 }

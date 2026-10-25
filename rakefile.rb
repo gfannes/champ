@@ -132,6 +132,6 @@ task :ee do
         File.write(config_fp, config)
 
         sh("champ -u #{config_fp} pl")
-        sh("champ -u #{config_fp} ch mem mero amp")
+        sh("champ -u #{config_fp} ch amp")
     end
 end

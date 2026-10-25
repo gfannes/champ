@@ -384,6 +384,7 @@ pub const Forest = struct {
 
             pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before) {
+                    my.is_file_metadata = false;
                     _ = my.info_path.pop();
                     return;
                 }
@@ -473,8 +474,9 @@ pub const Forest = struct {
                         if (meta.hasData())
                             create_amp_node = true;
 
-                        if (info.autodef_from_file) {
-                            var ap: amp.Path = if (my.parentAmpNode(false)) |parent_id|
+                        const skip_first = info.is_metadata_file and info.autodef_from_folder;
+                        if (!info.is_metadata_file and info.autodef_from_file) {
+                            var ap: amp.Path = if (my.parentAmpNode(skip_first)) |parent_id|
                                 try my.amp_tree.ampPath(my.env.a, parent_id)
                             else
                                 amp.Path.init(my.env.a);
@@ -492,7 +494,7 @@ pub const Forest = struct {
                         if (n.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{};
-                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(false), grove_id, entry.id, n.filepath, pos);
+                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(skip_first), grove_id, entry.id, n.filepath, pos);
                         }
 
                         if (n.amp_node) |amp_node| {
