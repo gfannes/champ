@@ -24,6 +24,7 @@ pub const Error = error{
     ExpectedAmpNode,
     UnknownConfigurationData,
     FoundConfigurationDataOutsideMetadataFile,
+    NoData,
 };
 
 pub const Forest = struct {
@@ -357,10 +358,24 @@ pub const Forest = struct {
         var cb = struct {
             const My = @This();
             const Info = struct {
-                const Kind = enum { Folder, File, Text };
+                const Kind = union(enum) {
+                    folder: void,
+                    file: []const u8, // filepath
+                    text: void,
+                };
+                // Holds all info necessary to create an amp.Node in a late manner: only when this autodef info is not overridden by file/folder metadata.
+                const AutodefStage = struct {
+                    parent_id: ?amp.Tree.Id = null,
+                    mero_id: mero.Tree.Id,
+                    filepath: []const u8,
+                };
+
                 kind: Kind,
+
+                autodef_stage: ?AutodefStage = null,
+
                 is_metadata_file: bool = false,
-                amp_node: ?usize = null,
+                amp_node: ?amp.Tree.Id = null,
                 autodef_from_folder: bool = false,
                 autodef_from_file: bool = false,
                 autodef_from_acronym: bool = false,
@@ -383,41 +398,48 @@ pub const Forest = struct {
             }
 
             pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
+                const n = entry.data;
+
                 if (!before) {
                     my.is_file_metadata = false;
-                    _ = my.info_path.pop();
+                    var info = my.info_path.pop();
+                    if (info) |*i|
+                        try my.commitAutodef(i);
                     return;
                 }
 
                 // Inherit all Info data except amp_node
                 {
-                    var info: Info = rubr.slc.last(my.info_path.items) orelse .{ .kind = .Text };
+                    var info: Info = rubr.slc.last(my.info_path.items) orelse .{ .kind = .text };
                     info.amp_node = null;
                     try my.info_path.append(my.env.a, info);
                 }
                 const info: *Info = rubr.slc.lastPtrUnsafe(my.info_path.items);
 
-                const n = entry.data;
+                var meta = amp.Meta{ .a = my.env.a };
+                defer meta.deinit();
+
+                var amp_node: ?amp.Tree.Id = null;
+                var push_to_parents: bool = false;
+                defer {
+                    if (amp_node) |an| {
+                        if (n.amp_node == null)
+                            n.amp_node = an;
+                        my.setAmpNode(an, push_to_parents) catch {};
+                        my.amp_tree.updateMeta(an, meta) catch {};
+                    }
+                }
 
                 switch (n.type) {
                     .grove, .folder => {
-                        info.kind = .Folder;
+                        info.kind = .folder;
 
                         if (info.autodef_from_folder) {
-                            var ap: amp.Path = if (my.parentAmpNode(false)) |parent_id|
-                                try my.amp_tree.ampPath(my.env.a, parent_id)
-                            else
-                                amp.Path.init(my.env.a);
-                            defer ap.deinit();
-                            try ap.parts.append(ap.a, ampPartFromFilepath(n.filepath));
-                            ap.is_definition = true;
-                            ap.is_absolute = true;
-
-                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                            const pos = filex.Pos{};
-                            const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, entry.id, n.filepath, pos);
-                            n.amp_node = amp_node;
-                            try my.setAmpNode(entry, amp_node);
+                            info.autodef_stage = .{
+                                .parent_id = my.parentAmpNode(),
+                                .mero_id = entry.id,
+                                .filepath = n.filepath,
+                            };
                         }
 
                         my.filepath = n.filepath;
@@ -434,9 +456,12 @@ pub const Forest = struct {
                                 my.do_process_amp_md = false;
                             }
                         }
+
+                        // Do not use `info` here: it might have moved in memory due to recursive call to my.mero_tree.dfs()
+                        try my.commitAutodef(rubr.slc.lastPtrUnsafe(my.info_path.items));
                     },
                     .file => {
-                        info.kind = .File;
+                        info.kind = .{ .file = n.filepath };
                         info.is_metadata_file = amp.is_folder_metadata_fp(n.filepath);
 
                         defer my.filepath = n.filepath;
@@ -450,8 +475,6 @@ pub const Forest = struct {
                         my.do_process_text = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
 
                         var create_amp_node: bool = false;
-                        var meta = amp.Meta{ .a = my.env.a };
-                        defer meta.deinit();
 
                         // &wikilink: Add filepaths
                         if (false) {
@@ -474,33 +497,18 @@ pub const Forest = struct {
                         if (meta.hasData())
                             create_amp_node = true;
 
-                        const skip_first = info.is_metadata_file and info.autodef_from_folder;
                         if (!info.is_metadata_file and info.autodef_from_file) {
-                            var ap: amp.Path = if (my.parentAmpNode(skip_first)) |parent_id|
-                                try my.amp_tree.ampPath(my.env.a, parent_id)
-                            else
-                                amp.Path.init(my.env.a);
-                            defer ap.deinit();
-                            try ap.parts.append(ap.a, ampPartFromFilepath(n.filepath));
-                            ap.is_definition = true;
-                            ap.is_absolute = true;
-
-                            const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                            const pos = filex.Pos{};
-                            const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, entry.id, n.filepath, pos);
-                            n.amp_node = amp_node;
+                            info.autodef_stage = .{
+                                .parent_id = my.parentAmpNode(),
+                                .mero_id = entry.id,
+                                .filepath = n.filepath,
+                            };
                         }
 
-                        if (n.amp_node == null and create_amp_node) {
+                        if (info.autodef_stage == null and amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{};
-                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(skip_first), grove_id, entry.id, n.filepath, pos);
-                        }
-
-                        if (n.amp_node) |amp_node| {
-                            try my.setAmpNode(entry, amp_node);
-                            // When the same definition occurs in several places, this will be an actual _update_
-                            try my.amp_tree.updateMeta(amp_node, meta);
+                            amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
                         }
                     },
                     .text => |text| {
@@ -511,14 +519,13 @@ pub const Forest = struct {
                             // Metadata in the first paragraph of a file is for that file
                             my.is_file_metadata = n.type.isText(.Paragraph);
                         defer my.is_file_metadata = false;
+                        push_to_parents = my.is_file_metadata;
 
                         // Search n.line for a def AMP
                         var line: usize = n.content_rows.begin;
                         var cols: rubr.idx.Range = .{};
 
                         var create_amp_node: bool = false;
-                        var meta = amp.Meta{ .a = my.env.a };
-                        defer meta.deinit();
                         for (text.terms.slice) |term| {
                             cols.begin = cols.end;
                             cols.end += term.word.len;
@@ -541,9 +548,23 @@ pub const Forest = struct {
                                         } else if (ap.is_definition) {
                                             // Make the amp.Path absolute if necessary
                                             if (!ap.is_absolute) {
-                                                // If autodef_from_file is enabled and this is file metadata, we have to skip the first match since that is the filename that we want to override here.
-                                                const skip_first = my.is_file_metadata and info.autodef_from_file;
-                                                if (my.parentAmpNode(skip_first)) |parent_id| {
+                                                if (rubr.slc.getBackPtr(my.info_path.items, 1)) |parent_info| {
+                                                    // If autodef_from_file is enabled and this is file metadata, we have to drop the staged info that might create an autodef amp_node later.
+                                                    // Else, we create it now to ensure it is available to parentAmpNode()
+                                                    if (push_to_parents and info.autodef_from_file)
+                                                        parent_info.autodef_stage = null
+                                                    else
+                                                        try my.commitAutodef(parent_info);
+                                                }
+                                                if (rubr.slc.getBackPtr(my.info_path.items, 2)) |parent_info| {
+                                                    // If autodef_from_file is enabled and this is file metadata, we have to drop the staged info that might create an autodef amp_node later.
+                                                    // Else, we create it now to ensure it is available to parentAmpNode()
+                                                    if (push_to_parents and info.autodef_from_file)
+                                                        parent_info.autodef_stage = null
+                                                    else
+                                                        try my.commitAutodef(parent_info);
+                                                }
+                                                if (my.parentAmpNode()) |parent_id| {
                                                     var parent_ap = try my.amp_tree.ampPath(my.env.a, parent_id);
                                                     defer parent_ap.deinit();
                                                     try ap.prepend(parent_ap);
@@ -557,10 +578,10 @@ pub const Forest = struct {
                                             // Create an amp.Node in the amp.Tree for this mero.Node
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                             const pos = filex.Pos{ .row = line, .cols = cols };
-                                            const amp_node = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
-                                            if (n.amp_node == null)
+                                            const an = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
+                                            if (amp_node == null)
                                                 // The first definition is added to info_path, see hereunder via setAmpNode()
-                                                n.amp_node = amp_node;
+                                                amp_node = an;
                                         }
                                     }
                                 } else |err| {
@@ -573,51 +594,71 @@ pub const Forest = struct {
                             }
                         }
 
-                        if (n.amp_node == null and create_amp_node) {
+                        if (amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                            n.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(false), grove_id, entry.id, my.filepath, pos);
-                        }
-
-                        if (n.amp_node) |amp_node| {
-                            try my.setAmpNode(entry, amp_node);
-                            // When the same definition occurs in several places, this will be an actual _update_
-                            try my.amp_tree.updateMeta(amp_node, meta);
+                            amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
                         }
                     },
                 }
             }
 
-            fn setAmpNode(my: *My, entry: mero.Tree.Entry, amp_node: usize) !void {
-                my.info_path.items[my.info_path.items.len - 1].amp_node = amp_node;
+            fn commitAutodef(my: *My, info: *Info) !void {
+                if (info.autodef_stage) |*stage| {
+                    if (info.amp_node == null) {
+                        var ap: amp.Path = if (stage.parent_id) |parent_id|
+                            try my.amp_tree.ampPath(my.env.a, parent_id)
+                        else
+                            amp.Path.init(my.env.a);
+                        defer ap.deinit();
+                        try ap.parts.append(ap.a, ampPartFromFilepath(stage.filepath));
+                        ap.is_definition = true;
+                        ap.is_absolute = true;
 
-                if (my.is_file_metadata) {
-                    if (my.info_path.items[my.info_path.items.len - 2].amp_node) |file_id|
+                        const grove_id = my.grove_id orelse return error.ExpectedGroveId;
+                        const pos = filex.Pos{};
+                        const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, stage.mero_id, stage.filepath, pos);
+                        const n = my.mero_tree.ptr(stage.mero_id);
+                        if (n.amp_node == null)
+                            n.amp_node = amp_node;
+                        info.amp_node = amp_node;
+                    }
+
+                    info.autodef_stage = null;
+                }
+            }
+
+            fn setAmpNode(my: *My, amp_node: amp.Tree.Id, push_to_parents: bool) !void {
+                const top = rubr.slc.getBackPtr(my.info_path.items, 0) orelse return error.NoData;
+                top.amp_node = amp_node;
+
+                if (push_to_parents) {
+                    const file = rubr.slc.getBackPtr(my.info_path.items, 1) orelse return error.NoData;
+                    if (file.kind != .file)
+                        return;
+
+                    if (file.amp_node) |file_id|
                         // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
                         _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
                     // We use amp_node instead of the any pre-existing File amp.Node
-                    my.info_path.items[my.info_path.items.len - 2].amp_node = amp_node;
+                    file.amp_node = amp_node;
 
-                    const file = try my.mero_tree.parent(entry.id) orelse return error.ParagraphMustHaveParent;
-                    if (amp.is_folder_metadata_fp(file.data.filepath)) {
-                        if (my.info_path.items[my.info_path.items.len - 3].amp_node) |folder_id|
+                    if (amp.is_folder_metadata_fp(file.kind.file)) {
+                        const folder = rubr.slc.getBackPtr(my.info_path.items, 2) orelse return error.NoData;
+                        if (folder.amp_node) |folder_id|
                             // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
                             _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
                         // We use amp_node instead of the any pre-existing Folder amp.Node
-                        my.info_path.items[my.info_path.items.len - 3].amp_node = amp_node;
+                        folder.amp_node = amp_node;
                     }
                 }
             }
 
-            fn parentAmpNode(my: My, skip_first: bool) ?usize {
-                var skip = skip_first;
+            fn parentAmpNode(my: My) ?amp.Tree.Id {
                 var rit = std.mem.reverseIterator(my.info_path.items);
                 while (rit.next()) |info| {
-                    if (info.amp_node) |amp_node| {
-                        if (!skip)
-                            return amp_node;
-                        skip = false;
-                    }
+                    if (info.amp_node) |amp_node|
+                        return amp_node;
                 }
                 return null;
             }
@@ -633,10 +674,10 @@ pub const Forest = struct {
                 var maybe_folder_info: ?*Info = null;
                 var rit = std.mem.reverseIterator(my.info_path.items);
                 while (rit.nextPtr()) |info| {
-                    if (info.kind == .File and !info.is_metadata_file)
+                    if (info.kind == .file and !info.is_metadata_file)
                         // We only consider configuration data from a metadata file
                         break;
-                    if (info.kind == .Folder) {
+                    if (info.kind == .folder) {
                         maybe_folder_info = info;
                         break;
                     }

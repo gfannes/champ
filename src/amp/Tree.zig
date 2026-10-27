@@ -10,6 +10,7 @@ const filex = @import("../filex.zig");
 
 const Self = @This();
 const Tree = rubr.tree.Tree(Node);
+pub const Id = Tree.Id;
 
 a: std.mem.Allocator,
 tree: Tree,

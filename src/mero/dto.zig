@@ -115,7 +115,7 @@ pub const Node = struct {
     type: Type = undefined,
 
     // Node id into amp.Tree.tree
-    amp_node: ?usize = null,
+    amp_node: ?amp.Tree.Id = null,
 
     // &perf: Only activate relevant fields depending on type
     filepath: []const u8 = &.{}, // Allocated on ArenaAllocator `tree.aa`: present many times

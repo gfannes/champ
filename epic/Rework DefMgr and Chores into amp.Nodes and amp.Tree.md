@@ -27,7 +27,7 @@ DONE &#0
 	- [x] Create phony amp.Nodes in amp.Tree.phony when not found
 - [x] Fix Exoplayer.md once implemented
 - [x] Support metadata in File.filepath
-- [ ] Replace `usize` with amp.Tree.Id
+- [x] Replace `usize` with amp.Tree.Id
 - [x] Enable part-whole dependency on definition parent via addAncestralDependencies()
 - [x] Goto reference only works on definition and not on reference
 - [x] Remove dto.Node.org_amps and agg_amps
