@@ -136,7 +136,7 @@ pub const Forest = struct {
                             node_type = .folder;
                         } else {
                             name = "<ROOT>";
-                            node_type = .grove;
+                            node_type = .{ .grove = .{ .id = my.cfg_grove.id orelse return error.ExpectedGroveId } };
                         }
 
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
@@ -202,7 +202,6 @@ pub const Forest = struct {
                                     .a = my.env.a,
                                     .type = .{ .file = .{ .language = language } },
                                     .filepath = try my.aa.dupe(u8, filepath),
-                                    .grove_id = my.cfg_grove.id,
                                 };
                                 {
                                     var readbuf: [1024]u8 = undefined;
@@ -276,15 +275,14 @@ pub const Forest = struct {
 
                 const n = entry.data;
                 switch (n.type) {
-                    .grove => {},
+                    .grove => |grove| {
+                        my.grove_id = grove.id;
+                    },
                     .folder => {
                         my.filepath = n.filepath;
                     },
                     .file => {
                         my.filepath = n.filepath;
-                        if (n.grove_id == null)
-                            return error.ExpectedGroveId;
-                        my.grove_id = n.grove_id;
                         my.is_new_file = true;
                     },
                     .text => |text| {
@@ -431,7 +429,10 @@ pub const Forest = struct {
                 }
 
                 switch (n.type) {
-                    .grove, .folder => {
+                    .grove => |grove| {
+                        my.grove_id = grove.id;
+                    },
+                    .folder => {
                         info.kind = .folder;
 
                         if (info.autodef_from_folder) {
@@ -469,8 +470,6 @@ pub const Forest = struct {
                         // Set is_file_metadata to true when we start processing the text
                         defer my.is_file_metadata = true;
                         my.is_file_metadata = false;
-
-                        my.grove_id = n.grove_id orelse return error.ExpectedGroveId;
 
                         my.do_process_text = if (amp.is_folder_metadata_fp(n.filepath)) my.do_process_amp_md else true;
 

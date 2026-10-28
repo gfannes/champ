@@ -92,12 +92,15 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
+    pub const Grove = struct {
+        id: usize,
+    };
     pub const File = struct {
         language: Language,
         terms: Terms = .empty,
     };
     pub const Type = union(enum) {
-        grove: void,
+        grove: Grove,
         folder: void,
         file: File,
         text: Text,
@@ -123,8 +126,6 @@ pub const Node = struct {
 
     content_rows: idx.Range = .{},
     content_cols: idx.Range = .{},
-
-    grove_id: ?usize = null,
 
     pub fn deinit(self: *Self) void {
         switch (self.type) {
