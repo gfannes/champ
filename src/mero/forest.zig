@@ -133,10 +133,10 @@ pub const Forest = struct {
                         var node_type: mero.Node.Type = undefined;
                         if (maybe_offsets) |offsets| {
                             name = filepath[offsets.name..];
-                            node_type = .folder;
+                            node_type = .{ .folder = .{} };
                         } else {
                             name = "<ROOT>";
-                            node_type = .{ .grove = .{ .id = my.cfg_grove.id orelse return error.ExpectedGroveId } };
+                            node_type = .{ .folder = .{ .grove_id = my.cfg_grove.id orelse return error.ExpectedGroveId } };
                         }
 
                         const entry = try my.tree.addChild(rubr.slc.last(my.node_stack.items));
@@ -275,10 +275,8 @@ pub const Forest = struct {
 
                 const n = entry.data;
                 switch (n.type) {
-                    .grove => |grove| {
-                        my.grove_id = grove.id;
-                    },
-                    .folder => {
+                    .folder => |folder| {
+                        my.grove_id = folder.grove_id orelse my.grove_id;
                         my.filepath = n.filepath;
                     },
                     .file => {
@@ -317,7 +315,7 @@ pub const Forest = struct {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
 
                                             const amp_node = (try my.amp_tree.resolve(ap.*, my.grove_id, my.filepath)) orelse rv: {
-                                                std.log.debug("Could not resolve {f}", .{ap.*});
+                                                std.log.warn("Could not resolve {f}", .{ap.*});
                                                 break :rv try my.amp_tree.addPhony(ap.*);
                                             };
                                             if (n.amp_node) |n_amp_node| {
@@ -429,10 +427,8 @@ pub const Forest = struct {
                 }
 
                 switch (n.type) {
-                    .grove => |grove| {
-                        my.grove_id = grove.id;
-                    },
-                    .folder => {
+                    .folder => |folder| {
+                        my.grove_id = folder.grove_id orelse my.grove_id;
                         info.kind = .folder;
 
                         if (info.autodef_from_folder) {
@@ -716,7 +712,7 @@ pub const Forest = struct {
                 if (std.mem.endsWith(u8, n.filepath, name))
                     return mero.Tree.Entry{ .id = id, .data = n };
             },
-            .folder, .grove => {
+            .folder => {
                 for (self.mero_tree.childIds(id)) |child_id| {
                     if (self.findFile_(name, child_id)) |file|
                         return file;

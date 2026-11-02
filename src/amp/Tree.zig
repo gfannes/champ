@@ -55,7 +55,11 @@ fn ampPath_(self: Self, ap: *Path, id: Tree.Id) !void {
 }
 
 pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !Tree.Id {
-    const leaf_id = try self.addAbsolute_(self.root.id, ap);
+    var did_add: bool = false;
+    const leaf_id = try self.addAbsolute_(self.root.id, ap, &did_add);
+
+    if (!did_add)
+        std.log.debug("Absolute entry for {f} already exists for {s}", .{ ap, filepath });
 
     var location: Node.Location = .{ .kind = .Definition, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos };
 
@@ -74,10 +78,11 @@ pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: mero.Tree.Id
 }
 
 pub fn addPhony(self: *Self, ap: Path) !Tree.Id {
-    return try self.addAbsolute_(self.phony.id, ap);
+    var did_add: bool = false;
+    return try self.addAbsolute_(self.phony.id, ap, &did_add);
 }
 
-fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path) !Tree.Id {
+fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path, did_add: *bool) !Tree.Id {
     var parent = root_node_id;
     for (ap.parts.items) |part| {
         var maybe_child_id: ?Tree.Id = null;
@@ -97,6 +102,7 @@ fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path) !Tree.Id {
             const name = try std.ascii.allocLowerString(self.a, part.content);
             try self.names.append(self.a, name);
             entry.data.init(self.a, name);
+            did_add.* = true;
 
             parent = entry.id;
         }

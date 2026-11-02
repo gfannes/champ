@@ -92,16 +92,15 @@ pub const Tree = tree.Tree(Node);
 
 pub const Node = struct {
     const Self = @This();
-    pub const Grove = struct {
-        id: usize,
+    pub const Folder = struct {
+        grove_id: ?usize = null,
     };
     pub const File = struct {
         language: Language,
         terms: Terms = .empty,
     };
     pub const Type = union(enum) {
-        grove: Grove,
-        folder: void,
+        folder: Folder,
         file: File,
         text: Text,
 
@@ -145,7 +144,6 @@ pub const Node = struct {
         if (maybe_id) |id|
             n.attr("id", id);
         switch (self.type) {
-            .grove => n.attr1("grove"),
             .folder => n.attr("folder", self.filepath),
             .file => |file| {
                 n.attr("path", self.filepath);
