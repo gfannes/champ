@@ -127,11 +127,11 @@ pub const Lsp = struct {
                             if (!std.mem.endsWith(u8, src_filename, location.path))
                                 continue;
 
-                            const pos = location.pos;
+                            const pos = location.pos orelse continue;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 if (rubr.slc.first(node.locations.items[0..node.def_count])) |def_loc| {
                                     def_filename = def_loc.path;
-                                    const def_pos = def_loc.pos;
+                                    const def_pos = def_loc.pos orelse continue;
                                     range.start = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.begin) };
                                     range.end = dto.Position{ .line = @intCast(def_pos.row), .character = @intCast(def_pos.cols.end) };
                                 }
@@ -235,7 +235,7 @@ pub const Lsp = struct {
                             if (!std.mem.endsWith(u8, src_filename, location.path))
                                 continue;
 
-                            const pos = location.pos;
+                            const pos = location.pos orelse continue;
                             if (pos.row == position.line and (pos.cols.begin <= position.character and position.character <= pos.cols.end)) {
                                 maybe_node_id = id;
                                 break;
@@ -251,7 +251,7 @@ pub const Lsp = struct {
                         var locations: std.ArrayList(dto.Location) = .empty;
                         for (forest.amp_tree.tree.cptr(node_id).locations.items) |location| {
                             const uri = try pathToUri_(location.path, aaa);
-                            const pos = location.pos;
+                            const pos = location.pos orelse continue;
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
@@ -287,7 +287,7 @@ pub const Lsp = struct {
                             if (!std.mem.endsWith(u8, filename, location.path))
                                 continue;
 
-                            const pos = location.pos;
+                            const pos = location.pos orelse continue;
                             const range = dto.Range{
                                 .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
                                 .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },
@@ -337,10 +337,10 @@ pub const Lsp = struct {
 
                     var workspace_symbols = std.ArrayList(dto.WorkspaceSymbol).empty;
 
-                    var q: qry.Query = .init(aa);
+                    var q: qry.Query = .init(aa, try rubr.datex.Date.today(self.env.io));
                     defer q.deinit();
 
-                    try q.setup(&[_][]const u8{query});
+                    try q.setup(query);
 
                     var aa_loop_ = std.heap.ArenaAllocator.init(self.env.a);
                     defer aa_loop_.deinit();
@@ -362,13 +362,13 @@ pub const Lsp = struct {
                             try aps.append(aa_loop, try forest.amp_tree.ampPath(aa_loop, ancestor));
                         }
 
-                        try q.prepare(node.meta, self.config.default_worker);
+                        try q.prepare(node.meta, self.config.default_worker, if (node.date_min) |date_min| date_min.date else null);
                         for (aps.items) |*ap|
                             try q.add(ap);
 
                         if (q.distance()) |distance| {
                             if (rubr.slc.first(node.locations.items)) |location| {
-                                const pos = location.pos;
+                                const pos = location.pos orelse continue;
                                 const range = dto.Range{
                                     .start = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.begin) },
                                     .end = dto.Position{ .line = @intCast(pos.row), .character = @intCast(pos.cols.end) },

@@ -108,8 +108,10 @@ task :ee do
         defref.naft
         case.naft
         autodef.naft
+        wbs.naft
+        search.naft
     ]
-    # fps = fps[1...2]
+    fps = fps[-1..]
 
     fps.each do |fp|
         my_dir = File.join(tmp_dir, File.basename(fp, '.*'))
@@ -132,6 +134,7 @@ task :ee do
         File.write(config_fp, config)
 
         sh("champ -u #{config_fp} pl")
+        sh("champ -u #{config_fp} pl auro so1a auromatic")
         sh("champ -u #{config_fp} ch amp")
     end
 end

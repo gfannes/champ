@@ -5,13 +5,15 @@ const Self = @This();
 
 const Options = struct {};
 
-pub const Kind = enum { Project, Area, Epic, Story, Task };
+pub const Kind = enum(u3) { Task, Story, Epic, Area, Project, Program, Portfolio };
 
 kind: Kind,
 prio: ?i32 = null,
 
 pub fn lower(self: Self) []const u8 {
     switch (self.kind) {
+        .Portfolio => return "portfolio",
+        .Program => return "program",
         .Project => return "project",
         .Area => return "area",
         .Epic => return "epic",
@@ -20,13 +22,24 @@ pub fn lower(self: Self) []const u8 {
     }
 }
 
-pub fn parse(str: []const u8, options: Options) ?Self {
+pub fn compare(self: Self, other: Self) std.math.Order {
+    return std.math.order(@backingInt(self.kind), @backingInt(other.kind));
+}
+
+pub fn parse(strange: *rubr.strng.Strange, options: Options) ?Self {
     _ = options;
+    var maybe_sp: ?rubr.strng.Strange = strange.*;
+    defer {
+        if (maybe_sp) |sp| strange.* = sp;
+    }
 
     var res: ?Self = null;
 
-    var strange = rubr.strng.Strange{ .content = str };
-    if (strange.popStr("project") or strange.popStr("proj")) {
+    if (strange.popStr("portfolio")) {
+        res = .{ .kind = .Portfolio };
+    } else if (strange.popStr("program")) {
+        res = .{ .kind = .Program };
+    } else if (strange.popStr("project")) {
         res = .{ .kind = .Project };
     } else if (strange.popStr("area")) {
         res = .{ .kind = .Area };
@@ -45,6 +58,7 @@ pub fn parse(str: []const u8, options: Options) ?Self {
             res.?.prio = v;
     }
 
+    maybe_sp = null;
     return res;
 }
 
@@ -55,4 +69,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
     node.attr("kind", self.kind);
     if (self.prio) |prio|
         node.attr("prio", prio);
+}
+pub fn format(self: Self, w: *std.Io.Writer) !void {
+    rubr.naft.Node.write(self, w);
 }

@@ -48,11 +48,12 @@ pub fn deinit(self: *Self) void {
     self.all_entries.deinit(self.env.a);
 }
 
-pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
-    var query: qry.Query = .init(self.env.a);
+pub fn call(self: *Self, query_inputs: [][]const u8, reverse: bool) !void {
+    var query: qry.Query = .init(self.env.a, try rubr.datex.Date.today(self.env.io));
     defer query.deinit();
 
-    try query.setup(query_input);
+    for (query_inputs) |query_input|
+        try query.setup(query_input);
 
     for (self.forest.amp_tree.tree.nodes.items, 0..) |entry, id| {
         const node = entry.data;
@@ -69,7 +70,7 @@ pub fn call(self: *Self, query_input: [][]const u8, reverse: bool) !void {
             try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
         }
 
-        try query.prepare(node.meta, self.config.default_worker);
+        try query.prepare(node.meta, self.config.default_worker, if (node.date_min) |date_min| date_min.date else null);
 
         for (aps.items) |*ap| {
             // std.debug.print("{f} ", .{ap.*});

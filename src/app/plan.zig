@@ -37,13 +37,12 @@ pub fn deinit(self: *Self) void {
     self.all_entries.deinit(self.env.a);
 }
 
-pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, reverse: bool) !void {
-    const today = try rubr.datex.Date.today(self.env.io);
-
-    var query: qry.Query = .init(self.env.a);
+pub fn call(self: *Self, max_order: i32, query_inputs: []const []const u8, reverse: bool) !void {
+    var query: qry.Query = .init(self.env.a, try rubr.datex.Date.today(self.env.io));
     defer query.deinit();
 
-    try query.setup(query_input);
+    for (query_inputs) |query_input|
+        try query.setup(query_input);
 
     // Collect all amp.Nodes
     for (self.forest.amp_tree.tree.nodes.items, 0..) |entry_, id| {
@@ -73,20 +72,15 @@ pub fn call(self: *Self, max_order: i32, query_input: []const []const u8, revers
             for (node.ancestors.items) |ancestor|
                 try aps.append(self.env.a, try self.forest.amp_tree.ampPath(self.env.a, ancestor));
 
-            try query.prepare(meta, self.config.default_worker);
+            try query.prepare(meta, self.config.default_worker, if (node.date_min) |date_min| date_min.date else null);
             for (aps.items) |*ap|
                 try query.add(ap);
 
             // Check correspondence with provided query
             const distance = query.distance() orelse continue;
+            std.log.debug("distance {}", .{distance});
             if (distance > 1.0)
                 continue;
-
-            // Check that its start date is before today, if any
-            // &todo &meta Add date to chore and re-enable this check
-            if (node.date_min) |date|
-                if (date.date.epoch_day.day > today.epoch_day.day)
-                    continue;
         }
 
         var filepath: []const u8 = &.{};

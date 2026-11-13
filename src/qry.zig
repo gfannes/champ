@@ -7,6 +7,8 @@ const amp = @import("amp.zig");
 pub const Query = struct {
     const Self = @This();
     const Parts = std.ArrayList([]const u8);
+
+    // Keeps track of amp.Node status kinds that must be included in the query
     pub const Include = struct {
         const My = @This();
         done: bool = false,
@@ -19,11 +21,11 @@ pub const Query = struct {
         blocked: bool = false,
         forward: bool = false,
 
-        pub fn set_all(my: *My, val: bool) void {
+        fn setAllFlagsTo(my: *My, val: bool) void {
             inline for (@typeInfo(My).@"struct".field_names) |field_name|
                 @field(my, field_name) = val;
         }
-        pub fn is_all(my: My, val: bool) bool {
+        fn allFlagsAre(my: My, val: bool) bool {
             inline for (@typeInfo(My).@"struct".field_names) |field_name| {
                 const my_val = @field(my, field_name);
                 if (my_val != val)
@@ -35,18 +37,21 @@ pub const Query = struct {
 
     a: std.mem.Allocator,
     meta: amp.Meta,
+    today: ?rubr.datex.Date,
 
     include: Include = .{},
     only_status: bool = false,
+    wbs: ?amp.Wbs = null,
     worker: ?[]const u8 = null,
     default_worker: ?[]const u8 = null,
+    date_min: ?rubr.datex.Date = null,
     parts: Parts = .empty,
     amp_paths: std.ArrayList(*const amp.Path) = .empty,
 
     do_log: bool = false,
 
-    pub fn init(a: std.mem.Allocator) Self {
-        return .{ .a = a, .meta = .init(a) };
+    pub fn init(a: std.mem.Allocator, today: ?rubr.datex.Date) Self {
+        return .{ .a = a, .meta = .init(a), .today = today };
     }
 
     pub fn deinit(self: *Self) void {
@@ -57,69 +62,82 @@ pub const Query = struct {
         self.meta.deinit();
     }
 
-    pub fn setup(self: *Self, parts: []const []const u8) !void {
-        for (parts) |part| {
-            if (self.do_log)
-                std.debug.print("part: '{s}'\n", .{part});
+    pub fn setup(self: *Self, part: []const u8) !void {
+        std.log.debug("part '{s}'", .{part});
+        var strange = rubr.strng.Strange{ .content = part };
 
-            var strange = rubr.strng.Strange{ .content = part };
+        while (!strange.empty()) {
+            if (strange.popChar('.')) {
+                self.include.setAllFlagsTo(true);
+                self.only_status = true;
+            } else if (strange.popStr("[ ]") or strange.popChar(' ') or strange.popChar(',')) {
+                self.include.todo = true;
+                self.only_status = true;
+            } else if (strange.popStr("[x]")) {
+                self.include.done = true;
+                self.only_status = true;
+            } else if (strange.popStr("[/]") or strange.popChar('/')) {
+                self.include.wip = true;
+                self.only_status = true;
+            } else if (strange.popStr("[*]") or strange.popChar('*')) {
+                self.include.go = true;
+                self.only_status = true;
+            } else if (strange.popStr("[-]") or strange.popChar('-')) {
+                self.include.canceled = true;
+                self.only_status = true;
+            } else if (strange.popStr("[i]")) {
+                self.include.info = true;
+                self.only_status = true;
+            } else if (strange.popStr("[!]") or strange.popChar('!')) {
+                self.include.blocked = true;
+                self.only_status = true;
+            } else if (strange.popStr("[?]") or strange.popChar('?')) {
+                self.include.question = true;
+                self.only_status = true;
+            } else if (strange.popStr("[>]") or strange.popChar('>')) {
+                self.include.forward = true;
+                self.only_status = true;
+            } else if (strange.popChar('@')) {
+                // Worker '' represents 'all workers'
+                self.worker = strange.popAll() orelse "";
+            } else if (strange.popChar('=')) {
+                if (amp.Wbs.parse(&strange, .{})) |wbs| {
+                    self.wbs = wbs;
+                }
+            } else if (amp.Date.parse(&strange, .{})) |date| {
+                self.today = date.date;
+            }
 
             while (!strange.empty()) {
-                if (strange.popChar('.')) {
-                    self.include.set_all(true);
-                    self.only_status = true;
-                } else if (strange.popStr("[ ]") or strange.popChar(' ') or strange.popChar(',')) {
-                    self.include.todo = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[x]")) {
-                    self.include.done = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[/]") or strange.popChar('/')) {
-                    self.include.wip = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[*]") or strange.popChar('*')) {
-                    self.include.go = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[-]") or strange.popChar('-')) {
-                    self.include.canceled = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[i]")) {
-                    self.include.info = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[!]") or strange.popChar('!')) {
-                    self.include.blocked = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[?]") or strange.popChar('?')) {
-                    self.include.question = true;
-                    self.only_status = true;
-                } else if (strange.popStr("[>]") or strange.popChar('>')) {
-                    self.include.forward = true;
-                    self.only_status = true;
-                } else if (strange.popChar('@')) {
-                    // Worker '' represents 'all workers'
-                    self.worker = strange.popAll() orelse "";
-                }
-
-                const str: []const u8 = if (strange.popTo(' ')) |str| str else if (strange.popAll()) |str| str else &.{};
+                const str: []const u8 = if (strange.popTo(' ')) |str|
+                    str
+                else if (strange.popTo(':')) |str|
+                    str
+                else if (strange.popAll()) |str|
+                    str
+                else
+                    &.{};
                 if (str.len > 0)
                     try self.parts.append(self.a, try self.a.dupe(u8, str));
             }
         }
-
-        if (self.include.is_all(false)) {
-            self.include.set_all(true);
-            self.include.done = false;
-        }
     }
 
     // Call this to reset this Query instance to start the computation of a match with a new Meta
-    pub fn prepare(self: *Self, maybe_meta: ?amp.Meta, default_worker: ?[]const u8) !void {
+    pub fn prepare(self: *Self, maybe_meta: ?amp.Meta, default_worker: ?[]const u8, date_min: ?rubr.datex.Date) !void {
+        // If the user did not filter the status kinds, we will report everything except DONE items
+        if (self.include.allFlagsAre(false)) {
+            self.include.setAllFlagsTo(true);
+            self.include.done = false;
+        }
+
         try self.amp_paths.resize(self.a, 0);
 
         self.meta.deinit();
         self.meta = if (maybe_meta) |meta| try meta.copy(self.a) else amp.Meta.init(self.a);
 
         self.default_worker = default_worker;
+        self.date_min = date_min;
     }
 
     // Add all relevant amp.Paths that you want to consider for matching
@@ -129,6 +147,17 @@ pub const Query = struct {
 
     // Compute the match itself
     pub fn distance(self: Self) ?f64 {
+        if (self.date_min) |date_min_|
+            if (self.today) |today_|
+                if (date_min_.epoch_day.day > today_.epoch_day.day)
+                    return null;
+
+        if (self.wbs) |wbs| {
+            const act_wbs = self.meta.wbs orelse return null;
+            if (act_wbs.compare(wbs) == .lt)
+                return null;
+        }
+
         var status_is_match: ?bool = null;
         if (self.meta.status) |status| {
             if (status.kind == .Done and self.include.done)
@@ -152,7 +181,7 @@ pub const Query = struct {
         }
 
         if (self.do_log)
-            std.debug.print("{} {?} worker {?s}\n", .{ self.only_status, status_is_match, self.worker });
+            std.log.debug("{} {?} worker {?s}", .{ self.only_status, status_is_match, self.worker });
         if (self.only_status and status_is_match == null)
             return null;
 
@@ -199,17 +228,19 @@ pub const Query = struct {
 
         var sum_distance: f64 = 0;
         if (self.do_log)
-            std.debug.print("{}\n", .{self.parts.items.len});
+            std.log.debug("Matching {} parts", .{self.parts.items.len});
         for (self.parts.items) |q_part| {
             if (self.do_log)
-                std.debug.print("Matching '{s}'\n", .{q_part});
+                std.log.debug(" matching '{s}'", .{q_part});
             var maybe_min_distance: ?f64 = null;
-            for (self.amp_paths.items) |path| {
-                for (path.parts.items) |a_part| {
+            for (self.amp_paths.items) |ap| {
+                if (self.do_log)
+                    std.log.debug("  against '{f}'", .{ap.*});
+                for (ap.parts.items) |ap_part| {
                     var skip_count: usize = undefined;
-                    const dist = rubr.fuzz.distance(q_part, a_part.content, &skip_count);
+                    const dist = rubr.fuzz.distance(q_part, ap_part.content, &skip_count);
                     if (self.do_log)
-                        std.debug.print("\t'{s}' '{s}' {} {}\n", .{ q_part, a_part.content, dist, skip_count });
+                        std.log.debug("   '{s}' dist: {} skip_count: {}", .{ ap_part.content, dist, skip_count });
                     if (skip_count > 0)
                         continue;
                     maybe_min_distance = @min(dist, maybe_min_distance orelse dist);

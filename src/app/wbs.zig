@@ -25,7 +25,8 @@ pub fn call(self: *Self) !void {
         const meta = node.meta orelse continue;
 
         if (meta.wbs) |wbs| {
-            wbs.write(&root);
+            _ = wbs;
+            node.write(&root);
         }
     }
 }

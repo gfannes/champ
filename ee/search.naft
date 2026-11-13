@@ -1,0 +1,8 @@
+[folder](name:grove){
+	[file](name:&.md)(content:&.autodef:from_folder &.autodef:from_file)
+	[folder](name:auro){
+		[folder](name:so1a){
+			[file](name:auromatic.md)(content:TODO)
+		}
+	}
+}

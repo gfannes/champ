@@ -21,7 +21,7 @@ pub const Location = struct {
 
     kind: Kind,
     path: []const u8 = &.{},
-    pos: filex.Pos,
+    pos: ?filex.Pos,
     mero_id: usize,
     grove_id: usize,
 
@@ -35,7 +35,8 @@ pub const Location = struct {
         };
         n.attr("kind", kind);
         n.attr("grove_id", self.grove_id);
-        n.attr("row", self.pos.row);
+        if (self.pos) |pos|
+            n.attr("row", pos.row);
         n.attr("mero_id", self.mero_id);
         n.attr("path", self.path);
     }

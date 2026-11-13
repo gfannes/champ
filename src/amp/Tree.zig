@@ -54,7 +54,7 @@ fn ampPath_(self: Self, ap: *Path, id: Tree.Id) !void {
     }
 }
 
-pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !Tree.Id {
+pub fn addAbsolute(self: *Self, ap: Path, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: ?filex.Pos) !Tree.Id {
     var did_add: bool = false;
     const leaf_id = try self.addAbsolute_(self.root.id, ap, &did_add);
 
@@ -111,7 +111,7 @@ fn addAbsolute_(self: *Self, root_node_id: Tree.Id, ap: Path, did_add: *bool) !T
     return parent;
 }
 
-pub fn addUnnamed(self: *Self, maybe_parent_id: ?Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !Tree.Id {
+pub fn addUnnamed(self: *Self, maybe_parent_id: ?Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: ?filex.Pos) !Tree.Id {
     const parent_id = maybe_parent_id orelse self.root.id;
 
     const entry = try self.tree.addChild(parent_id);
@@ -122,7 +122,7 @@ pub fn addUnnamed(self: *Self, maybe_parent_id: ?Tree.Id, grove_id: usize, mero_
     return entry.id;
 }
 
-pub fn addReference(self: *Self, id: Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: filex.Pos) !void {
+pub fn addReference(self: *Self, id: Tree.Id, grove_id: usize, mero_id: mero.Tree.Id, filepath: []const u8, pos: ?filex.Pos) !void {
     try self.tree.ptr(id).appendLocation(.{ .kind = .Reference, .grove_id = grove_id, .path = filepath, .mero_id = mero_id, .pos = pos });
 }
 

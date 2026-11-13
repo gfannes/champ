@@ -11,15 +11,19 @@ pub const Options = struct {
 };
 
 pub fn findDate(str: []const u8, options: Options) ?Self {
-    for (0..str.len) |ix| {
-        if (parse(str[ix..], options)) |date|
+    var strange: rubr.strng.Strange = .{ .content = str };
+    while (!strange.empty()) : (_ = strange.popFront(1)) {
+        if (parse(&strange, options)) |date|
             return date;
     }
     return null;
 }
 
-pub fn parse(str: []const u8, options: Options) ?Self {
-    var strange = rubr.strng.Strange{ .content = str };
+pub fn parse(strange: *rubr.strng.Strange, options: Options) ?Self {
+    var maybe_sp: ?rubr.strng.Strange = strange.*;
+    defer {
+        if (maybe_sp) |sp| strange.* = sp;
+    }
 
     // YEAR
     var year: u16 = 0;
@@ -153,6 +157,7 @@ pub fn parse(str: []const u8, options: Options) ?Self {
     if (!options.allow_yyyy and is_yyyy)
         return null;
 
+    maybe_sp = null;
     return Self{ .date = rubr.datex.Date.fromEpochDays(days) };
 }
 
@@ -215,7 +220,8 @@ test "amp.Date" {
 
     for (&scns) |scn| {
         std.debug.print("[Scn](str:{s})(exp:{?s})\n", .{ scn.str, scn.exp });
-        if (parse(scn.str, scn.options)) |date| {
+        var strange: rubr.strng.Strange = .{ .content = scn.str };
+        if (parse(&strange, scn.options)) |date| {
             var aw = std.Io.Writer.Allocating.init(ut.allocator);
             try aw.writer.print("{f}", .{date});
             const act = try aw.toOwnedSlice();

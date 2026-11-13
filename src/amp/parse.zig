@@ -33,10 +33,10 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             try path.parts.append(path.a, .{ .content = "worker", .is_exclusive = is_exclusive });
             try path.parts.append(path.a, .{ .content = name });
             return path;
-        } else if (strange.popChar('?')) {
-            meta.wbs = Meta.Wbs.parse(strange.str(), .{});
+        } else if (strange.popChar('=')) {
+            meta.wbs = Meta.Wbs.parse(strange, .{});
             return null;
-        } else if (Meta.Date.parse(strange.str(), .{})) |date| {
+        } else if (Meta.Date.parse(strange, .{})) |date| {
             meta.date = date;
             return null;
         } else if (Meta.Status.fromLower(strange.str())) |status| {

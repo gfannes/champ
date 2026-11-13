@@ -21,6 +21,16 @@ Example: Ampersand Metadata Protocol Program
 
 Example: Markdown-based project management CLI tool
 
+## Area
+
+- An Area is a functional or technical domain within a Project that groups related Epics and, where useful, standalone Stories.
+- An Area describes a part of the system or a sphere of responsibility, rather than a specific deliverable.
+- It provides a stable structure for organizing work, assigning ownership, and reporting progress as individual Epics are completed.
+- An Area answers: “Which part of the Project does this work belong to?”
+- An Epic delivers a capability, while an Area groups capabilities within a domain.
+
+Example: Work Item Management, containing Epics such as Define and Track Work Items in Markdown and Validate Work Item Relationships.
+
 ## Epic
 
 - An Epic is a large body of work that delivers a meaningful feature or capability but is too large to complete as a single story. It usually needs to be broken down into stories.

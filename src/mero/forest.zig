@@ -399,29 +399,35 @@ pub const Forest = struct {
                 if (!before) {
                     my.is_file_metadata = false;
                     var info = my.info_path.pop();
-                    if (info) |*i|
+                    if (info) |*i| {
                         try my.commitAutodef(i);
+                    }
                     return;
                 }
 
-                // Inherit all Info data except amp_node
-                {
-                    var info: Info = rubr.slc.last(my.info_path.items) orelse .{ .kind = .text };
-                    info.amp_node = null;
+                // Inherit all Info data except amp_node and autodef_stage
+                if (rubr.slc.lastPtr(my.info_path.items)) |last| {
+                    var info: Info = last.*;
+                    info.amp_node = null; // Do not inherit amp_node
+                    last.autodef_stage = null; // Take ownership of autodef_stage to ensure it will be added only once via commitAutodef()
                     try my.info_path.append(my.env.a, info);
+                } else {
+                    try my.info_path.append(my.env.a, .{ .kind = .text });
                 }
                 const info: *Info = rubr.slc.lastPtrUnsafe(my.info_path.items);
 
                 var meta = amp.Meta{ .a = my.env.a };
                 defer meta.deinit();
 
-                var amp_node: ?amp.Tree.Id = null;
                 var push_to_parents: bool = false;
                 defer {
-                    if (amp_node) |an| {
+                    // Do not use `info`, this pointer might be invalid due to recursive calls hereunder
+                    const i: *Info = rubr.slc.lastPtrUnsafe(my.info_path.items);
+                    if (i.amp_node) |an| {
                         if (n.amp_node == null)
                             n.amp_node = an;
-                        my.setAmpNode(an, push_to_parents) catch {};
+                        if (push_to_parents)
+                            my.setParentAmpNodes(an) catch {};
                         my.amp_tree.updateMeta(an, meta) catch {};
                     }
                 }
@@ -500,10 +506,9 @@ pub const Forest = struct {
                             };
                         }
 
-                        if (info.autodef_stage == null and amp_node == null and create_amp_node) {
+                        if (info.autodef_stage == null and info.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                            const pos = filex.Pos{};
-                            amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, pos);
+                            info.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, n.filepath, null);
                         }
                     },
                     .text => |text| {
@@ -574,9 +579,9 @@ pub const Forest = struct {
                                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                                             const pos = filex.Pos{ .row = line, .cols = cols };
                                             const an = try my.amp_tree.addAbsolute(ap.*, grove_id, entry.id, my.filepath, pos);
-                                            if (amp_node == null)
+                                            if (info.amp_node == null)
                                                 // The first definition is added to info_path, see hereunder via setAmpNode()
-                                                amp_node = an;
+                                                info.amp_node = an;
                                         }
                                     }
                                 } else |err| {
@@ -589,10 +594,12 @@ pub const Forest = struct {
                             }
                         }
 
-                        if (amp_node == null and create_amp_node) {
+                        if (info.autodef_stage != null) {
+                            try my.commitAutodef(info);
+                        } else if (info.amp_node == null and create_amp_node) {
                             const grove_id = my.grove_id orelse return error.ExpectedGroveId;
                             const pos = filex.Pos{ .row = n.content_rows.begin, .cols = n.content_cols };
-                            amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
+                            info.amp_node = try my.amp_tree.addUnnamed(my.parentAmpNode(), grove_id, entry.id, my.filepath, pos);
                         }
                     },
                 }
@@ -611,8 +618,7 @@ pub const Forest = struct {
                         ap.is_absolute = true;
 
                         const grove_id = my.grove_id orelse return error.ExpectedGroveId;
-                        const pos = filex.Pos{};
-                        const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, stage.mero_id, stage.filepath, pos);
+                        const amp_node = try my.amp_tree.addAbsolute(ap, grove_id, stage.mero_id, stage.filepath, null);
                         const n = my.mero_tree.ptr(stage.mero_id);
                         if (n.amp_node == null)
                             n.amp_node = amp_node;
@@ -623,29 +629,24 @@ pub const Forest = struct {
                 }
             }
 
-            fn setAmpNode(my: *My, amp_node: amp.Tree.Id, push_to_parents: bool) !void {
-                const top = rubr.slc.getBackPtr(my.info_path.items, 0) orelse return error.NoData;
-                top.amp_node = amp_node;
+            fn setParentAmpNodes(my: *My, amp_node: amp.Tree.Id) !void {
+                const file = rubr.slc.getBackPtr(my.info_path.items, 1) orelse return error.NoData;
+                if (file.kind != .file)
+                    return;
 
-                if (push_to_parents) {
-                    const file = rubr.slc.getBackPtr(my.info_path.items, 1) orelse return error.NoData;
-                    if (file.kind != .file)
-                        return;
+                if (file.amp_node) |file_id|
+                    // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
+                    _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
+                // We use amp_node instead of the any pre-existing File amp.Node
+                file.amp_node = amp_node;
 
-                    if (file.amp_node) |file_id|
-                        // There is a direct (File) parent: add a dependency on it before we overwrite this entry in my.path
-                        _ = try my.amp_tree.addAncestralDependency(amp_node, file_id);
-                    // We use amp_node instead of the any pre-existing File amp.Node
-                    file.amp_node = amp_node;
-
-                    if (amp.is_folder_metadata_fp(file.kind.file)) {
-                        const folder = rubr.slc.getBackPtr(my.info_path.items, 2) orelse return error.NoData;
-                        if (folder.amp_node) |folder_id|
-                            // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
-                            _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
-                        // We use amp_node instead of the any pre-existing Folder amp.Node
-                        folder.amp_node = amp_node;
-                    }
+                if (amp.is_folder_metadata_fp(file.kind.file)) {
+                    const folder = rubr.slc.getBackPtr(my.info_path.items, 2) orelse return error.NoData;
+                    if (folder.amp_node) |folder_id|
+                        // There is a 2nd-order (Folder) parent: add a dependency on it before we overwrite this entry in my.path
+                        _ = try my.amp_tree.addAncestralDependency(amp_node, folder_id);
+                    // We use amp_node instead of the any pre-existing Folder amp.Node
+                    folder.amp_node = amp_node;
                 }
             }
 
