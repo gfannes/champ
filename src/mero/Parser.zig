@@ -409,17 +409,17 @@ fn pop_amp_term(self: *Self) ?Term {
                         self.tokenizer = sp_1;
                         return null;
                     }
-
-                    if (token.symbol != .Hat)
-                        saw_nonhat = true;
-
-                    if (token.symbol == .Colon or token.symbol == .Dot)
-                        // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
-                        sp_2 = self.tokenizer
-                    else
-                        // Reset sp_2 (if any), this will accept the '[:.]'
-                        sp_2 = null;
                 }
+
+                if (token.symbol != .Hat)
+                    saw_nonhat = true;
+
+                if (token.symbol == .Colon or token.symbol == .Dot)
+                    // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
+                    sp_2 = self.tokenizer
+                else
+                    // Reset sp_2 (if any), this will accept the '[:.]'
+                    sp_2 = null;
 
                 self.tokenizer.commit_peek();
                 amp.word.len += token.word.len;

@@ -53,15 +53,19 @@ pub fn parse(strange: *rubr.strng.Strange, meta: *Meta) !?Path {
             path.is_dependency = strange.popCharBack('&');
 
             while (!strange.empty()) {
-                var maybe_content = strange.popTo(':');
-                if (maybe_content == null)
-                    maybe_content = strange.popAll();
+                var maybe_content: ?[]const u8 = null;
 
-                if (maybe_content) |content| {
-                    try path.parts.append(path.a, Path.Part{ .content = content, .is_exclusive = is_exclusive });
-
-                    is_exclusive = strange.popChar('^');
+                const maybe_quote: ?u8 = if (strange.popChar('\'')) '\'' else if (strange.popChar('"')) '"' else null;
+                if (maybe_quote) |quote| {
+                    maybe_content = strange.popTo(quote) orelse return error.ExpectedClosingQuote;
+                    _ = strange.popChar(':');
+                } else {
+                    maybe_content = strange.popTo(':') orelse strange.popAll();
                 }
+
+                if (maybe_content) |content|
+                    try path.parts.append(path.a, .{ .content = content, .is_exclusive = is_exclusive });
+                is_exclusive = strange.popChar('^');
             }
 
             return path;
