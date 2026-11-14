@@ -380,26 +380,46 @@ fn pop_amp_term(self: *Self) ?Term {
             var sp_2: ?tkn.Tokenizer = null;
 
             var saw_nonhat: bool = false;
+            var maybe_quote: ?tkn.Symbol = null;
             while (self.tokenizer.peek()) |token| {
-                if (is_whitespace(token) or is_newline(token) or (saw_nonhat and (is_questionmark(token) or is_exclamation(token) or is_comma(token))))
-                    // We accept this Amp
-                    break;
+                if (maybe_quote) |quote| {
+                    // Quoted
+                    if (token.symbol == quote) {
+                        // Quoted part stops
+                        maybe_quote = null;
+                    } else if (is_newline(token)) {
+                        // Do not allow a newline in a quoted Amp
+                        // Restore the tokenizer: this is not an Amp
+                        self.tokenizer = sp_1;
+                        return null;
+                    } else {
+                        // All other symbols are accepted when quoted
+                    }
+                } else if (is_quote(token)) {
+                    // Start quoted part
+                    maybe_quote = token.symbol;
+                } else {
+                    // Non-quoted
+                    if (is_whitespace(token) or is_newline(token) or (saw_nonhat and (is_questionmark(token) or is_exclamation(token) or is_comma(token))))
+                        // We accept this Amp
+                        break;
 
-                if (!is_amp_body(token)) {
-                    // Restore the tokenizer: this is not an Amp
-                    self.tokenizer = sp_1;
-                    return null;
+                    if (!is_amp_body(token)) {
+                        // Restore the tokenizer: this is not an Amp
+                        self.tokenizer = sp_1;
+                        return null;
+                    }
+
+                    if (token.symbol != .Hat)
+                        saw_nonhat = true;
+
+                    if (token.symbol == .Colon or token.symbol == .Dot)
+                        // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
+                        sp_2 = self.tokenizer
+                    else
+                        // Reset sp_2 (if any), this will accept the '[:.]'
+                        sp_2 = null;
                 }
-
-                if (token.symbol != .Hat)
-                    saw_nonhat = true;
-
-                if (token.symbol == .Colon or token.symbol == .Dot)
-                    // Setup savepoint to support removing this '[:.]' if it turns-out to be a trailing '[:.]'
-                    sp_2 = self.tokenizer
-                else
-                    // Reset sp_2 (if any), this will accept the '[:.]'
-                    sp_2 = null;
 
                 self.tokenizer.commit_peek();
                 amp.word.len += token.word.len;
@@ -919,6 +939,9 @@ fn is_exclamation(t: tkn.Token) bool {
 }
 fn is_comma(t: tkn.Token) bool {
     return t.symbol == .Comma;
+}
+fn is_quote(t: tkn.Token) bool {
+    return t.symbol == .SingleQuote or t.symbol == .DoubleQuote;
 }
 
 fn terms(self: *Self) *dto.Terms {
