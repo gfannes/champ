@@ -458,13 +458,13 @@ pub const Forest = struct {
 
                         my.filepath = n.filepath;
 
-                        // Process '&.md' before other Files and Folders.
+                        // Process `&.md` before other Files and Folders.
                         // The metadata in such a file will be copied to the Folder and must be present before any resolving occurs.
                         // Both making defs absolute or aggregation of AMPs require this.
                         for (my.mero_tree.childIds(entry.id)) |child_id| {
                             const child = my.mero_tree.ptr(child_id);
                             if (amp.is_folder_metadata_fp(child.filepath)) {
-                                // Allow processing '&.md'
+                                // Allow processing `&.md`
                                 my.do_process_amp_md = true;
                                 try my.mero_tree.dfs(child_id, my);
                                 my.do_process_amp_md = false;
@@ -477,7 +477,7 @@ pub const Forest = struct {
                     .file => {
                         const is_metadata_file = amp.is_folder_metadata_fp(n.filepath);
                         if (is_metadata_file and !my.do_process_amp_md)
-                            // &.md is already processed directly from .folder
+                            // `&.md` is already processed directly from .folder
                             return false;
 
                         info.kind = .{ .file = n.filepath };
@@ -556,7 +556,7 @@ pub const Forest = struct {
                                         defer ap.deinit();
                                         if (ap.is_config) {
                                             // &. contains configuration data
-                                            std.log.info("Found configuration data {f}", .{ap.*});
+                                            std.log.info("Found configuration data {f} from '{s}'", .{ ap.*, n.filepath });
                                             try my.setConfigurationData(ap.*);
                                         } else if (ap.is_definition) {
                                             // Make the amp.Path absolute if necessary
