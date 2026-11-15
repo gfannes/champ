@@ -146,7 +146,7 @@ pub const Node = struct {
         switch (self.type) {
             .folder => n.attr("folder", self.filepath),
             .file => |file| {
-                n.attr("path", self.filepath);
+                n.attr("file", self.filepath);
                 n.attr("language", file.language);
             },
             .text => |text| n.attr("text", text.kind),
@@ -169,6 +169,9 @@ pub const Node = struct {
             },
             else => {},
         }
+    }
+    pub fn format(self: Self, w: *std.Io.Writer) !void {
+        return rubr.naft.Node.write2(self, w, null);
     }
 };
 

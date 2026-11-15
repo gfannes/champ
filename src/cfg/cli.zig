@@ -48,13 +48,15 @@ pub const Args = struct {
     args: rubr.cli.Args = undefined,
 
     pub fn init(self: *Self, os_args: std.process.Args) !void {
-        self.args = rubr.cli.Args{ .env = self.env };
+        self.args = rubr.cli.Args{ .a = self.env.a };
         try self.args.setupFromOS(os_args);
 
         self.groves = Strings.empty;
         self.extra = Strings.empty;
     }
-    pub fn deinit(_: *Self) void {}
+    pub fn deinit(self: *Self) void {
+        self.args.deinit();
+    }
 
     pub fn parse(self: *Self) !void {
         self.exe_name = (self.args.pop() orelse return error.CouldNotFindExeName).arg;

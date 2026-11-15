@@ -111,6 +111,7 @@ task :ee do
         wbs.naft
         search.naft
         quote.naft
+        date.naft
     ]
     fps = fps[-1..]
 
@@ -134,9 +135,9 @@ task :ee do
         EOS
         File.write(config_fp, config)
 
-        sh("champ -u #{config_fp} pl")
         # sh("champ -u #{config_fp} pl auro so1a auromatic")
-        sh("champ -u #{config_fp} ch amp")
-        sh("champ -u #{config_fp} ch mero")
+        sh("champ -u #{config_fp} pl 2028")
+        # sh("champ -u #{config_fp} ch amp")
+        # sh("champ -u #{config_fp} ch mero")
     end
 end

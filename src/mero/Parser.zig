@@ -81,9 +81,9 @@ pub fn parse(self: *Self) !void {
         row: usize = 0,
         col: usize = 0,
 
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
             if (!before)
-                return;
+                return false;
             const n = entry.data;
             n.content_rows.begin = my.row;
             n.content_cols.begin = my.col;
@@ -111,6 +111,7 @@ pub fn parse(self: *Self) !void {
                 },
                 else => {},
             }
+            return true;
         }
 
         fn updateRow(my: *My, word: []const u8) void {

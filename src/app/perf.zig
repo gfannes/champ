@@ -50,18 +50,18 @@ pub fn call(self: Self) !void {
             byte_count: usize = 0,
             token_count: usize = 0,
 
-            pub fn call(my: *Cb, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
+            pub fn call(my: *Cb, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !bool {
                 if (kind != walker.Kind.File)
-                    return;
+                    return false;
 
-                const offsets = maybe_offsets orelse return;
+                const offsets = maybe_offsets orelse return false;
                 const name = filepath[offsets.name..];
 
                 if (my.grove.include) |include| {
                     const ext = std.fs.path.extension(name);
                     if (!strings.contains(u8, include, ext))
                         // Skip this extension
-                        return;
+                        return false;
                 }
 
                 const file = try dir.openFile(my.env.io, name, .{});
@@ -71,11 +71,11 @@ pub fn call(self: Self) !void {
 
                 const size_is_ok = if (my.grove.max_size) |max_size| stat.size < max_size else true;
                 if (!size_is_ok)
-                    return;
+                    return false;
 
                 if (my.grove.max_count) |max_count|
                     if (my.file_count >= max_count)
-                        return;
+                        return false;
 
                 if (my.env.log.level(2)) |out| {
                     try out.print("{s}\n", .{filepath});
@@ -123,6 +123,7 @@ pub fn call(self: Self) !void {
                         // return Error.UnknownFileType;
                     }
                 }
+                return true;
             }
         }{ .env = self.env, .outer = &self, .grove = &grove, .content = &content };
 

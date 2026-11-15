@@ -133,10 +133,10 @@ pub fn show(self: *Self) !void {
                 env: rubr.Env,
                 n: *rubr.naft.Node,
 
-                pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !void {
-                    if (!before)
-                        return;
-                    entry.data.write(my.n, entry.id);
+                pub fn call(my: @This(), entry: mero.Tree.Entry, before: bool) !bool {
+                    if (before)
+                        entry.data.write(my.n, entry.id);
+                    return true;
                 }
             };
             const cb = Cb{ .env = self.env, .n = &n };
@@ -147,14 +147,15 @@ pub fn show(self: *Self) !void {
                 node_count: u64 = 0,
                 term_count: u64 = 0,
 
-                pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
+                pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !bool {
                     if (!before)
-                        return;
+                        return false;
                     my.node_count += 1;
                     switch (entry.data.type) {
                         .file => |file| my.term_count += file.terms.items.len,
                         else => {},
                     }
+                    return true;
                 }
             };
             var cb = Cb{ .env = self.env };

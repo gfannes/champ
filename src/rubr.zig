@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-10-27
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-11-15
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -493,6 +493,11 @@ pub const naft = struct {
             defer r.deinit();
             v.write(&r);
         }
+        pub fn write2(v: anytype, w: *std.Io.Writer, arg: anytype) void {
+            var r = Node.root(w);
+            defer r.deinit();
+            v.write(&r, arg);
+        }
     
         pub fn root(w: ?*std.Io.Writer) Node {
             return .{ .w = w, .has_block = true };
@@ -649,9 +654,12 @@ pub const walker = struct {
     
             const path = self.path;
     
-            try cb.call(dir, path, null, Kind.Enter);
-            try self._walk(dir, cb);
-            try cb.call(dir, path, null, Kind.Leave);
+            const recurse: bool = try cb.call(dir, path, null, Kind.Enter);
+    
+            if (recurse)
+                try self._walk(dir, cb);
+    
+            _ = try cb.call(dir, path, null, Kind.Leave);
         }
     
         fn _walk(self: *Walker, dir: std.Io.Dir, cb: anytype) !void {
@@ -696,7 +704,7 @@ pub const walker = struct {
                                 continue;
                         }
     
-                        try cb.call(dir, self.path, offsets, Kind.File);
+                        _ = try cb.call(dir, self.path, offsets, Kind.File);
                     },
                     std.Io.File.Kind.directory => {
                         if (slc.last(self.ignore_stack.items)) |e| {
@@ -710,11 +718,12 @@ pub const walker = struct {
     
                         const path = self.path;
     
-                        try cb.call(subdir, path, offsets, Kind.Enter);
+                        const recurse: bool = try cb.call(subdir, path, offsets, Kind.Enter);
     
-                        try self._walk(subdir, cb);
+                        if (recurse)
+                            try self._walk(subdir, cb);
     
-                        try cb.call(subdir, path, offsets, Kind.Leave);
+                        _ = try cb.call(subdir, path, offsets, Kind.Leave);
                     },
                     else => {},
                 }
@@ -1183,49 +1192,48 @@ pub const cli = struct {
     pub const Args = struct {
         const Self = @This();
     
-        env: Env,
+        a: std.mem.Allocator,
         argv: [][]const u8 = &.{},
+        head: usize = 0,
+    
+        pub fn deinit(self: *Self) void {
+            for (self.argv) |arg|
+                self.a.free(arg);
+            self.a.free(self.argv);
+        }
     
         pub fn setupFromOS(self: *Self, os_args: std.process.Args) !void {
-            const a = self.env.aa;
+            self.argv = try self.a.alloc([]const u8, os_args.vector.len);
     
-            self.argv = try a.alloc([]const u8, os_args.vector.len);
-    
-            var it = try os_args.iterateAllocator(self.env.a);
+            var it = try os_args.iterateAllocator(self.a);
             defer it.deinit();
+    
             var ix: usize = 0;
-            while (it.next()) |os_arg| {
-                self.argv[ix] = try a.dupe(u8, os_arg);
-                ix += 1;
-            }
+            while (it.next()) |os_arg| : (ix += 1)
+                self.argv[ix] = try self.a.dupe(u8, os_arg);
     
             // This is necessary for Windows: os_args.vector.len is too long.
             self.argv.len = ix;
         }
         pub fn setupFromData(self: *Self, argv: []const []const u8) !void {
-            const a = self.env.aa;
+            self.argv = try self.a.alloc([]const u8, argv.len);
     
-            self.argv = try a.alloc([]const u8, argv.len);
-            for (argv, 0..) |slice, ix| {
-                self.argv[ix] = try a.dupe(u8, slice);
-            }
+            for (argv, 0..) |slice, ix|
+                self.argv[ix] = try self.a.dupe(u8, slice);
         }
     
         pub fn pop(self: *Self) ?Arg {
-            if (self.argv.len == 0) return null;
+            if (self.head == self.argv.len)
+                return null;
     
-            const a = self.env.aa;
-            const arg = a.dupe(u8, self.argv[0]) catch return null;
-            self.argv.ptr += 1;
-            self.argv.len -= 1;
-    
-            return Arg{ .arg = arg };
+            defer self.head += 1;
+            return Arg{ .arg = self.argv[self.head] };
         }
     
         // Can only be called when there was something popped first
         pub fn unpop(self: *Self) void {
-            self.argv.ptr -= 1;
-            self.argv.len += 1;
+            if (self.head > 0)
+                self.head -= 1;
         }
     };
     
@@ -1423,10 +1431,11 @@ pub const tree = struct {
             pub fn dfs(self: *Self, id: Id, cb: anytype) CallbackErrorSet(@TypeOf(cb.*))!void {
                 const n = &self.nodes.items[id];
                 const entry = Entry{ .id = id, .data = &n.data };
-                try cb.call(entry, true);
-                for (n.child_ids.items) |child_id|
-                    try self.dfs(child_id, cb);
-                try cb.call(entry, false);
+                const recurse: bool = try cb.call(entry, true);
+                if (recurse)
+                    for (n.child_ids.items) |child_id|
+                        try self.dfs(child_id, cb);
+                _ = try cb.call(entry, false);
             }
     
             pub fn each(self: *Self, cb: anytype) CallbackErrorSet(@TypeOf(cb.*))!void {

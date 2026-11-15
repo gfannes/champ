@@ -1,0 +1,3 @@
+[file](name:&.md)(content:&.autodef:from_folder &.autodef:from_file)
+[file](name:2027-02-01.md)(content:
+- [ ] &&task)

@@ -121,10 +121,6 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
     if (self.wbs) |wbs|
         n.attr("wbs", wbs.lower());
 }
-
 pub fn format(self: Self, w: *std.Io.Writer) !void {
-    var root = rubr.naft.Node.root(w);
-    defer root.deinit();
-    root.has_node = true;
-    self.write(&root);
+    return rubr.naft.Node.write(self, w);
 }

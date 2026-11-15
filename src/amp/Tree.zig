@@ -143,13 +143,13 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
         depth: usize = 0,
         maybe_gem: ?Gem = null,
         outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
             if (before) {
                 my.depth += 1;
 
                 if (my.grove_id) |id|
                     if (!entry.data.definedInGrove(id))
-                        return;
+                        return false;
 
                 if (my.fitCost(entry)) |cost| {
                     if (my.maybe_gem) |*gem| {
@@ -186,6 +186,7 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
             } else {
                 my.depth -= 1;
             }
+            return true;
         }
 
         fn fitCost(my: My, leaf: Tree.Entry) ?usize {
@@ -229,7 +230,6 @@ pub fn resolve(self: *Self, ap: Path, grove_id: ?usize, filepath: []const u8) !?
 pub fn addAncestralDependency(self: *Self, node: Tree.Id, parent: Tree.Id) !bool {
     if (node == parent)
         // No self-ancestors
-
         return false;
 
     var ancestors = &self.tree.ptr(node).ancestors;
@@ -244,13 +244,15 @@ pub fn addAncestralDependencies(self: *Self) !void {
     var cb = struct {
         const My = @This();
         outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
             if (!before)
-                return;
+                return false;
             if (try my.outer.tree.parent(entry.id)) |parent|
                 _ = try my.outer.addAncestralDependency(entry.id, parent.id);
             entry.data.direct_ancestor_count = entry.data.ancestors
                 .items.len;
+
+            return true;
         }
     }{ .outer = self };
     try self.tree.dfsAll(&cb);
@@ -261,9 +263,9 @@ pub fn aggregateDependencies(self: *Self) !void {
         const My = @This();
         new_dep_count: u64 = 0,
         outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
             if (!before)
-                return;
+                return false;
 
             // Do not directly iterate on items since addAncestralDependency() might reallocate that
             for (0..entry.data.ancestors
@@ -278,6 +280,8 @@ pub fn aggregateDependencies(self: *Self) !void {
                         my.new_dep_count += 1;
                 }
             }
+
+            return true;
         }
     }{ .outer = self };
 
@@ -311,6 +315,7 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
     }
 }
 fn write_(self: Self, parent: *rubr.naft.Node, id: Tree.Id) !void {
+    // &todo: use amp.Node.write for this
     var n = parent.node("Node");
     defer n.deinit();
 
@@ -319,6 +324,8 @@ fn write_(self: Self, parent: *rubr.naft.Node, id: Tree.Id) !void {
     const node = self.tree.cptr(id).*;
     if (node.name) |name|
         n.attr("name", name);
+    if (node.date_min) |date_min|
+        n.attr("date_min", date_min);
     for (node.ancestors.items) |ancestor|
         n.attr("ancestor", ancestor);
     if (node.meta) |meta|

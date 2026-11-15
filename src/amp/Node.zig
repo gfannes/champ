@@ -188,6 +188,8 @@ pub fn write(self: Self, parent: *rubr.naft.Node) void {
 
     if (self.name) |name|
         n.attr("name", name);
+    if (self.date_min) |date_min|
+        n.attr("date_min", date_min);
 
     if (self.meta) |meta|
         meta.write(&n);
