@@ -126,7 +126,7 @@ pub const Forest = struct {
                 my.node_stack.deinit(my.env.a);
             }
 
-            pub fn call(my: *My, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !bool {
+            pub fn call(my: *My, dir: std.Io.Dir, filepath: []const u8, maybe_offsets: ?walker.Offsets, kind: walker.Kind) !void {
                 switch (kind) {
                     .Enter => {
                         var name: []const u8 = undefined;
@@ -175,14 +175,14 @@ pub const Forest = struct {
                             const ext = std.fs.path.extension(name);
                             if (!strings.contains(u8, include, ext))
                                 // Skip this extension
-                                return false;
+                                return;
                         }
 
                         const my_ext = std.fs.path.extension(name);
                         if (mero.Language.from_extension(my_ext)) |language| {
                             if (my.cfg_grove.max_count) |max_count|
                                 if (my.file_count >= max_count)
-                                    return false;
+                                    return;
                             my.file_count += 1;
 
                             const file = try dir.openFile(my.env.io, name, .{});
@@ -191,7 +191,7 @@ pub const Forest = struct {
                             const stat = try file.stat(my.env.io);
                             const size_is_ok = if (my.cfg_grove.max_size) |max_size| stat.size < max_size else true;
                             if (!size_is_ok)
-                                return false;
+                                return;
 
                             var file_nid: usize = undefined;
                             {
@@ -216,9 +216,9 @@ pub const Forest = struct {
                             // Switch from Text.ixr to Text.terms
                             const cb2 = struct {
                                 terms: []const mero.Term,
-                                pub fn call(my2: @This(), e: mero.Tree.Entry, before: bool) !bool {
+                                pub fn call(my2: @This(), e: mero.Tree.Entry, before: bool) !void {
                                     if (!before)
-                                        return false;
+                                        return;
                                     var n2 = e.data;
                                     switch (n2.type) {
                                         .text => |*text| {
@@ -227,7 +227,6 @@ pub const Forest = struct {
                                         },
                                         else => {},
                                     }
-                                    return true;
                                 }
                             }{ .terms = my.tree.cptr(file_nid).type.file.terms.items };
                             try my.tree.dfs(file_nid, &cb2);
@@ -236,7 +235,6 @@ pub const Forest = struct {
                         }
                     },
                 }
-                return true;
             }
         }{ .env = self.env, .aa = self.aral.allocator(), .cfg_grove = cfg_grove, .tree = &self.mero_tree };
         defer cb.deinit();
@@ -271,9 +269,9 @@ pub const Forest = struct {
             grove_id: ?usize = null,
             is_new_file: bool = false,
 
-            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !bool {
+            pub fn call(my: *My, entry: mero.Tree.Entry, before: bool) !void {
                 if (!before)
-                    return false;
+                    return;
 
                 const n = entry.data;
                 switch (n.type) {
@@ -342,7 +340,6 @@ pub const Forest = struct {
                         }
                     },
                 }
-                return true;
             }
         }{
             .env = self.env,

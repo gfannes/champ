@@ -77,7 +77,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
             }
         }
 
-        pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !bool {
+        pub fn call(my: *@This(), entry: mero.Tree.Entry, before: bool) !void {
             const needle = my.needle orelse return error.ExpectedNeedle;
 
             const n: *const mero.Node = entry.data;
@@ -148,7 +148,7 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                     }
 
                     if (!before)
-                        return false;
+                        return;
 
                     var status_str: ?[]const u8 = null;
                     if (n.amp_node) |id| {
@@ -242,7 +242,6 @@ pub fn call(self: *Self, query_input: [][]const u8) !void {
                     my.add_newline_before_bullet = n.type.isText(.Paragraph);
                 },
             }
-            return true;
         }
     };
 

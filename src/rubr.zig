@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-11-15
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-11-17
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -654,12 +654,22 @@ pub const walker = struct {
     
             const path = self.path;
     
-            const recurse: bool = try cb.call(dir, path, null, Kind.Enter);
-    
-            if (recurse)
-                try self._walk(dir, cb);
-    
-            _ = try cb.call(dir, path, null, Kind.Leave);
+            switch (@TypeOf(try cb.call(dir, path, null, Kind.Enter))) {
+                bool => {
+                    const recurse: bool = try cb.call(dir, path, null, Kind.Enter);
+                    if (recurse)
+                        try self._walk(dir, cb);
+                    _ = try cb.call(dir, path, null, Kind.Leave);
+                },
+                void => {
+                    try cb.call(dir, path, null, Kind.Enter);
+                    try self._walk(dir, cb);
+                    try cb.call(dir, path, null, Kind.Leave);
+                },
+                else => {
+                    @compileError("rubr.walker.Walker: cb.call must return bool or void");
+                },
+            }
         }
     
         fn _walk(self: *Walker, dir: std.Io.Dir, cb: anytype) !void {
@@ -718,12 +728,22 @@ pub const walker = struct {
     
                         const path = self.path;
     
-                        const recurse: bool = try cb.call(subdir, path, offsets, Kind.Enter);
-    
-                        if (recurse)
-                            try self._walk(subdir, cb);
-    
-                        _ = try cb.call(subdir, path, offsets, Kind.Leave);
+                        switch (@TypeOf(try cb.call(subdir, path, offsets, Kind.Enter))) {
+                            bool => {
+                                const recurse: bool = try cb.call(subdir, path, offsets, Kind.Enter);
+                                if (recurse)
+                                    try self._walk(subdir, cb);
+                                _ = try cb.call(subdir, path, offsets, Kind.Leave);
+                            },
+                            void => {
+                                try cb.call(subdir, path, offsets, Kind.Enter);
+                                try self._walk(subdir, cb);
+                                try cb.call(subdir, path, offsets, Kind.Leave);
+                            },
+                            else => {
+                                @compileError("rubr.walker.Walker: cb.call() must return bool or void");
+                            },
+                        }
                     },
                     else => {},
                 }
@@ -1194,15 +1214,11 @@ pub const cli = struct {
     
         a: std.mem.Allocator,
         argv: [][]const u8 = &.{},
-        orig_len: ?usize = null,
         head: usize = 0,
     
         pub fn deinit(self: *Self) void {
             for (self.argv) |arg|
                 self.a.free(arg);
-
-            if (self.orig_len) |orig_len|
-                self.argv.len = orig_len;
             self.a.free(self.argv);
         }
     
@@ -1217,7 +1233,6 @@ pub const cli = struct {
                 self.argv[ix] = try self.a.dupe(u8, os_arg);
     
             // This is necessary for Windows: os_args.vector.len is too long.
-            self.orig_len = self.argv.len;
             self.argv.len = ix;
         }
         pub fn setupFromData(self: *Self, argv: []const []const u8) !void {
@@ -1436,11 +1451,23 @@ pub const tree = struct {
             pub fn dfs(self: *Self, id: Id, cb: anytype) CallbackErrorSet(@TypeOf(cb.*))!void {
                 const n = &self.nodes.items[id];
                 const entry = Entry{ .id = id, .data = &n.data };
-                const recurse: bool = try cb.call(entry, true);
-                if (recurse)
-                    for (n.child_ids.items) |child_id|
-                        try self.dfs(child_id, cb);
-                _ = try cb.call(entry, false);
+    
+                switch (@TypeOf(try cb.call(entry, true))) {
+                    bool => {
+                        const recurse: bool = try cb.call(entry, true);
+                        if (recurse)
+                            for (n.child_ids.items) |child_id|
+                                try self.dfs(child_id, cb);
+                        _ = try cb.call(entry, false);
+                    },
+                    void => {
+                        try cb.call(entry, true);
+                        for (n.child_ids.items) |child_id|
+                            try self.dfs(child_id, cb);
+                        try cb.call(entry, false);
+                    },
+                    else => @compileError("rubr.tree.Tree: cb.call() must return bool or void"),
+                }
             }
     
             pub fn each(self: *Self, cb: anytype) CallbackErrorSet(@TypeOf(cb.*))!void {

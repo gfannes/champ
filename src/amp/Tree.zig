@@ -244,15 +244,13 @@ pub fn addAncestralDependencies(self: *Self) !void {
     var cb = struct {
         const My = @This();
         outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (!before)
-                return false;
+                return;
             if (try my.outer.tree.parent(entry.id)) |parent|
                 _ = try my.outer.addAncestralDependency(entry.id, parent.id);
             entry.data.direct_ancestor_count = entry.data.ancestors
                 .items.len;
-
-            return true;
         }
     }{ .outer = self };
     try self.tree.dfsAll(&cb);
@@ -263,9 +261,9 @@ pub fn aggregateDependencies(self: *Self) !void {
         const My = @This();
         new_dep_count: u64 = 0,
         outer: *Self,
-        pub fn call(my: *My, entry: Tree.Entry, before: bool) !bool {
+        pub fn call(my: *My, entry: Tree.Entry, before: bool) !void {
             if (!before)
-                return false;
+                return;
 
             // Do not directly iterate on items since addAncestralDependency() might reallocate that
             for (0..entry.data.ancestors
@@ -280,8 +278,6 @@ pub fn aggregateDependencies(self: *Self) !void {
                         my.new_dep_count += 1;
                 }
             }
-
-            return true;
         }
     }{ .outer = self };
 
