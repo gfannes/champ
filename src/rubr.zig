@@ -1194,11 +1194,15 @@ pub const cli = struct {
     
         a: std.mem.Allocator,
         argv: [][]const u8 = &.{},
+        orig_len: ?usize = null,
         head: usize = 0,
     
         pub fn deinit(self: *Self) void {
             for (self.argv) |arg|
                 self.a.free(arg);
+
+            if (self.orig_len) |orig_len|
+                self.argv.len = orig_len;
             self.a.free(self.argv);
         }
     
@@ -1213,6 +1217,7 @@ pub const cli = struct {
                 self.argv[ix] = try self.a.dupe(u8, os_arg);
     
             // This is necessary for Windows: os_args.vector.len is too long.
+            self.orig_len = self.argv.len;
             self.argv.len = ix;
         }
         pub fn setupFromData(self: *Self, argv: []const []const u8) !void {
