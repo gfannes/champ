@@ -71,7 +71,11 @@ pub const Forest = struct {
     }
 
     pub fn load(self: *Self, config: *const cfg.file.Config) !void {
-        var s = try rubr.profile.Scope.start(self.env.io, .{ .ix = 0, .name = "loadGroves" });
+        var s: rubr.profile.Scope = .{ .a = self.env.a, .io = self.env.io };
+        try s.init(5);
+        defer s.deinit();
+
+        try s.start(.{ .ix = 0, .name = "loadGroves" });
 
         const selected_groves = config.selected_groves orelse return error.ExpectedConfigDefault;
         if (rubr.slc.isEmpty(selected_groves))

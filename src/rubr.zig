@@ -1,4 +1,4 @@
-// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-11-17
+// Output from `rake export[Env,strng,strings,naft,walker,slc,Log,idx,cli,datex,tree,lsp,fuzz,algo,opt,ansi,flush,fs,profile,fmt]` from https://github.com/gfannes/rubr from 2026-11-20
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -663,12 +663,12 @@ pub const walker = struct {
                 },
                 void => {
                     try cb.call(dir, path, null, Kind.Enter);
+    
                     try self._walk(dir, cb);
+    
                     try cb.call(dir, path, null, Kind.Leave);
                 },
-                else => {
-                    @compileError("rubr.walker.Walker: cb.call must return bool or void");
-                },
+                else => @compileError("Expected rubr.walker.Walker.cb.call() to return bool or void"),
             }
         }
     
@@ -740,9 +740,7 @@ pub const walker = struct {
                                 try self._walk(subdir, cb);
                                 try cb.call(subdir, path, offsets, Kind.Leave);
                             },
-                            else => {
-                                @compileError("rubr.walker.Walker: cb.call() must return bool or void");
-                            },
+                            else => @compileError("Expected rubr.walker.Walker.cb.call() to return bool or void"),
                         }
                     },
                     else => {},
@@ -1214,11 +1212,14 @@ pub const cli = struct {
     
         a: std.mem.Allocator,
         argv: [][]const u8 = &.{},
+        orig_len: ?usize = null,
         head: usize = 0,
     
         pub fn deinit(self: *Self) void {
             for (self.argv) |arg|
                 self.a.free(arg);
+            if (self.orig_len) |orig_len|
+                self.argv.len = orig_len;
             self.a.free(self.argv);
         }
     
@@ -1233,6 +1234,7 @@ pub const cli = struct {
                 self.argv[ix] = try self.a.dupe(u8, os_arg);
     
             // This is necessary for Windows: os_args.vector.len is too long.
+            self.orig_len = self.argv.len;
             self.argv.len = ix;
         }
         pub fn setupFromData(self: *Self, argv: []const []const u8) !void {
@@ -1466,7 +1468,7 @@ pub const tree = struct {
                             try self.dfs(child_id, cb);
                         try cb.call(entry, false);
                     },
-                    else => @compileError("rubr.tree.Tree: cb.call() must return bool or void"),
+                    else => @compileError("Expected rubr.tree.Tree.cb.call() to return bool or void"),
                 }
             }
     
@@ -2293,13 +2295,6 @@ pub const fs = struct {
 
 // Export from 'src/profile.zig'
 pub const profile = struct {
-    pub const Error = error{
-        NotRunning,
-        StillRunning,
-        IxOutOfRange,
-        NameMismatch,
-    };
-    
     pub fn now(io: std.Io) std.Io.Timestamp {
         return std.Io.Clock.now(.real, io);
     }
@@ -2322,20 +2317,30 @@ pub const profile = struct {
     pub const Scope = struct {
         const Self = @This();
     
-        const max_measurement_count: usize = 16;
-    
+        a: std.mem.Allocator,
         io: std.Io,
     
-        ix: usize,
-        start_ts: std.Io.Timestamp,
+        ix: usize = 0,
+        start_ts: std.Io.Timestamp = undefined,
     
-        measurements: [max_measurement_count]?Measurement = @splat(null),
-        running: bool = true,
+        measurements: []?Measurement = &.{},
+        running: bool = false,
     
-        pub fn start(io: std.Io, desc: Descriptor) !Self {
-            var rv: Self = .{ .io = io, .ix = desc.ix, .start_ts = now(io) };
-            try rv.setup(desc);
-            return rv;
+        pub fn init(self: *Self, max_measurements: usize) !void {
+            self.deinit();
+            self.measurements = try self.a.alloc(?Measurement, max_measurements);
+            for (self.measurements) |*m|
+                m.* = .{};
+        }
+    
+        pub fn deinit(self: *Self) void {
+            self.a.free(self.measurements);
+            self.measurements = &.{};
+        }
+    
+        pub fn start(self: *Self, desc: Descriptor) !void {
+            self.running = true;
+            try self.setup_(desc, now(self.io));
         }
     
         pub fn stop(self: *Self) !void {
@@ -2357,9 +2362,7 @@ pub const profile = struct {
             }
             self.measurements[self.ix] = m;
     
-            try self.setup(desc);
-            self.ix = desc.ix;
-            self.start_ts = now_ts;
+            try self.setup_(desc, now_ts);
         }
     
         pub fn measurement(self: Self, ix: usize) !?Measurement {
@@ -2369,8 +2372,8 @@ pub const profile = struct {
         }
     
         pub fn format(self: Self, w: *std.Io.Writer) !void {
-            for (0..max_measurement_count) |ix| {
-                if (self.measurements[ix]) |m| {
+            for (self.measurements, 0..) |maybe_measurement, ix| {
+                if (maybe_measurement) |m| {
                     try w.print("[Measurement]", .{});
                     const Local = struct {
                         fn print(ts: Timestamp, desc: []const u8, ww: *std.Io.Writer) !void {
@@ -2389,9 +2392,9 @@ pub const profile = struct {
             }
         }
     
-        fn setup(self: *Self, desc: Descriptor) !void {
-            if (desc.ix >= max_measurement_count)
-                return error.IxOutOfRange;
+        fn setup_(self: *Self, desc: Descriptor, now_ts: std.Io.Timestamp) !void {
+            if (desc.ix >= self.measurements.len)
+                return error.OutOfRange;
     
             if (self.measurements[desc.ix]) |*m| {
                 if (desc.name) |name| {
@@ -2405,6 +2408,9 @@ pub const profile = struct {
             } else {
                 self.measurements[desc.ix] = Measurement{ .name = desc.name };
             }
+    
+            self.ix = desc.ix;
+            self.start_ts = now_ts;
         }
     };
     
